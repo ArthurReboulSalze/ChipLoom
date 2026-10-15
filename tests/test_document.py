@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import wave
 
-from tracker4agents import demo, mod, project
+from tracker4agents import demo, mod, pixel_rush, project
 from tracker4agents.desktop_services import AppState, AudioCache
 from tracker4agents.document import Document, fingerprint, listening_copy
 from tracker4agents.model import Cell, Module, Pattern, Sample, ValidationError, cell, playback_plan
@@ -42,12 +42,14 @@ class DocumentTests(unittest.TestCase):
         self.assertTrue(document.dirty)
 
     def test_load_demos_from_both_formats_and_export_identically(self):
-        for stem in ("first_light", "pixel_rush"):
-            binary = ROOT / f"exports/{stem}/{stem}.mod"
-            document = Document.open(binary)
-            self.assertEqual(mod.encode(document.module), binary.read_bytes())
-            source = Document.open(ROOT / f"examples/{stem}.project.json")
-            self.assertEqual(mod.encode(source.module), binary.read_bytes())
+        with tempfile.TemporaryDirectory() as folder:
+            for stem, factory in (("first_light", demo.create), ("pixel_rush", pixel_rush.create)):
+                binary = Path(folder) / f"{stem}.mod"
+                binary.write_bytes(mod.encode(factory()))
+                document = Document.open(binary)
+                self.assertEqual(mod.encode(document.module), binary.read_bytes())
+                source = Document.open(ROOT / f"examples/{stem}.project.json")
+                self.assertEqual(mod.encode(source.module), binary.read_bytes())
 
     def test_save_preserves_recipes_and_mod_export_does_not_mark_project_saved(self):
         document = self.document
