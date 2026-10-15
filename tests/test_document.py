@@ -132,7 +132,7 @@ class DesktopServicesTests(unittest.TestCase):
             state.save()
             reopened = AppState(directory)
             self.assertEqual(len(reopened.recent()), 12)
-            self.assertEqual(reopened.recent()[0], directory / "13.mod")
+            self.assertEqual(reopened.recent()[0], (directory / "13.mod").resolve())
             self.assertEqual(reopened.values["volume"], 0)
             self.assertFalse(reopened.values["loop"])
             self.assertFalse(reopened.values["follow"])

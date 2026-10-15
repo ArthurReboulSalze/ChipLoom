@@ -79,7 +79,7 @@ Les palettes Midnight, Amber, Violet et Light s'appliquent aussi aux patterns, a
 
 Cette stratégie réutilise le lecteur déjà validé et garde le prototype simple. Elle entraîne une préparation après chaque modification et peut faire une petite coupure à la reprise de la boucle. Un accès direct au lecteur pour un mixage en temps réel sera nécessaire pour une édition musicale instantanée.
 
-Les chemins du cœur utilisent `pathlib`. Qt choisit le dossier de données utilisateur, et les commandes de rendu n'utilisent pas d'API audio Windows. Les lanceurs Windows et Linux sont séparés. La dépendance PySide6 appartient à l'option `desktop`, pas au cœur. La prochaine validation Linux devra couvrir les dépendances système Qt, la sortie audio, le rendu FFmpeg, les chemins et l'installation. Aucun essai Linux n'a encore été fait.
+Les chemins du cœur utilisent `pathlib`. Qt choisit le dossier de données utilisateur, et les commandes de rendu n'utilisent pas d'API audio Windows. Les lanceurs Windows et Linux sont séparés. La dépendance PySide6 appartient à l'option `desktop`, pas au cœur. La CI Ubuntu valide l'installation du cœur, ses tests, des rendus FFmpeg et la génération d'un MOD. La fenêtre Linux, ses dépendances système Qt et la sortie audio physique restent à valider.
 
 ## Options suivantes proposées
 

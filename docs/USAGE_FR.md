@@ -49,7 +49,7 @@ La session et le cache restent dans le dossier de données local choisi par Qt (
 
 **La fenêtre est facultative pour l'agent.** Le cœur, le modèle de document, les recettes, l'import/export et les commandes structurées fonctionnent sans PySide6, sans écran et sans application ouverte. L'agent modifie le même projet que l'humain via le JSON ou l'API Python ; la fenêtre le recharge. Il n'a pas besoin de piloter l'interface avec une souris. L'intégration MCP reste à développer.
 
-La base est préparée pour Linux avec `pathlib`, les dossiers de données Qt et les mêmes widgets et services. Une installation Linux se prépare avec `python3 -m venv .venv`, puis `.venv/bin/python -m pip install -e '.[desktop]'`, et se lance avec `sh lancer-tracker4agents.sh`. FFmpeg avec libopenmpt et les dépendances système Qt doivent être présents. **Linux n'a pas encore été exécuté ni validé.** Les conditions système sont décrites dans la [documentation officielle de Qt for Python](https://doc.qt.io/qtforpython-6/gettingstarted.html).
+La base est préparée pour Linux avec `pathlib`, les dossiers de données Qt et les mêmes widgets et services. Une installation Linux se prépare avec `python3 -m venv .venv`, puis `.venv/bin/python -m pip install -e '.[desktop]'`, et se lance avec `sh launch-chiploom.sh`. FFmpeg avec libopenmpt et les dépendances système Qt doivent être présents. **Le cœur et des rendus FFmpeg sont vérifiés par la CI Ubuntu ; la fenêtre Linux et sa sortie audio physique restent à valider.** Les conditions système sont décrites dans la [documentation officielle de Qt for Python](https://doc.qt.io/qtforpython-6/gettingstarted.html).
 
 Les prochaines options proposées et les limites de cette tranche sont dans [CONCEPTION.md](../CONCEPTION.md).
 
