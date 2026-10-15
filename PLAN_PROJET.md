@@ -2,7 +2,7 @@
 
 15 octobre 2026 — Plan de progression, mis à jour après le premier prototype MOD.
 
-La première version vise l’Amiga et les cracktros, avec des modules MOD à quatre voies, conformément à ton choix. XM puis IT restent dans la trajectoire du projet.
+Le projet vise la composition tracker et chiptune par des agents, avec une interface facultative pour les musiciens. La première version utilise des modules MOD à quatre voies. XM puis IT restent dans la trajectoire du projet, sans limiter son identité à une plateforme historique.
 
 **L’idée est techniquement faisable.** Un agent peut manipuler les notes, les patterns, les effets et les samples sous forme de données, puis produire un véritable module éditable. La qualité musicale, la proximité avec tes références et la fidélité de lecture devront être démontrées sur des morceaux concrets.
 
@@ -27,7 +27,7 @@ Les briques de lecture existent : libopenmpt transforme les modules en audio PCM
 
 | Étape | Format | Intérêt pour le projet |
 | --- | --- | --- |
-| Première version | MOD de type ProTracker, quatre voies | Cible Amiga, samples 8 bits, patterns de 64 lignes et contraintes adaptées aux premiers essais. |
+| Première version | MOD de type ProTracker, quatre voies | Samples 8 bits, patterns de 64 lignes et contraintes adaptées aux premiers essais. |
 | Extension suivante | XM | Instruments avec enveloppes et affectation de plusieurs samples à un instrument. |
 | Extension ultérieure | IT | Gestion plus riche des voix, notamment les New Note Actions, et filtres d’instrument. |
 
@@ -35,7 +35,7 @@ Ces différences sont décrites dans le [manuel des formats OpenMPT](https://wik
 
 Pour la première version, je propose un profil volontairement limité : quatre voies, 31 emplacements de samples, des sons courts et des effets choisis pour la cible ProTracker. Le code de référence OpenMPT confirme la structure à 31 samples et distingue plusieurs variantes MOD ; l’extension du fichier ne suffit donc pas à identifier son comportement exact. [Lecteur et exporteur MOD d’OpenMPT](https://github.com/OpenMPT/openmpt/blob/master/soundlib/Load_mod.cpp).
 
-La version précise de ProTracker, le mode de tempo et les limites de taille seront fixés pendant le cadrage. L’esthétique recherchée et la compatibilité avec un véritable Amiga seront deux critères distincts.
+La version précise de ProTracker, le mode de tempo et les limites de taille seront fixés pendant le cadrage. L’esthétique recherchée et la compatibilité avec les différents lecteurs seront deux critères distincts.
 
 ## Fonctionnement proposé pour un agent
 
@@ -114,7 +114,7 @@ La cible proposée est une boucle de 30 à 60 secondes avec un motif identifiabl
 - **Musique** : ton appréciation du motif, du rythme, des timbres, des variations et de la proximité avec les références.
 - **Reproductibilité** : conservation des fichiers et paramètres ayant produit la version retenue.
 
-Une comparaison audio entre lecteurs devra tenir compte du filtrage et du rééchantillonnage ; une différence numérique ne prouve pas à elle seule un défaut musical. Une validation sur lecteur logiciel ne constituera pas une validation sur un véritable Amiga.
+Une comparaison audio entre lecteurs devra tenir compte du filtrage et du rééchantillonnage ; une différence numérique ne prouve pas à elle seule un défaut musical. La validation concerne les lecteurs effectivement testés.
 
 Pour évaluer l’apport des références, on pourra comparer un même brief avec une composition simple à règles, une composition par l’agent seul et une composition par l’agent disposant des profils de style. Tes préférences d’écoute resteront le critère musical principal. Les mesures automatiques et un éventuel modèle d’analyse audio seront des aides, sans équivalence avec une écoute humaine.
 
@@ -124,6 +124,6 @@ La première fenêtre humaine ouvre les modules et projets, affiche patterns et 
 
 La fenêtre propose maintenant le mute par clic sur chaque voie, un vu-mètre stéréo alimenté par l'audio réellement décodé, quatre thèmes et les langues anglais/français, avec l'anglais par défaut. Le thème et la langue changent sans recharger le morceau et sont conservés après fermeture. Les 54 tests passent sous Windows avec les dépendances optionnelles ; la réouverture et les quatre thèmes ont aussi été vérifiés dans des fenêtres natives.
 
-La conception et les options proposées sont dans `CONCEPTION.md`, les lanceurs et commandes dans `README.md`. Le cœur et des rendus FFmpeg passent la CI Ubuntu ; la fenêtre Linux et sa sortie audio physique restent à valider. L'intégration MCP, les formats XM/IT et l'entraînement restent à développer. La validation sur matériel Amiga n'a pas été effectuée.
+La conception et les options proposées sont dans `CONCEPTION.md`, les lanceurs et commandes dans `README.md`. Le cœur et des rendus FFmpeg passent la CI Ubuntu ; la fenêtre Linux et sa sortie audio physique restent à valider. L'intégration MCP, les formats XM/IT et l'entraînement restent à développer.
 
 La tranche 0.4.0 ajoute le nom ChipLoom, un guide pour Codex et Hermès, une commande `preview` indépendante des démos et une commande `analyze` pour les MOD/ZIP de référence. La sélection de 15 modules est documentée dans `references/SELECTION_FR.md`. Six passent le profil éditable actuel. Le dépôt privé est sous licence MIT pour le code original ; les originaux tiers restent hors du dépôt. MCP reste un adaptateur à développer, distinct du cœur déjà utilisable par les agents.

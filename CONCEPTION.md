@@ -61,7 +61,7 @@ Les deux lecteurs rendent une boucle complète, sans échantillon PCM saturé ni
 
 Les empreintes, paramètres et résultats sont enregistrés dans `exports/first_light/validation.json`. Les rendus de lecteurs différents peuvent varier à cause du mixage, du filtrage et du rééchantillonnage ; leur égalité numérique n’est pas un critère de réussite.
 
-La compatibilité avec des modules tiers, l’écoute comparative de références et le fonctionnement sur matériel Amiga restent à évaluer. La qualité artistique se juge à l’écoute. Aucun entraînement de modèle n’est inclus dans ce prototype.
+La compatibilité avec des modules tiers et l’écoute comparative de références restent à évaluer. La qualité artistique se juge à l’écoute. Aucun entraînement de modèle n’est inclus dans ce prototype.
 
 ## Fenêtre et lecture
 

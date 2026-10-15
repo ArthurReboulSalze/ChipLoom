@@ -2,6 +2,8 @@
 
 ChipLoom is a tracker toolkit for agents and a companion editor for humans. Its Python package is `tracker4agents`; the installed CLI alias is `chiploom`.
 
+Present ChipLoom as a tracker and chiptune composition toolkit across platforms. Four-channel MOD is the first supported format; keep branding and repository topics independent of any particular historical computer.
+
 - Use the JSON project, Python API and CLI for music work. The window and HTML page are optional listening views.
 - Read `docs/AGENT_GUIDE.md` for composition workflows and `docs/CLI.md` for command contracts.
 - Save new compositions and generated media under `exports/<name>`. Preserve supplied references and existing examples unless the user explicitly asks to edit them.

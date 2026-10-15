@@ -38,7 +38,7 @@ QPushButton#primary {{background:{primary};color:{primary_text};border-color:{ac
 QPushButton[trackMuted="true"] {{color:{disabled};background:{panel};border-color:{disabled}}}
 QHeaderView::section {{background:{header};color:{text};border:0;border-right:1px solid {border};padding:8px}}
 QTableView {{gridline-color:{border};selection-background-color:{selected};selection-color:{text}}}
-QLabel#title {{font-size:29px;font-weight:600}} QLabel#muted {{color:{muted}}}
+QLineEdit#songTitle {{font-size:18px;font-weight:600}} QLabel#muted {{color:{muted}}}
 QLabel#section {{font-size:14px;font-weight:bold;color:{accent};padding-top:8px}}
 QToolTip {{background:{panel};color:{text};border:1px solid {border}}}
 QSplitter::handle {{background:{border}}} QSlider::groove:horizontal {{height:5px;background:{border};border-radius:2px}}

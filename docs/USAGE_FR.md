@@ -52,7 +52,7 @@ La fenêtre permet de :
 - régler le titre, le tempo et la vitesse de départ, annuler/rétablir et enregistrer le projet ;
 - exporter le **MOD**, un WAV ou un MP3 facultatif. L'export audio utilise les voies actuellement audibles ; le MOD conserve les quatre voies.
 
-Les colonnes Smp et Effet ainsi que les numéros de lignes et d'ordres sont en hexadécimal. La transposition concerne toute la voie du pattern affiché, y compris ses autres occurrences dans la liste d'ordres. Les effets s'éditent directement dans le tableau. Le panneau droit regroupe les réglages du morceau et les exports WAV/MP3. Le réglage du tempo refuse d'effacer d'autres effets s'il manque deux colonnes disponibles sur la première ligne.
+Les colonnes Smp et Effet ainsi que les numéros de lignes et d'ordres sont en hexadécimal. La transposition concerne toute la voie du pattern affiché, y compris ses autres occurrences dans la liste d'ordres. Les effets s'éditent directement dans le tableau. Les réglages du morceau, les exports WAV/MP3 et le vu-mètre se trouvent en haut de la fenêtre : le tracker occupe toute la largeur à droite de la bibliothèque. Le réglage du tempo refuse d'effacer d'autres effets s'il manque deux colonnes disponibles sur la première ligne.
 
 `Ctrl+S` enregistre un projet JSON déjà ouvert ; pour un MOD, il propose un nouveau projet JSON. `Ctrl+Maj+S` enregistre sous un autre nom. `Ctrl+Z` annule, `Ctrl+Maj+Z` rétablit et Espace commande la lecture lorsque la table des patterns a le focus. **F5** recharge le fichier, notamment après une modification faite par l'agent. Une confirmation protège les retouches non enregistrées lors d'un changement de fichier ou d'une fermeture.
 
@@ -203,6 +203,6 @@ La suite comprend **54 tests** : les 23 contrôles initiaux du format, des rendu
 
 Les quatre thèmes ont aussi été inspectés dans des fenêtres Windows natives ; les captures et rapports sont dans `exports/desktop`. Un nouveau processus a confirmé la restauration du thème et de la langue après fermeture complète.
 
-Le rapport de la démo contient **13 contrôles réussis** : reconstruction identique du MOD, signal présent, durée complète et absence de saturation PCM dans les deux lecteurs, puis correspondance des 256 lignes avec la trace d’exécution libxmp. Un test séparé vérifie deux boucles consécutives. Ces contrôles ne remplacent pas l’écoute musicale et ne valident pas un véritable Amiga.
+Le rapport de la démo contient **13 contrôles réussis** : reconstruction identique du MOD, signal présent, durée complète et absence de saturation PCM dans les deux lecteurs, puis correspondance des 256 lignes avec la trace d’exécution libxmp. Un test séparé vérifie deux boucles consécutives. Ces contrôles ne remplacent pas l’écoute musicale.
 
 La conception retenue et les limites actuelles sont décrites dans [CONCEPTION.md](../CONCEPTION.md).

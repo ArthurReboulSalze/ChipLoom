@@ -79,7 +79,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
         current_flags = dll.xmp_get_player(ctx, 5)
         checked(current_flags, "current flags")
         # CFLAGS applies to the loaded module; FLAGS only configures future loads.
-        checked(dll.xmp_set_player(ctx, 5, (current_flags | 8) & ~1), "PAL CIA / Amiga mixer flags")
+        checked(dll.xmp_set_player(ctx, 5, (current_flags | 8) & ~1), "PAL CIA / mixer flags")
         checked(dll.xmp_set_player(ctx, 1, 70), "stereo separation")
         checked(dll.xmp_set_player(ctx, 0, 1), "amplification")
         frame = FrameInfo()

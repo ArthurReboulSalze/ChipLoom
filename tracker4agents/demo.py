@@ -1,4 +1,4 @@
-"""First Light: an original 16-bar, four-channel Amiga-style test loop."""
+"""First Light: an original 16-bar, four-channel chiptune test loop."""
 
 from __future__ import annotations
 
@@ -97,8 +97,8 @@ def create(seed: int = 104729) -> Module:
     module = Module(
         "First Light", samples, patterns, [0, 1, 2, 3],
         {
-            "description": "Original 16-bar Amiga/cracktro test loop; no imported music or samples.",
-            "display_description": "Une boucle Amiga composée par l’agent. Huit samples dessinés ou synthétisés pour le projet, quatre voies et seize mesures.",
+            "description": "Original 16-bar chiptune test loop; no imported music or samples.",
+            "display_description": "Une boucle chiptune composée par l’agent. Huit samples dessinés ou synthétisés pour le projet, quatre voies et seize mesures.",
             "arrangement": "Progression Am – F – C – G. La seconde moitié développe la mélodie, puis un roulement ramène au début.",
             "bars": 16,
             "seed": seed, "author": "tracker4agents / agent prototype",

@@ -73,7 +73,7 @@ def main():
                 "follow": window.follow.isChecked(), "error": window.player.errorString(),
                 "theme": window.theme, "language": window.language,
                 "meter_buffers": buffers, "meter_rms": levels, "meter_peaks": peaks,
-                "not_checked": ["physical speakers", "Linux", "Amiga hardware"],
+                "not_checked": ["physical speakers", "Linux"],
             }
             if args.screenshot:
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)

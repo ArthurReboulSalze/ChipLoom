@@ -36,7 +36,7 @@ Les fichiers utilisent **101 emplacements de samples non vides**, totalisant 33 
 
 **S02.** Quatre patterns, vitesse 5 à 125 BPM dans le plan strict. Entre 0 et 1, puis entre 2 et 3, les voies **1, 2 et 4 sont identiques** ; seule la voie 3 change. La voie 4 contient seulement 12 événements avec période non nulle mais **244 événements avec sample et sans nouvelle période** sur les patterns stockés. Piste : garder un accompagnement stable et faire évoluer une ligne, tout en sculptant les timbres à l'intérieur des notes.
 
-**S03.** Deux voies, quatre samples et douze ordres `0,7,1,4,2,3,5,6,2,3,5,8`. Les commandes F03 donnent une grille rapide ; les patterns 5 et 6 conservent exactement la deuxième voie. Piste : avec peu de voix, alterner les rôles dans le temps et varier une ligne tout en conservant l'autre. Ce fichier n'est pas un MOD Amiga à quatre voies malgré son extension.
+**S03.** Deux voies, quatre samples et douze ordres `0,7,1,4,2,3,5,6,2,3,5,8`. Les commandes F03 donnent une grille rapide ; les patterns 5 et 6 conservent exactement la deuxième voie. Piste : avec peu de voix, alterner les rôles dans le temps et varier une ligne tout en conservant l'autre. Ce fichier n'est pas un MOD à quatre voies malgré son extension.
 
 **S04.** L'arrangement `2,3,4,3,4,1,1` ne joue pas le pattern 0. Dans les patterns 2, 3 et 4, les voies **2, 3 et 4 sont identiques** ; les variantes concernent la voie 1. La voie 2 comporte 185 commandes de sample sans note sur l'ensemble stocké. Piste : distinguer les données stockées de l'arrangement joué et construire des variantes ciblées, sans réécrire toutes les voix.
 

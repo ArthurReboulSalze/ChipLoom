@@ -4,7 +4,7 @@ On 15 October 2026, the project owner supplied a report from a **Hermes Agent / 
 
 The agent reported completing two original compositions, *Night Courier* (53.76 seconds) and *Turbo Galette* (92.16 seconds), including valid MOD exports and MP3 listening copies. It used the CLI without a graphical desktop, an MCP adapter or changes to Hermes core. The owner confirmed that the workflow worked.
 
-This is a **user-reported end-to-end result**, not a reproduced server test by this repository's CI. The supplied report did not include a full machine log or an independent libxmp run. It does not validate the Linux desktop, every model/provider, or physical Amiga playback. Private delivery details and the raw session report are not republished.
+This is a **user-reported end-to-end result**, not a reproduced server test by this repository's CI. The supplied report did not include a full machine log or an independent libxmp run. It does not validate the Linux desktop or every model/provider. Private delivery details and the raw session report are not republished.
 
 ## Changes made in v0.5.0
 

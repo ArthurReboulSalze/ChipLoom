@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — 2026-10-15
+
+- Remove the right sidebar and move song settings and audio exports above the tracker, alongside the transport and stereo meter. Use the title field as the song heading to keep the header compact.
+- Give the pattern and sample views the full width beside the library, including at the minimum window size in English and French.
+- Present ChipLoom as a tracker and chiptune composition toolkit for agents, with four-channel MOD support as its first format rather than a platform-specific focus.
+
 ## 0.5.1 — 2026-10-15
 
 - Integrate the approved ChipLoom logo in the library and its emblem in the native window/taskbar icon, including installed packages.

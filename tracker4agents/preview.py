@@ -39,7 +39,7 @@ def create_bundle(source: Path, output: Path, mp3: bool = False, ffmpeg: str | N
         report = {"schema": "chiploom.preview.v1", "version": __version__, "title": module.title,
             "mod_sha256": audio.sha256(module_path), "mod_roundtrip_byte_exact": mod.encode(mod.read(module_path)) == payload,
             "duration_seconds": plan["duration_seconds"], "render": render, "optional_mp3": encoded,
-            "scope": "One renderer and structural round-trip; musical quality and physical Amiga playback are not assessed."}
+            "scope": "One renderer and structural round-trip; musical quality and physical audio output are not assessed."}
         project.write_json(folder / "validation.json", report)
         write_preview(module, folder / "preview.html", "module.wav", "validation.json",
                       "module.mp3" if mp3 else None, language=language)

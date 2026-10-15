@@ -12,7 +12,7 @@ FR = {
     "Open…": "Ouvrir…", "MOD · 4 CHANNELS · PAL": "MOD · 4 VOIES · PAL",
     "Open a module to get started": "Ouvre un module pour commencer",
     "Play": "Écouter", "Pause": "Pause", "Stop": "Stop", "Loop": "Boucle", "Volume": "Volume",
-    "LIBRARY": "BIBLIOTHÈQUE", "SONG": "MORCEAU", "EXPORT": "EXPORT", "SAMPLES": "SAMPLES",
+    "LIBRARY": "BIBLIOTHÈQUE", "SAMPLES": "SAMPLES",
     "MOD and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.":
         "MOD et projets JSON\nDépose un fichier ici pour l'ouvrir.\nF5 recharge les changements de l'agent.",
     "Order": "Ordre", "Follow playback": "Suivre la lecture",

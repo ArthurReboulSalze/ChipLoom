@@ -100,7 +100,7 @@ def create_demo(args: argparse.Namespace) -> dict:
         "prototype_version": __version__, "status": "pass" if all(checks.values()) else "fail",
         "module": summary, "mod_sha256": audio.sha256(module_path), "mod_bytes": len(payload),
         "checks": checks, "renders": rendered, "optional_mp3": mp3,
-        "not_validated": ["human musical listening", "original Amiga hardware", "third-party module corpus"],
+        "not_validated": ["human musical listening", "physical audio output", "third-party module corpus"],
         "reference_note": "libopenmpt and libxmp are distinct replay implementations; their PCM is not expected to be identical.",
     }
     project.write_json(directory / "validation.json", report)

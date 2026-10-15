@@ -57,7 +57,7 @@ Musical brief → Agent → JSON score + sample recipes → Validate → MOD
 | Standard-library core, independent of the agent provider | Portable HTML listening bundles |
 
 <p align="center">
-  <img src="docs/assets/chiploom-desktop-v051.png" alt="ChipLoom desktop on Windows: the integrated logo, October Letters in the Violet theme, four tracker channels, mute and solo buttons, song controls, audio exports and a sample waveform editor." width="1100">
+  <img src="docs/assets/chiploom-desktop-v052.png" alt="ChipLoom desktop on Windows: the integrated logo, October Letters in the Violet theme, full-width tracker channels, mute and solo buttons, top song controls and audio exports, a stereo meter and a sample waveform editor." width="1100">
 </p>
 
 <p align="center"><em>The Windows desktop companion, showing October Letters in the Violet theme. The agent works through JSON and the CLI; the window is for the human.</em></p>
@@ -151,7 +151,7 @@ The included [reference study](references/SELECTION_FR.md) covers 15 historical 
 | 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Arrangement/block editor and interactive sample drawing |
 | Signed 8-bit mono samples with deterministic synthesis | Real-time tracker mixer |
 | Render up to 120 seconds per request, including excerpts | MCP protocol adapter |
-| Windows desktop; Windows/Linux core CI and reported Debian agent use | Linux desktop and physical Amiga validation |
+| Windows desktop; Windows/Linux core CI and reported Debian agent use | Linux desktop validation |
 
 Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx`, other signatures and restart-byte variants are outside the editing profile. [Format details](docs/USAGE_FR.md#profil-mod-pris-en-charge) · [Roadmap](PLAN_PROJET.md)
 

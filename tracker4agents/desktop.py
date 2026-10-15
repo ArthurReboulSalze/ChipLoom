@@ -10,7 +10,7 @@ from PySide6.QtCore import (QAbstractTableModel, QLibraryInfo, QModelIndex, QObj
 from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
-                               QFormLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
                                QSpinBox, QSplitter, QTableView, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
@@ -456,15 +456,36 @@ class TrackerWindow(QMainWindow):
         top.addWidget(self.language_combo)
         top.addWidget(self._label('MOD · 4 CHANNELS · PAL', "muted"))
         outer.addLayout(top)
-        heading = QHBoxLayout()
-        self.title = self._label("ChipLoom", "title")
-        heading.addWidget(self.title)
-        heading.addStretch()
-        self.summary = self._label('Open a module to get started', "muted")
-        heading.addWidget(self.summary)
-        outer.addLayout(heading)
+        song = QHBoxLayout()
+        song.addWidget(self._label('Title'))
+        self.title_edit = QLineEdit()
+        self.title_edit.setObjectName("songTitle")
+        self.title_edit.setMaxLength(20)
+        self.title_edit.setMinimumWidth(150)
+        self._bind(self.title_edit, 'Untitled', 'setPlaceholderText')
+        song.addWidget(self.title_edit, 1)
+        song.addWidget(self._label('Tempo'))
+        self.bpm = QSpinBox()
+        self.bpm.setRange(33, 255)
+        self.bpm.setFixedWidth(65)
+        song.addWidget(self.bpm)
+        song.addWidget(self._label('Ticks / row'))
+        self.speed = QSpinBox()
+        self.speed.setRange(1, 31)
+        self.speed.setFixedWidth(55)
+        song.addWidget(self.speed)
+        song.addWidget(self._button('Apply at start', self.apply_song, "applySong"))
+        song.addSpacing(14)
+        song.addWidget(self._button('Export WAV…', lambda: self.export_audio("wav"), "exportWav"))
+        song.addWidget(self._button('Export MP3…', lambda: self.export_audio("mp3"), "exportMp3"))
+        outer.addLayout(song)
+        details = QHBoxLayout()
         self.origin = self._label("", "muted")
-        outer.addWidget(self.origin)
+        details.addWidget(self.origin)
+        details.addStretch()
+        self.summary = self._label('Open a module to get started', "muted")
+        details.addWidget(self.summary)
+        outer.addLayout(details)
         transport = QHBoxLayout()
         self.play_button = self._button('Play', self.toggle_play, "primary")
         self.play_button.setEnabled(False)
@@ -491,6 +512,7 @@ class TrackerWindow(QMainWindow):
         outer.addLayout(transport)
 
         horizontal = QSplitter(Qt.Orientation.Horizontal)
+        horizontal.setObjectName("workspace")
         outer.addWidget(horizontal, 1)
         library = QWidget()
         library.setMaximumWidth(250)
@@ -603,34 +625,9 @@ class TrackerWindow(QMainWindow):
         center.addWidget(sample_widget)
         center.setSizes([490, 240])
 
-        inspector = QWidget()
-        inspector.setMaximumWidth(245)
-        inspector.setMinimumWidth(205)
-        side = QVBoxLayout(inspector)
-        side.setContentsMargins(12, 0, 0, 0)
-        side.addWidget(self._label('SONG', "section"))
-        form = QFormLayout()
-        self.title_edit = QLineEdit()
-        self.title_edit.setMaxLength(20)
-        form.addRow(self._label('Title'), self.title_edit)
-        self.bpm = QSpinBox()
-        self.bpm.setRange(33, 255)
-        form.addRow(self._label('Tempo'), self.bpm)
-        self.speed = QSpinBox()
-        self.speed.setRange(1, 31)
-        form.addRow(self._label('Ticks / row'), self.speed)
-        side.addLayout(form)
-        side.addWidget(self._button('Apply at start', self.apply_song))
-        side.addSpacing(16)
-        side.addWidget(self._label('EXPORT', "section"))
-        side.addWidget(self._button('Export WAV…', lambda: self.export_audio("wav")))
-        side.addWidget(self._button('Export MP3…', lambda: self.export_audio("mp3")))
-        side.addStretch()
-        horizontal.addWidget(inspector)
-        horizontal.setSizes([210, 950, 225])
+        horizontal.setSizes([210, 1175])
         horizontal.setStretchFactor(0, 0)
         horizontal.setStretchFactor(1, 1)
-        horizontal.setStretchFactor(2, 0)
         self.message("Ready")
         self.play_action = QAction(self)
         self.play_action.setShortcut("Space")
@@ -738,7 +735,6 @@ class TrackerWindow(QMainWindow):
         self.plan = playback_plan(module)
         self.times = [entry["seconds"] for entry in self.plan["timeline"]]
         self.current_order = min(self.current_order, len(module.orders) - 1)
-        self.title.setText(module.title or self.t('Untitled'))
         self.title_edit.setText(module.title)
         initial = self.plan["timeline"][0]
         self.bpm.setValue(initial["bpm"])
@@ -775,7 +771,6 @@ class TrackerWindow(QMainWindow):
 
     def _song_labels(self):
         module = self.document.module
-        self.title.setText(module.title or self.t("Untitled"))
         self.summary.setText(self.t("{bpm} BPM  ·  {orders} orders  ·  {samples} samples  ·  {seconds:.2f} s",
             bpm=self.plan["timeline"][0]["bpm"], orders=len(module.orders),
             samples=sum(bool(sample.pcm) for sample in module.samples), seconds=self.plan["duration_seconds"]))
