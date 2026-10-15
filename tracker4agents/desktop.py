@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (QAbstractTableModel, QLibraryInfo, QModelIndex, QObject, QRunnable, QStandardPaths,
                             Qt, QThreadPool, QTimer, QTranslator, QUrl, Signal)
-from PySide6.QtGui import QAction, QColor, QFontDatabase, QKeySequence, QPainter, QPainterPath, QPalette, QPen
+from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
                                QFormLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -24,7 +24,31 @@ from .model import Cell, Sample, cell, playback_plan
 from .themes import THEMES, stylesheet
 
 ROOT = Path(__file__).resolve().parents[1]
+ASSETS = Path(__file__).resolve().parent / "assets"
 STYLE = stylesheet('midnight')
+
+
+def brand_icon() -> QIcon:
+    """Use the four-channel emblem from the approved logo, with square padding.
+
+    This is a display crop of the bundled artwork, not a second visual identity.
+    Keeping the source inside the package also supports non-editable installs.
+    """
+    logo = QPixmap(str(ASSETS / "chiploom-logo.png"))
+    if logo.isNull():
+        return QIcon()
+    emblem = logo.copy(100, 160, 520, 410)
+    icon = QIcon()
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.GlobalColor.transparent)
+        scaled = emblem.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                               Qt.TransformationMode.SmoothTransformation)
+        painter = QPainter(canvas)
+        painter.drawPixmap((size - scaled.width()) // 2, (size - scaled.height()) // 2, scaled)
+        painter.end()
+        icon.addPixmap(canvas)
+    return icon
 
 
 def label(text: str, name: str = "") -> QLabel:
@@ -190,6 +214,7 @@ class TrackerWindow(QMainWindow):
         super().__init__()
         self.setObjectName("Tracker4Agents")
         self.setWindowTitle(f"ChipLoom {__version__}")
+        self.setWindowIcon(brand_icon())
         self.resize(1420, 900)
         self.setMinimumSize(1080, 710)
         self.setAcceptDrops(True)
@@ -342,10 +367,6 @@ class TrackerWindow(QMainWindow):
         if self.document:
             self._song_labels()
             self._sample_labels()
-            index = self.table.currentIndex()
-            if index.isValid():
-                value = self.document.module.patterns[self.pattern_model.pattern].get(index.row(), index.column() // 3)
-                self.cell_info.setText(self.t("Row {row:02X} · track {channel}\n{value}", row=index.row(), channel=index.column() // 3 + 1, value=value.text()))
         self.pattern_model.headerDataChanged.emit(Qt.Orientation.Horizontal, 0, 11)
         self._transport_labels()
         self._monitor_style()
@@ -475,6 +496,14 @@ class TrackerWindow(QMainWindow):
         library.setMaximumWidth(250)
         library_layout = QVBoxLayout(library)
         library_layout.setContentsMargins(0, 0, 10, 0)
+        self.brand = QLabel()
+        self.brand.setObjectName("brandLogo")
+        self.brand.setAccessibleName("ChipLoom")
+        self.brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo = QPixmap(str(ASSETS / "chiploom-logo.png"))
+        self.brand.setPixmap(logo.scaled(190, 64, Qt.AspectRatioMode.KeepAspectRatio,
+                                        Qt.TransformationMode.SmoothTransformation))
+        library_layout.addWidget(self.brand)
         library_layout.addWidget(self._label('LIBRARY', "section"))
         self.library = QTreeWidget()
         self.library.setHeaderHidden(True)
@@ -592,25 +621,11 @@ class TrackerWindow(QMainWindow):
         form.addRow(self._label('Ticks / row'), self.speed)
         side.addLayout(form)
         side.addWidget(self._button('Apply at start', self.apply_song))
-        side.addWidget(self._label('CELL', "section"))
-        self.cell_info = self._label('Select a cell', "muted")
-        self.cell_info.setWordWrap(True)
-        side.addWidget(self.cell_info)
-        gate_form = QFormLayout()
-        self.gate = QSpinBox()
-        self.gate.setRange(1, 15)
-        self.gate.setValue(3)
-        gate_form.addRow(self._label('Cut after'), self.gate)
-        side.addLayout(gate_form)
-        cut = self._button('Apply ECx', self.gate_note)
-        self._bind(cut, "Replace the selected cell's effect with a note cut after this many ticks.", "setToolTip")
-        side.addWidget(cut)
-        hint = self._label("EC3 cuts after 3 ticks. Use a value lower than the ticks per row to shorten a note.", "muted")
-        hint.setWordWrap(True)
-        side.addWidget(hint)
-        side.addStretch()
+        side.addSpacing(16)
+        side.addWidget(self._label('EXPORT', "section"))
         side.addWidget(self._button('Export WAV…', lambda: self.export_audio("wav")))
         side.addWidget(self._button('Export MP3…', lambda: self.export_audio("mp3")))
+        side.addStretch()
         horizontal.addWidget(inspector)
         horizontal.setSizes([210, 950, 225])
         horizontal.setStretchFactor(0, 0)
@@ -764,7 +779,8 @@ class TrackerWindow(QMainWindow):
         self.summary.setText(self.t("{bpm} BPM  ·  {orders} orders  ·  {samples} samples  ·  {seconds:.2f} s",
             bpm=self.plan["timeline"][0]["bpm"], orders=len(module.orders),
             samples=sum(bool(sample.pcm) for sample in module.samples), seconds=self.plan["duration_seconds"]))
-        self.origin.setText(str(self.document.path) if self.document.path else self.t("New project"))
+        self.origin.setText(self.document.path.name if self.document.path else self.t("New project"))
+        self.origin.setToolTip(str(self.document.path) if self.document.path else "")
 
     def _update_title(self):
         if self.document:
@@ -938,7 +954,6 @@ class TrackerWindow(QMainWindow):
         if not self.document or not index.isValid():
             return
         value = self.document.module.patterns[self.pattern_model.pattern].get(index.row(), index.column() // 3)
-        self.cell_info.setText(self.t("Row {row:02X} · track {channel}\n{value}", row=index.row(), channel=index.column() // 3 + 1, value=value.text()))
         if value.sample:
             for row in range(self.samples.count()):
                 if self.samples.item(row).data(Qt.ItemDataRole.UserRole) == value.sample - 1:
@@ -1026,11 +1041,6 @@ class TrackerWindow(QMainWindow):
             self.edit(lambda: self.document.transpose(self.pattern_model.pattern, index.column() // 3, semitones))
         else:
             self.message('Select a cell in the track you want to transpose.')
-
-    def gate_note(self):
-        index = self.table.currentIndex()
-        if self.document and index.isValid():
-            self.edit(lambda: self.document.gate_note(self.pattern_model.pattern, index.row(), index.column() // 3, self.gate.value()))
 
     def undo(self):
         if self.document and self.document.undo():
@@ -1136,12 +1146,19 @@ class TrackerWindow(QMainWindow):
 
 
 def application() -> QApplication:
+    # Group native Windows taskbar windows as ChipLoom rather than Python.
+    import sys
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChipLoom.Desktop")
     app = QApplication.instance() or QApplication(["tracker4agents"])
     app.setOrganizationName("tracker4agents")
     app.setApplicationName("tracker4agents")
     # Keep the data-directory identity so existing sessions survive the new name.
     app.setApplicationDisplayName("ChipLoom")
     app.setApplicationVersion(__version__)
+    app.setWindowIcon(brand_icon())
+    app.setDesktopFileName("chiploom")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
     return app

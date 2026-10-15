@@ -2,9 +2,7 @@
   "purpose": "Structural reference analysis; no source PCM or note sequence copied",
   "modules": [
     {
-      "source": "2000AD - Creatures To The Rescue +3 trn.mod",
-      "sha256": "df76f2fc85ddf95f76913fedc443e92d22af8dcef256e2cac08e4898e85368a7",
-      "title": "kortis",
+      "reference_id": "A01",
       "bytes": 13712,
       "channels": 4,
       "orders": [
@@ -39,8 +37,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "9471aa3a62b19cb9bd3665671d9181cd8ca5377c1df9910bd4ee1179af731d6c"
+          "loop_length": 0
         },
         {
           "slot": 2,
@@ -48,8 +45,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 1194,
-          "pcm_sha256": "7ef42993079ab6254dd0dc5ffceff567d6bcb198a801b77f39b51c213a59044c"
+          "loop_length": 1194
         },
         {
           "slot": 3,
@@ -57,8 +53,7 @@
           "volume": 54,
           "finetune": 0,
           "loop_start": 16,
-          "loop_length": 28,
-          "pcm_sha256": "b80969f455db44a665bbd35c8dcaa1d1c6a7822b3e771530582d9cc6825bfdf6"
+          "loop_length": 28
         },
         {
           "slot": 4,
@@ -66,8 +61,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "6dfba38bd9f11c65d0f787a5481735222214a0dfebd6372b27bf356211b1e0af"
+          "loop_length": 0
         },
         {
           "slot": 6,
@@ -75,8 +69,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 20,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 7,
@@ -84,8 +77,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 18,
-          "loop_length": 28,
-          "pcm_sha256": "f04faa1c2907dde71d3bf50a4764236407f481a1b27eb3472f5b544c1b022a12"
+          "loop_length": 28
         },
         {
           "slot": 8,
@@ -93,8 +85,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 16,
-          "loop_length": 28,
-          "pcm_sha256": "f58412e701220124a1bccfe4adc63259ca93344d75b09a3654c0f9f98124a5f8"
+          "loop_length": 28
         },
         {
           "slot": 9,
@@ -102,8 +93,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 14,
-          "loop_length": 28,
-          "pcm_sha256": "87cc4a6858190e9510501724707488f12743aef4d8d0d5f1da5dea655669e9a4"
+          "loop_length": 28
         },
         {
           "slot": 10,
@@ -111,8 +101,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 12,
-          "loop_length": 28,
-          "pcm_sha256": "8399ab159932ea798f4b11710d4755d8f4d6547d3cbd10745f6143e87a198125"
+          "loop_length": 28
         },
         {
           "slot": 11,
@@ -120,8 +109,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 8,
-          "loop_length": 28,
-          "pcm_sha256": "d36096b632adc279f3819d5fe9195899fe3c4e0ff00ce120e3839853e59a7479"
+          "loop_length": 28
         },
         {
           "slot": 12,
@@ -129,8 +117,7 @@
           "volume": 60,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 28,
-          "pcm_sha256": "e0d5c44d139faf69573aaf4df01167cac318ed4e09f79e3063a766c4c825ef0e"
+          "loop_length": 28
         },
         {
           "slot": 13,
@@ -138,8 +125,7 @@
           "volume": 44,
           "finetune": 0,
           "loop_start": 18,
-          "loop_length": 28,
-          "pcm_sha256": "f04faa1c2907dde71d3bf50a4764236407f481a1b27eb3472f5b544c1b022a12"
+          "loop_length": 28
         },
         {
           "slot": 14,
@@ -147,8 +133,7 @@
           "volume": 28,
           "finetune": 0,
           "loop_start": 16,
-          "loop_length": 28,
-          "pcm_sha256": "f58412e701220124a1bccfe4adc63259ca93344d75b09a3654c0f9f98124a5f8"
+          "loop_length": 28
         },
         {
           "slot": 15,
@@ -156,8 +141,7 @@
           "volume": 12,
           "finetune": 0,
           "loop_start": 14,
-          "loop_length": 28,
-          "pcm_sha256": "87cc4a6858190e9510501724707488f12743aef4d8d0d5f1da5dea655669e9a4"
+          "loop_length": 28
         },
         {
           "slot": 16,
@@ -165,8 +149,7 @@
           "volume": 4,
           "finetune": 0,
           "loop_start": 12,
-          "loop_length": 28,
-          "pcm_sha256": "8399ab159932ea798f4b11710d4755d8f4d6547d3cbd10745f6143e87a198125"
+          "loop_length": 28
         },
         {
           "slot": 17,
@@ -174,8 +157,7 @@
           "volume": 64,
           "finetune": 2,
           "loop_start": 0,
-          "loop_length": 128,
-          "pcm_sha256": "49250bb6a6908a1ee03e7ab039215387185f22a227ef25a7ebaa31dab01e55f8"
+          "loop_length": 128
         }
       ],
       "patterns": [
@@ -845,9 +827,7 @@
       "byte_exact_decode_encode": true
     },
     {
-      "source": "ACME (Melboorn) - PC Flanc - Who Easykg.MOD",
-      "sha256": "6c7c17aeddc67f00936a74f688ae9033ef778f7a5ecd0d5811085cf65290744b",
-      "title": "monday",
+      "reference_id": "A02",
       "bytes": 15960,
       "channels": 4,
       "orders": [
@@ -878,8 +858,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "839c180c9c3ec577669ba234a96e02ec1cc8fcd03214e94eef0a1237d850a3f8"
+          "loop_length": 0
         },
         {
           "slot": 2,
@@ -887,8 +866,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "e18c9af07cde381bdcba4eaffb70416ccf7afd50ddfc7d12b68f746821c86cc5"
+          "loop_length": 0
         },
         {
           "slot": 3,
@@ -896,8 +874,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "dd593a1aaa900fa37552436ab75404517c6f8840f8bf29b68a3891519e074f2e"
+          "loop_length": 0
         },
         {
           "slot": 4,
@@ -905,8 +882,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 0,
-          "pcm_sha256": "2f20b1be37a21063dbc034f4a39f732bf6879de963bd0e0a5f536f63758c6b44"
+          "loop_length": 0
         },
         {
           "slot": 5,
@@ -914,8 +890,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 14,
-          "loop_length": 112,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "loop_length": 112
         },
         {
           "slot": 6,
@@ -923,8 +898,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 20,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 7,
@@ -932,8 +906,7 @@
           "volume": 61,
           "finetune": 0,
           "loop_start": 18,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 8,
@@ -941,8 +914,7 @@
           "volume": 58,
           "finetune": 0,
           "loop_start": 16,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 9,
@@ -950,8 +922,7 @@
           "volume": 55,
           "finetune": 0,
           "loop_start": 14,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 10,
@@ -959,8 +930,7 @@
           "volume": 52,
           "finetune": 0,
           "loop_start": 12,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 11,
@@ -968,8 +938,7 @@
           "volume": 49,
           "finetune": 0,
           "loop_start": 8,
-          "loop_length": 28,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "loop_length": 28
         },
         {
           "slot": 12,
@@ -977,8 +946,7 @@
           "volume": 64,
           "finetune": 0,
           "loop_start": 0,
-          "loop_length": 28,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "loop_length": 28
         }
       ],
       "patterns": [
@@ -1557,5 +1525,6 @@
       ],
       "byte_exact_decode_encode": true
     }
-  ]
+  ],
+  "publication": "Structural observations using neutral IDs; original filenames, internal titles and reference hashes omitted."
 }

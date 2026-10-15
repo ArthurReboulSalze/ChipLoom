@@ -145,8 +145,8 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(window.document.module.patterns[0].get(0, 3).note, "D-3", window.statusBar().currentMessage())
         self.assertTrue(window.document.dirty)
         self.assertEqual(window.table.currentIndex().row(), 0)
-        window.gate.setValue(2)
-        window.gate_note()
+        # Effects remain editable in the tracker after removing the ECx sidebar.
+        self.assertTrue(window.pattern_model.setData(window.pattern_model.index(0, 11), "EC2"))
         self.assertEqual(window.document.module.patterns[0].get(0, 3).effect, "EC2")
         window.undo()
         window.undo()

@@ -11,5 +11,6 @@ ChipLoom is a tracker toolkit for agents and a companion editor for humans. Its 
 - Keep the standard-library core independent of Qt and any particular agent provider. Do not describe the project as an MCP server until an actual protocol adapter exists and is tested.
 - Run relevant tests for code changes. Native desktop tests require the optional PySide6 dependency and FFmpeg.
 - Do not commit original reference modules, archives, external binaries, audio caches or machine-specific session data.
+- Published reference studies use neutral IDs. Keep original filenames, internal titles and reference hashes in local analysis only.
 
 Pour les échanges avec le propriétaire du projet : tutoie-le et adopte le ton chaleureux d'un ami proche.

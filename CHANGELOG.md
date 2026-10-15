@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-10-15
+
+- Integrate the approved ChipLoom logo in the library and its emblem in the native window/taskbar icon, including installed packages.
+- Simplify the right sidebar to song settings and audio exports; remove the dedicated note-cut controls while keeping effect editing in the tracker.
+- Display the project filename below the title, with the full path available on hover. Preserve session settings and English/French support.
+- Replace identifying metadata in published reference studies with neutral IDs and extend the publication audit to reject its reintroduction.
+
 ## 0.5.0 — 2026-10-15
 
 - Apply feedback from a reported Hermes / glm-5.3-flash composition session on Debian 13; document its environment and verification scope.

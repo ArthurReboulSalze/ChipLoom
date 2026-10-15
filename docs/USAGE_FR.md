@@ -48,11 +48,11 @@ La fenêtre permet de :
 - suivre l'intensité du son avec un **vu-mètre stéréo animé**, mesurant le niveau moyen et les crêtes du signal réellement décodé, également pendant l'écoute d'un sample ;
 - choisir parmi quatre thèmes (**Midnight**, **Amber**, **Violet**, **Light**) et basculer entre **English** et **Français** avec les menus en haut à droite ; l'anglais est la langue par défaut ;
 - afficher les samples et leurs boucles, les écouter séparément, régler volume et accord fin ;
-- modifier les notes, numéros de samples et effets par double-clic, transposer une voie du pattern ou raccourcir une note avec `ECx` ;
+- modifier les notes, numéros de samples et effets par double-clic, ou transposer une voie du pattern ;
 - régler le titre, le tempo et la vitesse de départ, annuler/rétablir et enregistrer le projet ;
 - exporter le **MOD**, un WAV ou un MP3 facultatif. L'export audio utilise les voies actuellement audibles ; le MOD conserve les quatre voies.
 
-Les colonnes Smp et Effet ainsi que les numéros de lignes et d'ordres sont en hexadécimal. La transposition concerne toute la voie du pattern affiché, y compris ses autres occurrences dans la liste d'ordres. `ECx` remplace l'effet de la cellule sélectionnée. Le réglage du tempo refuse d'effacer d'autres effets s'il manque deux colonnes disponibles sur la première ligne.
+Les colonnes Smp et Effet ainsi que les numéros de lignes et d'ordres sont en hexadécimal. La transposition concerne toute la voie du pattern affiché, y compris ses autres occurrences dans la liste d'ordres. Les effets s'éditent directement dans le tableau. Le panneau droit regroupe les réglages du morceau et les exports WAV/MP3. Le réglage du tempo refuse d'effacer d'autres effets s'il manque deux colonnes disponibles sur la première ligne.
 
 `Ctrl+S` enregistre un projet JSON déjà ouvert ; pour un MOD, il propose un nouveau projet JSON. `Ctrl+Maj+S` enregistre sous un autre nom. `Ctrl+Z` annule, `Ctrl+Maj+Z` rétablit et Espace commande la lecture lorsque la table des patterns a le focus. **F5** recharge le fichier, notamment après une modification faite par l'agent. Une confirmation protège les retouches non enregistrées lors d'un changement de fichier ou d'une fermeture.
 

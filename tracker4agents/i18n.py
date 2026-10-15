@@ -12,7 +12,7 @@ FR = {
     "Open…": "Ouvrir…", "MOD · 4 CHANNELS · PAL": "MOD · 4 VOIES · PAL",
     "Open a module to get started": "Ouvre un module pour commencer",
     "Play": "Écouter", "Pause": "Pause", "Stop": "Stop", "Loop": "Boucle", "Volume": "Volume",
-    "LIBRARY": "BIBLIOTHÈQUE", "SONG": "MORCEAU", "CELL": "CELLULE", "SAMPLES": "SAMPLES",
+    "LIBRARY": "BIBLIOTHÈQUE", "SONG": "MORCEAU", "EXPORT": "EXPORT", "SAMPLES": "SAMPLES",
     "MOD and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.":
         "MOD et projets JSON\nDépose un fichier ici pour l'ouvrir.\nF5 recharge les changements de l'agent.",
     "Order": "Ordre", "Follow playback": "Suivre la lecture",
@@ -23,14 +23,9 @@ FR = {
     "Solo": "Solo", "Solo track {number}": "Écouter seulement la voie {number}",
     "Double-click: edit a cell · Click a row number: seek · Samples and effects are hexadecimal":
         "Double-clic : éditer · Clic sur un numéro de ligne : déplacer l'écoute · Samples et effets en hexadécimal",
-    "Select a sample": "Sélectionne un sample", "Play sample": "Écouter le sample",
+    "Select a sample": "Sélectionne un sample", "Play sample": "Écouter",
     "Fine tune": "Accord fin", "Apply": "Appliquer", "Title": "Titre", "Tempo": "Tempo",
     "Ticks / row": "Ticks / ligne", "Apply at start": "Appliquer au départ",
-    "Select a cell": "Sélectionne une cellule", "Cut after": "Coupe après", "Apply ECx": "Appliquer ECx",
-    "Replace the selected cell's effect with a note cut after this many ticks.":
-        "Remplace l'effet de la cellule sélectionnée par une coupe de note après ce nombre de ticks.",
-    "EC3 cuts after 3 ticks. Use a value lower than the ticks per row to shorten a note.":
-        "EC3 coupe après 3 ticks. Utilise une valeur inférieure aux ticks par ligne pour raccourcir la note.",
     "Ready": "Prêt", "Compositions": "Compositions", "Recent files": "Fichiers récents",
     "Unsaved changes": "Modifications non enregistrées",
     "Save the project changes before continuing?": "Enregistrer les modifications du projet avant de continuer ?",
@@ -47,7 +42,6 @@ FR = {
     "Ready to play": "Prêt à écouter", "Playback failed: {detail}": "Lecture impossible : {detail}",
     "Sample: {detail}": "Sample : {detail}",
     "This order is not reached in the module's playback cycle.": "Cet ordre n'est pas atteint dans le cycle de lecture du module.",
-    "Row {row:02X} · track {channel}\n{value}": "Ligne {row:02X} · voie {channel}\n{value}",
     "loop {start} → {end}": "boucle {start} → {end}", "no loop": "sans boucle",
     "{size} bytes · mono 8-bit · {loop} · C-2 preview": "{size} octets · mono 8 bits · {loop} · aperçu C-2",
     "Change applied · Ctrl+Z to undo": "Modification appliquée · Ctrl+Z pour annuler",

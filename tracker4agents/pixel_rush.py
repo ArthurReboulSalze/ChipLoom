@@ -166,8 +166,7 @@ def create(seed: int = 104729) -> Module:
         "timing": {"mode": "PAL CIA", "speed": 6, "bpm": 160},
         "sample_reference": "C-2 period 428; tiny drawn waves use finetune +1",
         "reference_use": "Arrangement, short waveforms and tracker articulation only; no reference PCM or note sequence imported.",
-        "reference_sha256": ["df76f2fc85ddf95f76913fedc443e92d22af8dcef256e2cac08e4898e85368a7",
-                             "6c7c17aeddc67f00936a74f688ae9033ef778f7a5ecd0d5811085cf65290744b"],
+        "reference_studies": ["A01", "A02"],
     })
     validate(module)
     return module

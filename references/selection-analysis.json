@@ -1,14 +1,10 @@
 {
   "ok": true,
-  "source": "selection_MODULES.zip",
-  "source_sha256": "a72f5a3cfbce3b1aabe5a6ecd6b18c16a83b549c3413f526555a24b1f364a456",
   "source_unchanged": true,
   "scope": "Read-only structural facts. No PCM or full note sequences. Stored-pattern counts do not imply audible playback counts.",
   "modules": [
     {
-      "filename": "CODEX - SpinTires installer.mod",
-      "sha256": "4c76a6a07da8a00bb97ce24f2e8931437d1341cf2483aee567a9ef7e0f6de0bd",
-      "title": "razor1911 chipdisk02",
+      "reference_id": "S01",
       "bytes": 8596,
       "signature": "M.K.",
       "channels": 4,
@@ -34,8 +30,7 @@
           "loop_start": 12,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 19,
-          "pcm_sha256": "2812b2e32cf8cfeb8cf5e866731f1a0d923ec6e7d8ccb8e3400686c23e310af9"
+          "distinct_amplitudes": 19
         },
         {
           "slot": 3,
@@ -45,8 +40,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 13,
-          "pcm_sha256": "dfd5d70a9bd3a8aaefa92a8c96e37c60cc6e9fc8ff7ce6259d6a62c88eed5119"
+          "distinct_amplitudes": 13
         },
         {
           "slot": 4,
@@ -56,8 +50,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 71,
-          "pcm_sha256": "ac7cc79b61c898dffa19107ca607f12debb7200112f8ffd5268e785d7b0531c9"
+          "distinct_amplitudes": 71
         },
         {
           "slot": 5,
@@ -67,8 +60,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 32,
-          "pcm_sha256": "0026f58f3e7a223a33ef9f9786c235b5510205c7e34ada9f8eeae2364c5f5e2a"
+          "distinct_amplitudes": 32
         },
         {
           "slot": 6,
@@ -78,8 +70,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 149,
-          "pcm_sha256": "cfeab978dc80f1d240ceac99294094a0aa86b206d646706e47353e4370d84603"
+          "distinct_amplitudes": 149
         },
         {
           "slot": 7,
@@ -89,8 +80,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 7,
-          "pcm_sha256": "cbdd79dfd43487e9223a68520f24407d5b10e88e0bf29a3b6a537fe81b41c1f8"
+          "distinct_amplitudes": 7
         },
         {
           "slot": 8,
@@ -100,8 +90,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 8,
-          "pcm_sha256": "b8dba2f4f9f42457986fcdc4a7c75593e49e192b3ae0c2412b4a118fd8f578fc"
+          "distinct_amplitudes": 8
         }
       ],
       "stored_effect_families": {
@@ -968,9 +957,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "DBH - HelioBar XP 1.61 crk.mod",
-      "sha256": "b6c2e017e3af16dded660228f2b2bd833b1d057b71f0af1f11d9baa697a447fc",
-      "title": "enchantment#37",
+      "reference_id": "S02",
       "bytes": 7750,
       "signature": "M.K.",
       "channels": 4,
@@ -993,8 +980,7 @@
           "loop_start": 0,
           "loop_length": 126,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 3,
@@ -1004,8 +990,7 @@
           "loop_start": 12,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "fbe40368296524abe777cedddbc8a84a6cb055ea506aa30885348b3f4cf6bb97"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 4,
@@ -1015,8 +1000,7 @@
           "loop_start": 14,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 37,
-          "pcm_sha256": "bfd0014f2ce7db9bc467f0cfb59891bf44b1e12c57a445033732b7d14a07369e"
+          "distinct_amplitudes": 37
         },
         {
           "slot": 5,
@@ -1026,8 +1010,7 @@
           "loop_start": 16,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 33,
-          "pcm_sha256": "c0563be099102ae782e09c5e242f33eba14f10db6709a5e1424816b4946cde3a"
+          "distinct_amplitudes": 33
         },
         {
           "slot": 6,
@@ -1037,8 +1020,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 31,
-          "pcm_sha256": "99f366953a1bfae3715eeee499a31d30ba7343056403fa3dae3272998c61faa7"
+          "distinct_amplitudes": 31
         },
         {
           "slot": 7,
@@ -1048,8 +1030,7 @@
           "loop_start": 20,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 7,
-          "pcm_sha256": "23391769c302a18364542a570c125248a37bf6b80aeeae22993a27e34d3473ab"
+          "distinct_amplitudes": 7
         },
         {
           "slot": 11,
@@ -1059,8 +1040,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 61,
-          "pcm_sha256": "24d6ebebb992f5eacba18941bb75ad973865fcdf6080dcff3e88461eadd3db85"
+          "distinct_amplitudes": 61
         },
         {
           "slot": 14,
@@ -1070,8 +1050,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 216,
-          "pcm_sha256": "6ef85a48edc5db60927ad7ce12634204d00fb9967992477ce22373066ced29b9"
+          "distinct_amplitudes": 216
         },
         {
           "slot": 15,
@@ -1081,8 +1060,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 191,
-          "pcm_sha256": "54551dbef29d5ba3319489553dd3844ba52b65a0d5220f30ec66473a79b06e9f"
+          "distinct_amplitudes": 191
         }
       ],
       "stored_effect_families": {
@@ -1676,9 +1654,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "DiViNE - Desperados +5 trn.mod",
-      "sha256": "41b27a6a248ea0ed091314bbd7b38dbb42d4659d8eebb0a30200141f7c4d3687",
-      "title": "brainless.introtune",
+      "reference_id": "S03",
       "bytes": 7380,
       "signature": "2CHN",
       "channels": 2,
@@ -1709,8 +1685,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 168,
-          "pcm_sha256": "132614a91fe5db3cbdb73a4cdbdb046e991d698731e0b2ab47597fd56cc8d6a2"
+          "distinct_amplitudes": 168
         },
         {
           "slot": 3,
@@ -1720,8 +1695,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 230,
-          "pcm_sha256": "2a9b54e390f2636adef09c93e24667dff0b63065c6d3d28cd191525893783681"
+          "distinct_amplitudes": 230
         },
         {
           "slot": 4,
@@ -1731,8 +1705,7 @@
           "loop_start": 0,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 20,
-          "pcm_sha256": "62c0bcbccdc857344249cbfba61d6e3fab3701a66b580e5f1a66cbe1d97bde2a"
+          "distinct_amplitudes": 20
         },
         {
           "slot": 5,
@@ -1742,8 +1715,7 @@
           "loop_start": 0,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 45,
-          "pcm_sha256": "16caaa0bb2db8ac2f68403a030cd16f16f6558c51b1bdb13a04f5f379d80a994"
+          "distinct_amplitudes": 45
         }
       ],
       "stored_effect_families": {
@@ -2437,9 +2409,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "FANAiON - MVP Baseball 2005 kg.mod",
-      "sha256": "29c20a6e23647945ff869753c8b3457778ebfe574c769f0270d940301462fc54",
-      "title": "enchantment#26",
+      "reference_id": "S04",
       "bytes": 8416,
       "signature": "M.K.",
       "channels": 4,
@@ -2465,8 +2435,7 @@
           "loop_start": 0,
           "loop_length": 126,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 3,
@@ -2476,8 +2445,7 @@
           "loop_start": 12,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "fbe40368296524abe777cedddbc8a84a6cb055ea506aa30885348b3f4cf6bb97"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 4,
@@ -2487,8 +2455,7 @@
           "loop_start": 14,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 37,
-          "pcm_sha256": "bfd0014f2ce7db9bc467f0cfb59891bf44b1e12c57a445033732b7d14a07369e"
+          "distinct_amplitudes": 37
         },
         {
           "slot": 5,
@@ -2498,8 +2465,7 @@
           "loop_start": 16,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 33,
-          "pcm_sha256": "c0563be099102ae782e09c5e242f33eba14f10db6709a5e1424816b4946cde3a"
+          "distinct_amplitudes": 33
         },
         {
           "slot": 6,
@@ -2509,8 +2475,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 31,
-          "pcm_sha256": "99f366953a1bfae3715eeee499a31d30ba7343056403fa3dae3272998c61faa7"
+          "distinct_amplitudes": 31
         },
         {
           "slot": 7,
@@ -2520,8 +2485,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "fbe40368296524abe777cedddbc8a84a6cb055ea506aa30885348b3f4cf6bb97"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 14,
@@ -2531,8 +2495,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 216,
-          "pcm_sha256": "6ef85a48edc5db60927ad7ce12634204d00fb9967992477ce22373066ced29b9"
+          "distinct_amplitudes": 216
         },
         {
           "slot": 15,
@@ -2542,8 +2505,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 191,
-          "pcm_sha256": "54551dbef29d5ba3319489553dd3844ba52b65a0d5220f30ec66473a79b06e9f"
+          "distinct_amplitudes": 191
         }
       ],
       "stored_effect_families": {
@@ -3255,9 +3217,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "FFF - ByteOMeter 1.2 crk.mod",
-      "sha256": "3811051e8b75ad403e7eb5d96d02964ba62544c9c1a80a9f1a6c47ab99d8195d",
-      "title": "xps introtune 3.",
+      "reference_id": "S05",
       "bytes": 7530,
       "signature": "M.K.",
       "channels": 4,
@@ -3283,8 +3243,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 33,
-          "pcm_sha256": "c6de32f40ee96c2f981ae2cb6db04b76e3495d2da8ecf54cb44853944eb61341"
+          "distinct_amplitudes": 33
         },
         {
           "slot": 4,
@@ -3294,8 +3253,7 @@
           "loop_start": 12,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 26,
-          "pcm_sha256": "15be32fbdc919c31c41855dbc7f9caaca37956868aa21ceb560ea9401c957229"
+          "distinct_amplitudes": 26
         },
         {
           "slot": 8,
@@ -3305,8 +3263,7 @@
           "loop_start": 0,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 6,
-          "pcm_sha256": "60ec4cc1212bd16655919c0168c86fef4a8fdeaf8a38215fca8767b5f6aacab3"
+          "distinct_amplitudes": 6
         },
         {
           "slot": 9,
@@ -3316,8 +3273,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 4,
-          "pcm_sha256": "576db0de23fa94e0dbc1940b95cb9c35c7fe77e492af49be4724f0ba62b0058d"
+          "distinct_amplitudes": 4
         },
         {
           "slot": 10,
@@ -3327,8 +3283,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 4,
-          "pcm_sha256": "02ebf48d993e42ea4478e9c4e82a008a3d31a04f21a12b3686069d35d2074d00"
+          "distinct_amplitudes": 4
         },
         {
           "slot": 12,
@@ -3338,8 +3293,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 4,
-          "pcm_sha256": "916206aa33c70b21a96cdbab6f897e0aa3289d0a588823f4cd69ee4f527f7a3c"
+          "distinct_amplitudes": 4
         }
       ],
       "stored_effect_families": {
@@ -4014,9 +3968,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "h4x0r - Battlefield Bad Company 2 1.0.1.0 +3 trn.mod",
-      "sha256": "75b1348bbbb9ec00e13bb8f8c58c1f358310b56717da7aebc9be849de9b3f67d",
-      "title": "enchantment#27",
+      "reference_id": "S06",
       "bytes": 3574,
       "signature": "M.K.",
       "channels": 4,
@@ -4039,8 +3991,7 @@
           "loop_start": 0,
           "loop_length": 126,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 3,
@@ -4050,8 +4001,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "fbe40368296524abe777cedddbc8a84a6cb055ea506aa30885348b3f4cf6bb97"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 4,
@@ -4061,8 +4011,7 @@
           "loop_start": 54,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 36,
-          "pcm_sha256": "fd455dc3e9b26a3e064351d9558f0b81cfd58faa851000cc83a6e152a476403e"
+          "distinct_amplitudes": 36
         },
         {
           "slot": 5,
@@ -4072,8 +4021,7 @@
           "loop_start": 0,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 15,
-          "pcm_sha256": "fae5437be27a6eb49330be2334423281bc132e0271ea37b3bc235fb5a67c846e"
+          "distinct_amplitudes": 15
         },
         {
           "slot": 6,
@@ -4083,8 +4031,7 @@
           "loop_start": 2,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 16,
-          "pcm_sha256": "cc5e67b102d697208de3c462ac31d0bcdc69102e5b77bcececc122d889c07449"
+          "distinct_amplitudes": 16
         },
         {
           "slot": 7,
@@ -4094,8 +4041,7 @@
           "loop_start": 4,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 17,
-          "pcm_sha256": "3c9924f74971f0469eb6b68535b0c99b9a6b1e17bfa2cfa7d20864ea7de049b4"
+          "distinct_amplitudes": 17
         },
         {
           "slot": 8,
@@ -4105,8 +4051,7 @@
           "loop_start": 6,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 18,
-          "pcm_sha256": "0b33acc6a4d99591533a63c877e09e76611e093028c8c5fc013fee5957ce8afd"
+          "distinct_amplitudes": 18
         },
         {
           "slot": 9,
@@ -4116,8 +4061,7 @@
           "loop_start": 10,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 21,
-          "pcm_sha256": "ef9f711fbf5f946ca1e24126b05fcd35fcc8a596478a5b49629e4a509b5b987c"
+          "distinct_amplitudes": 21
         }
       ],
       "stored_effect_families": {
@@ -4440,9 +4384,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "J@CK@L - DVD PixPlay 6.32 crk.mod",
-      "sha256": "0b34a53021af86d59546b79784e37e7c7a75e5005bafeeee41393afa1cae4097",
-      "title": "zwerge (score!)",
+      "reference_id": "S07",
       "bytes": 5248,
       "signature": "M.K.",
       "channels": 4,
@@ -4463,8 +4405,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 191,
-          "pcm_sha256": "54551dbef29d5ba3319489553dd3844ba52b65a0d5220f30ec66473a79b06e9f"
+          "distinct_amplitudes": 191
         },
         {
           "slot": 4,
@@ -4474,8 +4415,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 216,
-          "pcm_sha256": "6ef85a48edc5db60927ad7ce12634204d00fb9967992477ce22373066ced29b9"
+          "distinct_amplitudes": 216
         },
         {
           "slot": 5,
@@ -4485,8 +4425,7 @@
           "loop_start": 14,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 7,
@@ -4496,8 +4435,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "fbe40368296524abe777cedddbc8a84a6cb055ea506aa30885348b3f4cf6bb97"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 9,
@@ -4507,8 +4445,7 @@
           "loop_start": 8,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 22,
-          "pcm_sha256": "dd095dee4a9f1533ca25c8596fb5b5882ce9143434970dfcd17367ed260e7857"
+          "distinct_amplitudes": 22
         },
         {
           "slot": 10,
@@ -4518,8 +4455,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 40,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "distinct_amplitudes": 40
         },
         {
           "slot": 11,
@@ -4529,8 +4465,7 @@
           "loop_start": 8,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 21,
-          "pcm_sha256": "15d31a043c66637f2c7b5a6661d79997fcf7cdfb5e25269b0a7592886c6a31ab"
+          "distinct_amplitudes": 21
         }
       ],
       "stored_effect_families": {
@@ -4886,9 +4821,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "Kindly - PluginPowerPack for AMS 6.0 installer.mod",
-      "sha256": "031f8f41bf284cac11a0054399c3372140417f60b18592cfa0acc0cbc9e01d61",
-      "title": "analyzer",
+      "reference_id": "S08",
       "bytes": 6840,
       "signature": "M.K.",
       "channels": 4,
@@ -4911,8 +4844,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 67,
-          "pcm_sha256": "5595fef60f2882b57fa30b12c7ce9cd013b34a4a65e8ec07e23d745547a196d7"
+          "distinct_amplitudes": 67
         },
         {
           "slot": 2,
@@ -4922,8 +4854,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 56,
-          "pcm_sha256": "0522bc3ecaca12f811ff2a97466fcb30997a5a9752e75e9f880f973694735499"
+          "distinct_amplitudes": 56
         },
         {
           "slot": 3,
@@ -4933,8 +4864,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 179,
-          "pcm_sha256": "18e199eb001aa92cc92baeb59e12ece0e58d5b23979202af22b20491f1fddf0b"
+          "distinct_amplitudes": 179
         },
         {
           "slot": 4,
@@ -4944,8 +4874,7 @@
           "loop_start": 2,
           "loop_length": 30,
           "loop_within_sample": true,
-          "distinct_amplitudes": 27,
-          "pcm_sha256": "e9a3a0a2a58763d8e36f722e1b487fba7dcb3cb6b3c48ad9751869db0639a286"
+          "distinct_amplitudes": 27
         },
         {
           "slot": 5,
@@ -4955,8 +4884,7 @@
           "loop_start": 2,
           "loop_length": 30,
           "loop_within_sample": true,
-          "distinct_amplitudes": 26,
-          "pcm_sha256": "a6861d376229821d867560b40c97b0bbaab9f37b9546e7553265230896767b36"
+          "distinct_amplitudes": 26
         },
         {
           "slot": 6,
@@ -4966,8 +4894,7 @@
           "loop_start": 2,
           "loop_length": 120,
           "loop_within_sample": true,
-          "distinct_amplitudes": 88,
-          "pcm_sha256": "73476d5e7c55fc8fc44753ea3f9e8f85cd414917e52be415a078df10b7316220"
+          "distinct_amplitudes": 88
         },
         {
           "slot": 7,
@@ -4977,8 +4904,7 @@
           "loop_start": 0,
           "loop_length": 30,
           "loop_within_sample": true,
-          "distinct_amplitudes": 26,
-          "pcm_sha256": "412f3d0ce1e69b021332c85d21dc46eafcaf06ec465595c1dc8a29e87df555e6"
+          "distinct_amplitudes": 26
         }
       ],
       "stored_effect_families": {
@@ -5582,9 +5508,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "MPAK - Delta Force Extreme 2 1.7.x.x crk.mod",
-      "sha256": "ecdd7a6428552cca77c41f6d53a63c2f4e7af436e599f8e02e6001418f67a319",
-      "title": "ballerina",
+      "reference_id": "S09",
       "bytes": 6372,
       "signature": "M.K.",
       "channels": 4,
@@ -5604,8 +5528,7 @@
           "loop_start": 3266,
           "loop_length": 978,
           "loop_within_sample": true,
-          "distinct_amplitudes": 142,
-          "pcm_sha256": "afee058c2267aa1552a0f192869de5340d0433df38583fda4a942caaf5aa0070"
+          "distinct_amplitudes": 142
         }
       ],
       "stored_effect_families": {
@@ -5798,9 +5721,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "PARADOX - Camel Audio Cameleon 5000 1 installer.mod",
-      "sha256": "94e3b5a5d6324657fd94d82618554c583e3ca4bf6db8b73621e057a44b366c3b",
-      "title": "captain future",
+      "reference_id": "S10",
       "bytes": 9052,
       "signature": "M.K.",
       "channels": 4,
@@ -5823,8 +5744,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 209,
-          "pcm_sha256": "7219a11246e6c6a2b7ac3634ef7620f51a875ebe99fb234b9a83b4112a6e82da"
+          "distinct_amplitudes": 209
         },
         {
           "slot": 5,
@@ -5834,8 +5754,7 @@
           "loop_start": 14,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 6,
@@ -5845,8 +5764,7 @@
           "loop_start": 22,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 39,
-          "pcm_sha256": "1f33c5acecff7b12e302bc0770d1dd3e03c3de0b23a859e95a6253675106e153"
+          "distinct_amplitudes": 39
         },
         {
           "slot": 7,
@@ -5856,8 +5774,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 40,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "distinct_amplitudes": 40
         },
         {
           "slot": 9,
@@ -5867,8 +5784,7 @@
           "loop_start": 14,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 40,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "distinct_amplitudes": 40
         },
         {
           "slot": 10,
@@ -5878,8 +5794,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 40,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "distinct_amplitudes": 40
         }
       ],
       "stored_effect_families": {
@@ -6424,9 +6339,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "PARADOX - Dave Mirra Freestyle BMX PSX intro.mod",
-      "sha256": "61451fedfc879bf74004cdb25e481de8e282ad61b2a8a0b4d9ed7deae3e12737",
-      "title": "coopy*0001",
+      "reference_id": "S11",
       "bytes": 8550,
       "signature": "M.K.",
       "channels": 4,
@@ -6449,8 +6362,7 @@
           "loop_start": 0,
           "loop_length": 20,
           "loop_within_sample": true,
-          "distinct_amplitudes": 15,
-          "pcm_sha256": "90ed021d06c1bfc3ad41b5e952fd26c6e46e25a45c38d596b6cd5a352aa64ea2"
+          "distinct_amplitudes": 15
         },
         {
           "slot": 2,
@@ -6460,8 +6372,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 105,
-          "pcm_sha256": "fbacbfd2759729d6ae3aa9cbe6ebccdf82bac2975dda254db9ad82975879cc0e"
+          "distinct_amplitudes": 105
         },
         {
           "slot": 3,
@@ -6471,8 +6382,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 97,
-          "pcm_sha256": "1ed5f6b61f4be09dc27025246ef0c416b992da74ce5d8186c0c371a6d761e195"
+          "distinct_amplitudes": 97
         },
         {
           "slot": 4,
@@ -6482,8 +6392,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 152,
-          "pcm_sha256": "06adca32297ef41e6100e88b2af0d80d1c3c6287fee4df7fa73e777cdb93f227"
+          "distinct_amplitudes": 152
         },
         {
           "slot": 6,
@@ -6493,8 +6402,7 @@
           "loop_start": 28,
           "loop_length": 96,
           "loop_within_sample": true,
-          "distinct_amplitudes": 48,
-          "pcm_sha256": "fcd7533ce9d416bcaa686f5c60aaef66cccda3aa29b2624784ee8a41f0f451a3"
+          "distinct_amplitudes": 48
         },
         {
           "slot": 7,
@@ -6504,8 +6412,7 @@
           "loop_start": 0,
           "loop_length": 20,
           "loop_within_sample": true,
-          "distinct_amplitudes": 15,
-          "pcm_sha256": "90ed021d06c1bfc3ad41b5e952fd26c6e46e25a45c38d596b6cd5a352aa64ea2"
+          "distinct_amplitudes": 15
         },
         {
           "slot": 8,
@@ -6515,8 +6422,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 97,
-          "pcm_sha256": "5617b20b5cdc0b587e3a54ea52e90ae34d1803562763ddedb898759cb80916a9"
+          "distinct_amplitudes": 97
         }
       ],
       "stored_effect_families": {
@@ -6952,9 +6858,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "PHROZEN CREW - Aone Ultra Video Splitter 3.x.x crk.mod",
-      "sha256": "ddaea553d142ada4ea0e2422c0ba4ff5dbc44a79febe02939add04b1bee586aa",
-      "title": "orgasmic-chipper2",
+      "reference_id": "S12",
       "bytes": 5908,
       "signature": "M.K.",
       "channels": 4,
@@ -6983,8 +6887,7 @@
           "loop_start": 0,
           "loop_length": 16,
           "loop_within_sample": true,
-          "distinct_amplitudes": 16,
-          "pcm_sha256": "85e51b7942615a7db7ce3e8472f11dd8739620310f68af0a586f699e6c9882d3"
+          "distinct_amplitudes": 16
         },
         {
           "slot": 6,
@@ -6994,8 +6897,7 @@
           "loop_start": 0,
           "loop_length": 16,
           "loop_within_sample": true,
-          "distinct_amplitudes": 16,
-          "pcm_sha256": "c272b3bd39e4b0314abe2354acd1b0d0c8d67a7a2dba8d1a7761363532011d83"
+          "distinct_amplitudes": 16
         },
         {
           "slot": 7,
@@ -7005,8 +6907,7 @@
           "loop_start": 2,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 28,
-          "pcm_sha256": "076a91a7d50a5334af034fa1df5cb5fcf4779ffe065493a8fb0ee8bffb36a28d"
+          "distinct_amplitudes": 28
         },
         {
           "slot": 8,
@@ -7016,8 +6917,7 @@
           "loop_start": 2,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 11,
-          "pcm_sha256": "76d360fac7906448c52244bcc9b2e130a3124bc5d42b9f760d716dc7ec7eb50c"
+          "distinct_amplitudes": 11
         },
         {
           "slot": 16,
@@ -7027,8 +6927,7 @@
           "loop_start": 0,
           "loop_length": 128,
           "loop_within_sample": true,
-          "distinct_amplitudes": 16,
-          "pcm_sha256": "8dbca86adca1f9b97fff6060cd767ca758740319c35fd62b32a5d832ddd16bf0"
+          "distinct_amplitudes": 16
         },
         {
           "slot": 17,
@@ -7038,8 +6937,7 @@
           "loop_start": 348,
           "loop_length": 70,
           "loop_within_sample": true,
-          "distinct_amplitudes": 7,
-          "pcm_sha256": "b365fe9a630c688788412721696703ee927590497c3baf6d2b5102b5fccbe056"
+          "distinct_amplitudes": 7
         },
         {
           "slot": 19,
@@ -7049,8 +6947,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 3,
-          "pcm_sha256": "2f76fb34e2195b0ed3ce5d2f156ee7ce1292861b6468bc04ffdeb9d3a3fa4717"
+          "distinct_amplitudes": 3
         }
       ],
       "stored_effect_families": {
@@ -7665,9 +7562,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "RiSiNG SUN - Bouken Yuuki Densetsu Plaston Gate intro.mod",
-      "sha256": "60d500a743cd7cc61376d344ffe86ac38133087237ce88ebffdb661caf4387dc",
-      "title": "cunfuzion",
+      "reference_id": "S13",
       "bytes": 6498,
       "signature": "M.K.",
       "channels": 4,
@@ -7690,8 +7585,7 @@
           "loop_start": 0,
           "loop_length": 18,
           "loop_within_sample": true,
-          "distinct_amplitudes": 3,
-          "pcm_sha256": "4564c289a209981844bc99c76076fa7119efd456ee51d1ca7eed7e085be006d4"
+          "distinct_amplitudes": 3
         },
         {
           "slot": 7,
@@ -7701,8 +7595,7 @@
           "loop_start": 0,
           "loop_length": 18,
           "loop_within_sample": true,
-          "distinct_amplitudes": 6,
-          "pcm_sha256": "9e723d2a006e5f2a1c2ada788511228283aec2e96a403b89e88b5a6a6678f331"
+          "distinct_amplitudes": 6
         },
         {
           "slot": 8,
@@ -7712,8 +7605,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 26,
-          "pcm_sha256": "d44440c6de157d72b885bf40f4b3fa0ba36874139056d1b6d43f2f15a7b2bd2a"
+          "distinct_amplitudes": 26
         },
         {
           "slot": 9,
@@ -7723,8 +7615,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 61,
-          "pcm_sha256": "30e06c3da693a8d7876a7d823fd234ea995ba493666bd40e0ef6bd39e9426fb1"
+          "distinct_amplitudes": 61
         },
         {
           "slot": 10,
@@ -7734,8 +7625,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 67,
-          "pcm_sha256": "56fc0892854b5268413a001de32a1a90e4373c40bdc9414c91ab24abe2d85b9e"
+          "distinct_amplitudes": 67
         },
         {
           "slot": 11,
@@ -7745,8 +7635,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 28,
-          "pcm_sha256": "0391f8c4d4966a0101b603c50431e2c5082b5db329537f53c596c9ce751d60f2"
+          "distinct_amplitudes": 28
         },
         {
           "slot": 12,
@@ -7756,8 +7645,7 @@
           "loop_start": 6,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 14,
-          "pcm_sha256": "f6d54265377d2dec9f2660b86599f52902ecfd9bea1169a17a875255f3c70edc"
+          "distinct_amplitudes": 14
         },
         {
           "slot": 13,
@@ -7767,8 +7655,7 @@
           "loop_start": 22,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 9,
-          "pcm_sha256": "cbb3eeb881350e0debc49015a7cf679ae5b30a1b9494628f223b13634a92cb75"
+          "distinct_amplitudes": 9
         },
         {
           "slot": 14,
@@ -7778,8 +7665,7 @@
           "loop_start": 26,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 7,
-          "pcm_sha256": "30806b46d868b0e17372734f5caa77090a39dbd7521cc8dc8975ac86b0f34bdc"
+          "distinct_amplitudes": 7
         },
         {
           "slot": 15,
@@ -7789,8 +7675,7 @@
           "loop_start": 28,
           "loop_length": 32,
           "loop_within_sample": true,
-          "distinct_amplitudes": 28,
-          "pcm_sha256": "bdbe9b4434c09a537746918870901b631ce974364a56da0381d6823043cf042f"
+          "distinct_amplitudes": 28
         }
       ],
       "stored_effect_families": {
@@ -8114,9 +7999,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "SST - Blu-Ray to HDD 1.70b431 crk.mod",
-      "sha256": "101c74182bef34a3e0948d810fef08a3264597996582d589f6814a1d1f1687fa",
-      "title": "crack-tune5",
+      "reference_id": "S14",
       "bytes": 4134,
       "signature": "M.K.",
       "channels": 4,
@@ -8136,8 +8019,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 73,
-          "pcm_sha256": "df1d03ec8b484ec862bf3535701358d24f9272ccc2b3883c774be27f2ff53947"
+          "distinct_amplitudes": 73
         },
         {
           "slot": 3,
@@ -8147,8 +8029,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 150,
-          "pcm_sha256": "5ecbeac68db0e51422505fee606fd69eb8c19d166820764f5308569b7409a3cf"
+          "distinct_amplitudes": 150
         },
         {
           "slot": 4,
@@ -8158,8 +8039,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 182,
-          "pcm_sha256": "b4c55b95439c51dfa7de158745ad759d4e0263ce2a5b4a88611afb4c39a0f5f0"
+          "distinct_amplitudes": 182
         },
         {
           "slot": 5,
@@ -8169,8 +8049,7 @@
           "loop_start": 14,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 51,
-          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+          "distinct_amplitudes": 51
         },
         {
           "slot": 6,
@@ -8180,8 +8059,7 @@
           "loop_start": 20,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 40,
-          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+          "distinct_amplitudes": 40
         },
         {
           "slot": 7,
@@ -8191,8 +8069,7 @@
           "loop_start": 18,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 38,
-          "pcm_sha256": "f04faa1c2907dde71d3bf50a4764236407f481a1b27eb3472f5b544c1b022a12"
+          "distinct_amplitudes": 38
         },
         {
           "slot": 8,
@@ -8202,8 +8079,7 @@
           "loop_start": 16,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 36,
-          "pcm_sha256": "f58412e701220124a1bccfe4adc63259ca93344d75b09a3654c0f9f98124a5f8"
+          "distinct_amplitudes": 36
         },
         {
           "slot": 9,
@@ -8213,8 +8089,7 @@
           "loop_start": 14,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 35,
-          "pcm_sha256": "87cc4a6858190e9510501724707488f12743aef4d8d0d5f1da5dea655669e9a4"
+          "distinct_amplitudes": 35
         },
         {
           "slot": 10,
@@ -8224,8 +8099,7 @@
           "loop_start": 12,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 34,
-          "pcm_sha256": "dbe5f2a9ba5cc69d36beb0eec6a660b3ef3c737d0c73eb7d96e74d5dae418da5"
+          "distinct_amplitudes": 34
         },
         {
           "slot": 11,
@@ -8235,8 +8109,7 @@
           "loop_start": 8,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 31,
-          "pcm_sha256": "da61392e3e13a5e60b87212ce8efb256e95a8980bff706e61f7375ae772ebdb3"
+          "distinct_amplitudes": 31
         }
       ],
       "stored_effect_families": {
@@ -8444,9 +8317,7 @@
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
     {
-      "filename": "TWK - FlashGet 1.71 crk.mod",
-      "sha256": "162af8910bf6c1db790232f794a47910cea13c146496803ff881691bfd48766f",
-      "title": "comic bakery remix.",
+      "reference_id": "S15",
       "bytes": 3918,
       "signature": "2CHN",
       "channels": 2,
@@ -8470,8 +8341,7 @@
           "loop_start": 0,
           "loop_length": 0,
           "loop_within_sample": true,
-          "distinct_amplitudes": 33,
-          "pcm_sha256": "c6de32f40ee96c2f981ae2cb6db04b76e3495d2da8ecf54cb44853944eb61341"
+          "distinct_amplitudes": 33
         },
         {
           "slot": 4,
@@ -8481,8 +8351,7 @@
           "loop_start": 12,
           "loop_length": 112,
           "loop_within_sample": true,
-          "distinct_amplitudes": 26,
-          "pcm_sha256": "15be32fbdc919c31c41855dbc7f9caaca37956868aa21ceb560ea9401c957229"
+          "distinct_amplitudes": 26
         },
         {
           "slot": 8,
@@ -8492,8 +8361,7 @@
           "loop_start": 0,
           "loop_length": 28,
           "loop_within_sample": true,
-          "distinct_amplitudes": 6,
-          "pcm_sha256": "60ec4cc1212bd16655919c0168c86fef4a8fdeaf8a38215fca8767b5f6aacab3"
+          "distinct_amplitudes": 6
         },
         {
           "slot": 9,
@@ -8503,8 +8371,7 @@
           "loop_start": 0,
           "loop_length": 14,
           "loop_within_sample": true,
-          "distinct_amplitudes": 4,
-          "pcm_sha256": "576db0de23fa94e0dbc1940b95cb9c35c7fe77e492af49be4724f0ba62b0058d"
+          "distinct_amplitudes": 4
         }
       ],
       "stored_effect_families": {
@@ -8791,5 +8658,6 @@
       "libopenmpt_duration_seconds": 32.0,
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     }
-  ]
+  ],
+  "publication": "Structural observations using neutral IDs; original filenames, internal titles and reference hashes omitted."
 }

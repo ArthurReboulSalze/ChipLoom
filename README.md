@@ -57,7 +57,7 @@ Musical brief → Agent → JSON score + sample recipes → Validate → MOD
 | Standard-library core, independent of the agent provider | Portable HTML listening bundles |
 
 <p align="center">
-  <img src="docs/assets/chiploom-desktop.png" alt="ChipLoom desktop on Windows: October Letters in the Violet theme, with four tracker channels, mute and solo buttons, song controls and a sample waveform editor." width="1100">
+  <img src="docs/assets/chiploom-desktop-v051.png" alt="ChipLoom desktop on Windows: the integrated logo, October Letters in the Violet theme, four tracker channels, mute and solo buttons, song controls, audio exports and a sample waveform editor." width="1100">
 </p>
 
 <p align="center"><em>The Windows desktop companion, showing October Letters in the Violet theme. The agent works through JSON and the CLI; the window is for the human.</em></p>

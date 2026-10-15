@@ -41,6 +41,8 @@ def main():
                 if isinstance(value, dict):
                     if {"pcm", "events", "recipe"}.intersection(value):
                         errors.append(f"Raw music data in reference report: {name}")
+                    if {"source", "filename", "title", "sha256", "source_sha256", "pcm_sha256"}.intersection(value):
+                        errors.append(f"Identifying metadata in public reference report: {name}")
                     for child in value.values():
                         walk(child)
                 elif isinstance(value, list):
