@@ -15,11 +15,19 @@ import tempfile
 import wave
 
 from . import mod
-from .model import PAL_CLOCK, Sample, ValidationError, playback_plan
+from .model import PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_RENDER_SECONDS = 120
+MAX_PREROLL_SECONDS = 600
 # Child renderers must not flash console windows when started from pythonw/Qt.
 SUBPROCESS_OPTIONS = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
+
+def duration_warnings(seconds: float) -> list[str]:
+    return ([f"Duration {seconds:.2f} s exceeds the {MAX_RENDER_SECONDS} s render limit. "
+             "Render a section with --seconds (and optionally --from-order), or shorten the arrangement."]
+            if seconds > MAX_RENDER_SECONDS else [])
 
 
 class RenderError(RuntimeError):
@@ -82,11 +90,22 @@ def default_xmp_library() -> Path:
 
 
 def render(source: Path, output: Path, engine: str = "openmpt", seconds: float | None = None,
-           sample_rate: int = 48000, ffmpeg: str | None = None, xmp_library: Path | None = None) -> dict:
+           sample_rate: int = 48000, ffmpeg: str | None = None, xmp_library: Path | None = None,
+           from_order: int | None = None) -> dict:
     module = mod.read(source)
+    plan = playback_plan(module)
+    start_seconds = 0.0
+    if from_order is not None:
+        require_int(from_order, "from_order", 0, len(module.orders) - 1)
+        entry = next((row for row in plan["timeline"] if row["order"] == from_order), None)
+        if entry is None:
+            raise ValidationError("Cet ordre n'est pas atteint pendant le premier cycle de lecture.")
+        start_seconds = entry["seconds"]
+        if start_seconds > MAX_PREROLL_SECONDS:
+            raise ValidationError(f"Le début de l'extrait dépasse la limite de prélecture de {MAX_PREROLL_SECONDS} secondes.")
     if seconds is None:
-        seconds = playback_plan(module)["duration_seconds"]
-    if not math.isfinite(seconds) or not 0 < seconds <= 120:
+        seconds = plan["duration_seconds"] - start_seconds
+    if not math.isfinite(seconds) or not 0 < seconds <= MAX_RENDER_SECONDS:
         raise ValidationError("Un rendu doit durer plus de zéro et au maximum 120 secondes.")
     if type(sample_rate) is not int or not 8000 <= sample_rate <= 96000:
         raise ValidationError("La fréquence de rendu doit être comprise entre 8000 et 96000 Hz.")
@@ -111,7 +130,8 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
             result = subprocess.run(
                 [executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                  "-f", "libopenmpt", "-sample_rate", str(sample_rate), "-layout", "stereo",
-                 "-i", str(source), "-t", f"{seconds:.9f}", "-map", "0:a:0", "-vn",
+                 "-i", str(source), "-ss", f"{start_seconds:.9f}",
+                 "-t", f"{seconds:.9f}", "-map", "0:a:0", "-vn",
                  "-ac", "2", "-ar", str(sample_rate), "-c:a", "pcm_s16le", str(temporary)],
                 capture_output=True, text=True, timeout=60,
                 **SUBPROCESS_OPTIONS,
@@ -124,7 +144,7 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
             library = (xmp_library or default_xmp_library()).resolve()
             result = subprocess.run(
                 [sys.executable, "-m", "tracker4agents._xmp_worker", str(source), str(temporary),
-                 str(seconds), str(sample_rate), str(library)],
+                 str(seconds), str(sample_rate), str(library), str(start_seconds)],
                 cwd=ROOT, capture_output=True, text=True, timeout=60,
                 **SUBPROCESS_OPTIONS,
             )
@@ -139,6 +159,7 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
             raise RenderError("Le moteur a produit trop peu de données audio.")
         os.replace(temporary, output)
         details.update(source_sha256=sha256(source), requested_seconds=seconds,
+                       from_order=from_order, start_seconds=start_seconds,
                        output=str(output), audio=metrics)
         return details
     except subprocess.TimeoutExpired as exc:

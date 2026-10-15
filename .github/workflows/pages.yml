@@ -1,0 +1,43 @@
+name: Listening room
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/listen/**'
+      - 'docs/assets/chiploom-logo.png'
+      - 'tools/build_showcase.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Package only the curated public examples
+        run: python tools/build_showcase.py --output _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy listening room
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,153 +1,162 @@
-# ChipLoom
+<p align="center">
+  <img src="docs/assets/chiploom-logo.png" alt="ChipLoom" width="640">
+</p>
 
-**An agent-driven MOD tracker, with a desktop editor and portable HTML listening pages.**
+<h1 align="center">Four channels. Tiny samples. Real tracker music.</h1>
 
-ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** a concrete way to compose tracker music: write notes and effects, draw or synthesize samples, validate the score, export a real `.mod`, render it, and revise it from feedback. The human can inspect, listen and make edits in the native window, or open a generated HTML listening page.
+<p align="center">
+  A music toolkit for agents. A tracker window for humans.<br>
+  Compose with JSON and Python, export a real MOD, and share the sound.
+</p>
 
-The musical project is structured JSON. The exported MOD contains its samples and plays independently in a compatible tracker. WAV and MP3 are listening copies.
+<p align="center">
+  <a href="https://github.com/ArthurReboulSalze/ChipLoom/actions/workflows/tests.yml"><img src="https://github.com/ArthurReboulSalze/ChipLoom/actions/workflows/tests.yml/badge.svg" alt="Windows and Linux tests"></a>
+  <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12 or newer">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-29bfa5" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/format-4--channel_MOD-8b5cf6" alt="4-channel MOD">
+</p>
 
-[Guide en français](docs/USAGE_FR.md) · [Agent workflow](docs/AGENT_GUIDE.md) · [CLI reference](docs/CLI.md) · [Reference studies](references/README.md) · [Architecture and MCP](docs/ARCHITECTURE.md)
+<p align="center">
+  <a href="https://arthurreboulsalze.github.io/ChipLoom/">Listen to the demos</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="docs/AGENT_GUIDE.md">Agent guide</a> ·
+  <a href="docs/CLI.md">CLI reference</a> ·
+  <a href="docs/USAGE_FR.md">Français</a>
+</p>
 
-## What this project is
+---
 
-- A Python music toolkit and CLI that an existing agent can use through file and terminal tools.
-- An optional Qt desktop application for a human, with four-channel patterns, sample previews, cell editing, undo/redo, mute/solo, stereo level meter, four themes, and English/French UI. English is the default.
-- An optional static HTML listening bundle, generated from an existing MOD or project. It needs neither Qt nor an agent to view.
-- An early, strict four-channel ProTracker-style MOD editor. XM and IT are future work.
+## Hear what four channels can do
 
-ChipLoom does **not** include an AI model, run an autonomous agent, train model weights, or currently provide an MCP server. Codex or Hermes supplies the planning and composition; ChipLoom supplies the musical data model and verifiable outputs. It is an independent project, without affiliation with OpenAI or Nous Research.
+Two original compositions made with ChipLoom, using newly synthesized samples. The MP3s are listening copies of the actual exported MOD files. **Open the listening room for audio players and downloads.** GitHub strips audio players from repository READMEs.
 
-## Install
+| | Pixel Rush | Voltage Odyssey V2 |
+| :--- | :--- | :--- |
+| **The sound** | Quick melodic hooks, tiny pulse waves and an arcade beat | A full chiptune journey with a bigger drop and an expressive solo |
+| **The arrangement** | **0:48** · 160 BPM · 13 samples | **1:57** · 164 BPM · 28 samples |
+| **Play** | [▶ Listen to Pixel Rush](https://arthurreboulsalze.github.io/ChipLoom/#pixel-rush) | [▶ Listen to Voltage Odyssey V2](https://arthurreboulsalze.github.io/ChipLoom/#voltage-odyssey-v2) |
+| **Take it apart** | [MOD](docs/listen/media/pixel_rush.mod) · [MP3](docs/listen/media/pixel_rush.mp3) · [Project](docs/listen/media/pixel_rush.project.json) | [MOD](docs/listen/media/voltage_odyssey_v2.mod) · [MP3](docs/listen/media/voltage_odyssey_v2.mp3) · [Project](docs/listen/media/voltage_odyssey_v2.project.json) |
 
-Python **3.12+** is required. The core uses only the Python standard library. Working from a cloned checkout is the supported setup.
+## Built for the agent, shared with the musician
+
+ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: write notes and effects, draw waveforms or synthesize samples, validate a score, render it, and revise it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker.
+
+```text
+Musical brief → Agent → JSON score + sample recipes → Validate → MOD
+                                                                ├─ WAV / MP3
+                                                                ├─ HTML listening page
+                                                                └─ Desktop tracker
+```
+
+| For the agent | For the human |
+| :--- | :--- |
+| Structured JSON responses and editable scores | Optional Qt desktop window |
+| Python API and CLI; no display required | Pattern editing, undo/redo and sample previews |
+| Deterministic sample recipes, including drawn waves | Channel mute/solo and stereo level meter |
+| Duration estimates, grouped diagnostics and section renders | Four themes; English and French UI |
+| Standard-library core, independent of the agent provider | Portable HTML listening bundles |
+
+**No embedded model, model-weight training or MCP server.** Your agent provides the composition decisions; ChipLoom provides the musical tools. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
+
+## Get started
+
+Requires **Python 3.12+**. The core has no third-party Python dependencies. Work from a cloned checkout:
 
 ```sh
 git clone https://github.com/ArthurReboulSalze/ChipLoom.git
 cd ChipLoom
-python -m venv .venv
 ```
 
-The repository is currently private; cloning requires access to it. On Linux, use `python3` to create the environment.
+<details open>
+<summary><strong>Linux / Debian — headless agent setup</strong></summary>
 
-On Windows:
+```sh
+# Debian: virtual environments and the optional audio renderer
+sudo apt install python3-venv ffmpeg
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+.venv/bin/chiploom demo --song pixel-rush --mp3
+```
+
+</details>
+
+<details>
+<summary><strong>Windows — CLI or desktop</strong></summary>
 
 ```powershell
+python -m venv .venv
 .venv\Scripts\python.exe -m pip install -e .
-.venv\Scripts\chiploom.exe --help
+.venv\Scripts\chiploom.exe demo --song pixel-rush --no-audio
 ```
 
-On Linux:
+For the human window, run **Install ChipLoom.cmd**, then **Launch ChipLoom.cmd**. Or install `.[desktop]` and run `python -m tracker4agents gui examples/pixel_rush.project.json` from the configured environment.
+
+</details>
+
+For audio, install **FFmpeg with libopenmpt** on PATH; MP3 also needs **libmp3lame**. Check `ffmpeg -demuxers` and `ffmpeg -encoders`. [Official FFmpeg downloads](https://ffmpeg.org/download.html). `--no-audio` produces the MOD and editable project without an external decoder.
+
+The CLI alias is `chiploom`; `python -m tracker4agents` remains supported. Commands below use the Python interpreter from your virtual environment. Generated work goes under `exports/`; the two curated public demos are the explicit media exception.
+
+## Give your agent a musical brief
+
+Open the checkout in Codex, or give Hermes terminal and file access to it. Ask the agent to read `AGENTS.md` and `docs/AGENT_GUIDE.md`, then describe what you want:
+
+> Compose an original 45-second, four-channel chiptune with a memorable melody, a short breakdown and a stronger final chorus. Create the samples yourself. Plan the duration, save a new JSON project, validate it, export a real MOD, and deliver an MP3 and an HTML listening page. Preserve the existing examples and references.
 
 ```sh
-.venv/bin/python -m pip install -e .
-.venv/bin/chiploom --help
+# Plan first: eight full orders at speed 6 / 160 BPM = 48 seconds
+python -m tracker4agents estimate --orders 8 --speed 6 --bpm 160
+
+# Inspect and validate before exporting
+python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0
+python -m tracker4agents validate exports/my-song/project.json --report
+python -m tracker4agents export exports/my-song/project.json --output exports/my-song/song.mod
+
+# Audition ten seconds from order 6 (indices start at zero)
+python -m tracker4agents render exports/my-song/song.mod --from-order 6 --seconds 10 --output exports/my-song/section.wav
+
+# Create a complete, shareable listening bundle in a NEW directory
+python -m tracker4agents preview exports/my-song/project.json --output exports/my-song-review --mp3
 ```
 
-The Python package keeps its original name, `tracker4agents`, for compatibility. Every command can also be run as `python -m tracker4agents ...` with the chosen interpreter. Existing projects and desktop session folders keep working.
+**Tested outside this development workspace:** a user-reported Hermes session with `glm-5.3-flash` completed two original MOD compositions on **Debian 13 / Python 3.13.5 / FFmpeg 7.1.5**. That feedback drove the diagnostics and excerpt workflow in v0.5.0. [Environment, findings and scope →](docs/HERMES_FEEDBACK.md)
 
-Audio playback, rendering and HTML bundles require **FFmpeg built with libopenmpt** on PATH. MP3 additionally requires **libmp3lame**. The optional reference duration probe uses `ffprobe` with libopenmpt. These executables are not bundled. Check availability with:
+## Two ways to listen and edit
+
+**Desktop:** open a MOD or JSON project, edit cells, preview samples, mute/solo tracks and reload agent changes with F5. English is the default; French and four themes are available. Playback prepares a WAV in the background, so edits are not yet mixed in real time. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
+
+**HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
+
+## Learn from tracker construction
+
+The read-only analyzer studies a MOD or a ZIP of modules: arrangement, sample loops, effects, channel activity and related patterns. Reference files remain untouched.
 
 ```sh
-ffmpeg -demuxers
-ffmpeg -encoders
+python -m tracker4agents analyze path/to/selection.zip --output exports/study.json --probe
 ```
 
-Look for `libopenmpt` and `libmp3lame`, respectively. See [FFmpeg's official downloads](https://ffmpeg.org/download.html) and [libopenmpt demuxer documentation](https://ffmpeg.org/ffmpeg-formats.html#libopenmpt).
+The included [reference study](references/SELECTION_FR.md) covers 15 historical files. It shares structural observations, **not third-party MODs, PCM samples or recordings**. Studying references informs composition; it does not train a model.
 
-## First MOD in one command
+## Current scope
 
-The following examples use `python` from the configured environment. On Windows, substitute `.venv\Scripts\python.exe`; on Linux, `.venv/bin/python`.
+| Available now | Still ahead |
+| :--- | :--- |
+| Strict four-channel `M.K.` MOD import/export | XM and IT |
+| 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Arrangement/block editor and interactive sample drawing |
+| Signed 8-bit mono samples with deterministic synthesis | Real-time tracker mixer |
+| Render up to 120 seconds per request, including excerpts | MCP protocol adapter |
+| Windows desktop; Windows/Linux core CI and reported Debian agent use | Linux desktop and physical Amiga validation |
 
-```sh
-python -m tracker4agents demo --song pixel-rush --no-audio
-```
+Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx`, other signatures and restart-byte variants are outside the editing profile. [Format details](docs/USAGE_FR.md#profil-mod-pris-en-charge) · [Roadmap](PLAN_PROJET.md)
 
-This builds the original Pixel Rush example and its samples without FFmpeg. The result includes `exports/pixel_rush/pixel_rush.mod` and its editable JSON project. The demo command reproduces a supplied composition; it does not ask an AI to compose a new one.
-
-For audio and the optional MP3:
-
-```sh
-python -m tracker4agents demo --song pixel-rush --mp3
-```
-
-| Included original composition | Timing | Length | Samples | MOD size |
-| --- | --- | --- | --- | --- |
-| First Light | 125 BPM, speed 6 | 30.72 s | 8 | 17,206 bytes |
-| Pixel Rush | 160 BPM, speed 6 | 48.00 s | 13 | 12,924 bytes |
-
-Generated media is kept out of Git. Rebuild it from the recipes and source code.
-
-## Two human listening options
-
-### Native desktop
-
-Windows: run **Install ChipLoom.cmd**, then **Launch ChipLoom.cmd**.
-
-Or install the optional GUI explicitly:
-
-```sh
-python -m pip install -e ".[desktop]"
-python -m tracker4agents gui examples/pixel_rush.project.json
-```
-
-Click **Track 1–4** to mute/unmute; use Solo to isolate channels. Double-click a pattern cell to edit it. F5 reloads changes made by the agent, with a guard for unsaved edits. Theme and language selectors are at the top right.
-
-Playback uses a background MOD-to-WAV render. Edits and mute changes may need a short preparation; this is not yet a real-time tracker mixer. The meter measures decoded stereo RMS and peaks.
-
-The window is verified on Windows. Linux launch support is prepared (`sh launch-chiploom.sh`), but Linux desktop/audio-device behavior still requires validation. The agent does not need PySide6, a display or an open window.
-
-### Portable HTML page
-
-```sh
-python -m tracker4agents preview examples/pixel_rush.project.json --output exports/pixel-review --mp3
-```
-
-Open `exports/pixel-review/preview.html`. The bundle includes the MOD, JSON project, WAV, optional MP3, sample WAVs and a technical report. **Copy the whole directory when sharing**, not just the HTML file. This command expects a new output directory to preserve existing work.
-
-Use `--language fr` for French page controls; English is the default. User-authored titles, names and descriptions keep their original language. The HTML view shows patterns and samples and lets you seek by clicking a row; editing remains in the JSON project or native window.
-
-If a browser restricts local audio, serve only the output directory:
-
-```sh
-python tools/serve_previews.py --directory exports/pixel-review --port 8765
-```
-
-Open [localhost preview](http://127.0.0.1:8765/preview.html). The optional server binds to loopback and supports byte ranges for seeking. There is no remote hosting or background upload.
-
-## Ask an agent to compose
-
-Open this checkout in Codex, or give Hermes terminal and file access to the same checkout. Ask it to read `AGENTS.md` and `docs/AGENT_GUIDE.md`, then give a musical brief:
-
-> Create an original 30–45 second four-channel chiptune at 150–165 BPM. Use newly synthesized samples, a short memorable motif, and variations every one or two bars. Save a new JSON project, validate it, export a MOD, and build an HTML listening bundle with an optional MP3. Preserve the reference modules and existing examples.
-
-The [agent guide](docs/AGENT_GUIDE.md) includes the full inspect → edit → validate → export → render workflow, a Python editing example and instructions for both agents.
-
-## Study reference modules
-
-```sh
-python -m tracker4agents analyze path/to/selection.zip --output references/local-study.json --probe
-```
-
-The analyzer reads a MOD or MOD files inside a ZIP without extracting archive paths. It reports arrangement, sample sizes/loops, effect families, channel activity and related patterns. It can study certain variants that the editor refuses; the report explicitly records that distinction.
-
-The first selection study covers **15 files: 13 four-channel and 2 two-channel modules**. Six pass the current strict editing profile. Structural reports and observations are included; original third-party modules, their samples and audio renders are not. [Read the findings](references/SELECTION_FR.md).
-
-## Compatibility and current limits
-
-Editing/export targets `M.K.`, four channels, 64 rows per pattern, 1–64 patterns, 1–128 orders, 31 sample slots, and signed 8-bit mono PCM. The strict profile deliberately rejects some valid historical variants, including other signatures, restart-byte variants and several effects. This is not a general MOD converter.
-
-Rendering is limited to 120 seconds per request. Pattern loop `E6x`, pattern delay `EEx` and destructive `EFx` are outside the current editing profile. Interactive sample drawing, arrangement/block editing, real-time mixing, MCP, XM and IT remain planned. See the [detailed format profile](docs/USAGE_FR.md#profil-mod-pris-en-charge) and [roadmap](PLAN_PROJET.md).
-
-## Verification and development
+## Development
 
 ```sh
 python -m unittest discover -s tests -v
 ```
 
-The suite covers MOD binary round trips, malformed inputs, synthesis, editing/undo, audio backends, portable HTML assets, reference archives and optional Qt integration. Qt/audio tests are skipped when their dependencies are absent. The CI matrix exercises the core on Windows and Linux; it does not validate a physical audio device or the Linux desktop.
-
-For an independent second decoder, `python tools/setup_reference.py` downloads and verifies pinned libxmp 4.7.3 sources, then builds locally with CMake and a C compiler. `demo --with-xmp --mp3` checks a rendered cycle against its timing trace. No external replay-engine binaries are committed.
+Tests cover binary round trips, malformed inputs, synthesis, editing, diagnostics, partial renders, HTML bundles, archives and optional Qt integration. Unavailable optional dependencies produce skips. For a second replay engine, `python tools/setup_reference.py` builds pinned libxmp locally; no replay-engine binaries are committed. [CLI contracts](docs/CLI.md) · [Agent workflow](docs/AGENT_GUIDE.md)
 
 ## License
 
-Original project code and documentation are MIT licensed: see [LICENSE](LICENSE). Third-party reference modules remain the property of their respective rights holders and are not included or relicensed. External tools and libraries retain their own licenses; see [third-party notes](docs/THIRD_PARTY.md).
+Original project code and documentation are **MIT** licensed. See [LICENSE](LICENSE) and the [asset and third-party notes](docs/THIRD_PARTY.md). The published demos were created for ChipLoom; historical reference modules are not included or relicensed.

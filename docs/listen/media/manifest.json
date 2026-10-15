@@ -1,0 +1,45 @@
+{
+  "provenance": "Original compositions and synthesized samples created for ChipLoom. MP3 listening copies rendered from these MOD files. No historical reference recordings or PCM included.",
+  "songs": [
+    {
+      "title": "Pixel Rush",
+      "files": [
+        {
+          "name": "pixel_rush.mod",
+          "sha256": "1ce068afb51e239fb090ff8b1cf3adca9ab96991d12bad6c618573d873516281",
+          "bytes": 12924
+        },
+        {
+          "name": "pixel_rush.mp3",
+          "sha256": "d503741a5a83faa79940fb6513b129021c8cc10ae5e1f1b50e911ca6200c55c3",
+          "bytes": 1085924
+        },
+        {
+          "name": "pixel_rush.project.json",
+          "sha256": "26c9714aef34846b042020cfe65c4a21a0eda288171a2c5865e4a8af7264233b",
+          "bytes": 192062
+        }
+      ]
+    },
+    {
+      "title": "Voltage Odyssey V2",
+      "files": [
+        {
+          "name": "voltage_odyssey_v2.mod",
+          "sha256": "a4822a56be18d66145dac91706a096e6efbfcfa97b9e5a392c3d79f128234197",
+          "bytes": 58832
+        },
+        {
+          "name": "voltage_odyssey_v2.mp3",
+          "sha256": "2b2d18c7370e5e42877edf87c5c8eae7f5b496bb347cc48bd3563f83b9ada4dc",
+          "bytes": 2497383
+        },
+        {
+          "name": "voltage_odyssey_v2.project.json",
+          "sha256": "a9caaef0a2746e1091681241b79ee2f482e28b48718b12f8082f8c469bc4ae73",
+          "bytes": 690007
+        }
+      ]
+    }
+  ]
+}

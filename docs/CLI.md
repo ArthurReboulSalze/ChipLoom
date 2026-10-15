@@ -6,7 +6,8 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | --- | --- | --- |
 | `demo` | Built-in song and seed | Reproduces an original example, MOD and project; optional renders |
 | `inspect` | Strict MOD or JSON | Structured summary; optional 64-row pattern |
-| `validate` | Strict MOD or JSON | Validates profile and computes playback plan |
+| `validate` | Strict MOD or JSON | Playback plan, duration warnings; `--report` collects independent JSON errors |
+| `estimate` | Order count, speed, BPM, rows | Constant-timing duration estimate without a source file |
 | `import` | Strict MOD | JSON with PCM; no inferred synthesis recipes |
 | `export` | JSON project | Real self-contained MOD |
 | `render` | Strict MOD | WAV from the actual MOD; optional MP3 |
@@ -49,3 +50,19 @@ The analysis command returns a compact report location and count to stdout, with
 Export, import, render and analysis may replace the explicitly requested output file after validation. Preview refuses an existing output directory. Demo output is reproducible generated content and may be refreshed in its designated directory. Always choose output paths separate from user-supplied references.
 
 Generated files can contain the project's user-authored metadata and music. Review a bundle before publishing it. ChipLoom does not upload it automatically.
+
+## Planning and diagnostics (v0.5.0)
+
+```sh
+python -m tracker4agents estimate --orders 18 --speed 6 --bpm 125
+python -m tracker4agents validate examples/pixel_rush.project.json --report
+python -m tracker4agents render docs/listen/media/voltage_odyssey_v2.mod --from-order 6 --seconds 10 --output exports/drop.wav
+```
+
+`estimate` accepts `--orders` 1–128, `--rows` 1–64 (default 64), `--speed` 1–31 (default 6) and `--bpm` 33–255 (default 125), all decimal integers. It returns seconds per order, total duration, assumptions and warnings. It assumes constant timing and no jumps or early breaks.
+
+`inspect` and successful `validate` responses now include `warnings: []`. A duration over 120 seconds adds a warning while retaining `ok: true`: render bounds do not make a MOD invalid.
+
+For JSON, `validate --report` collects independent structural errors as `errors: [{"path": "...", "message": "..."}]` plus `error_count`. On failure it uses stderr / exit 2, retaining the normal error envelope; success uses stdout / exit 0 and an empty error array. One primary error per field/sample/event and additional collisions are reported. Dependent timing checks run only after the score is structurally valid. Unparseable JSON or MOD data returns the usual single decoding error. No source is modified.
+
+`render --from-order N` selects the first reached entry into zero-based order N. It decodes the prefix to retain state, then cuts at the nominal playback-plan timestamp. Small native replay timing differences remain possible. Both engines support it. Preroll must be at most 600 seconds; output is still limited to 120 seconds. If `--seconds` is absent, render the remainder of the first cycle. The response includes `from_order` (null when omitted) and `start_seconds`; excerpt trace timestamps are relative to the output, while order/row indices remain those of the original MOD.

@@ -16,3 +16,9 @@ references/private/
 .env.*
 session.json
 .playwright-mcp/
+_site/
+# Explicitly approved original public demos; other media remains excluded.
+!docs/listen/media/pixel_rush.mod
+!docs/listen/media/pixel_rush.mp3
+!docs/listen/media/voltage_odyssey_v2.mod
+!docs/listen/media/voltage_odyssey_v2.mp3

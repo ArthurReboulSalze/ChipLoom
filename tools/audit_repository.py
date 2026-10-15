@@ -1,5 +1,6 @@
 """Audit the exact Git index before sharing: no local state or reference media."""
 from pathlib import Path, PurePosixPath
+import hashlib
 import json
 import re
 import subprocess
@@ -8,6 +9,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 BLOCKED_PARTS = {".venv", ".tools", "__pycache__", ".playwright-mcp", "exports", "private"}
 BLOCKED_EXTENSIONS = {".mod", ".xm", ".it", ".zip", ".wav", ".mp3", ".dll", ".exe", ".pyc"}
+# Owner-approved original compositions only, pinned to the reviewed bytes.
+PUBLIC_DEMOS = {
+    "docs/listen/media/pixel_rush.mod": "1ce068afb51e239fb090ff8b1cf3adca9ab96991d12bad6c618573d873516281",
+    "docs/listen/media/pixel_rush.mp3": "d503741a5a83faa79940fb6513b129021c8cc10ae5e1f1b50e911ca6200c55c3",
+    "docs/listen/media/voltage_odyssey_v2.mod": "a4822a56be18d66145dac91706a096e6efbfcfa97b9e5a392c3d79f128234197",
+    "docs/listen/media/voltage_odyssey_v2.mp3": "2b2d18c7370e5e42877edf87c5c8eae7f5b496bb347cc48bd3563f83b9ada4dc",
+}
 SECRET = re.compile(rb"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 
 
@@ -17,13 +25,15 @@ def main():
     for name in filter(None, names):
         path = PurePosixPath(name)
         checked += 1
-        if BLOCKED_PARTS.intersection(path.parts) or path.suffix.lower() in BLOCKED_EXTENSIONS or path.name.startswith(".env"):
+        if BLOCKED_PARTS.intersection(path.parts) or (path.suffix.lower() in BLOCKED_EXTENSIONS and name not in PUBLIC_DEMOS) or path.name.startswith(".env"):
             errors.append(f"Excluded local/reference file in index: {name}")
             continue
         content = subprocess.check_output(["git", "show", f":{name}"], cwd=ROOT)
+        if name in PUBLIC_DEMOS and hashlib.sha256(content).hexdigest() != PUBLIC_DEMOS[name]:
+            errors.append(f"Public demo differs from approved bytes: {name}")
         if SECRET.search(content):
             errors.append(f"Possible credential in index: {name}")
-        if len(content) > 2 * 1024 * 1024:
+        if len(content) > 2 * 1024 * 1024 and name not in PUBLIC_DEMOS:
             errors.append(f"Unexpectedly large tracked file: {name}")
         if path.parts[0] == "references" and path.suffix == ".json":
             report = json.loads(content)

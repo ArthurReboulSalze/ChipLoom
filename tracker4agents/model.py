@@ -64,7 +64,8 @@ EMPTY = Cell()
 
 def cell(note: str | None = None, sample: int = 0, effect: str = "000") -> Cell:
     if note is not None and (not isinstance(note, str) or note not in NOTE_TO_PERIOD):
-        raise ValidationError(f"Note inconnue {note!r}; utilise C-1 à B-3 (notation ProTracker).")
+        raise ValidationError(f"Note inconnue {note!r}; utilise C-1 à B-3, dièses sans tiret "
+                              "(exemples : C-3, G#3, A#2 ; notation ProTracker).")
     if not isinstance(effect, str) or not re.fullmatch(r"[0-9A-Fa-f]{3}", effect):
         raise ValidationError("Un effet doit contenir trois chiffres hexadécimaux, par exemple 037 ou C20.")
     return Cell(NOTE_TO_PERIOD.get(note, 0), sample, int(effect[0], 16), int(effect[1:], 16))
@@ -107,6 +108,61 @@ class Module:
     metadata: dict = field(default_factory=dict)
 
 
+def validate_sample(sample: Sample, index: int = 1) -> None:
+    label = f"Sample {index}"
+    ascii_field(sample.name, 22, label)
+    require_int(sample.volume, f"{label} volume", 0, 64)
+    require_int(sample.finetune, f"{label} finetune", -8, 7)
+    length = len(sample.pcm)
+    if length % 2 or length > 65_534 or length in (1, 2):
+        raise ValidationError(f"{label}: longueur paire, de 4 à 65534 octets, ou sample vide.")
+    if any(type(value) is not int or not -128 <= value <= 127 for value in sample.pcm):
+        raise ValidationError(f"{label}: valeurs PCM signées 8 bits attendues (-128 à 127).")
+    require_int(sample.loop_start, f"{label} loop_start", 0, length)
+    require_int(sample.loop_length, f"{label} loop_length", 0, length)
+    if sample.loop_start % 2 or sample.loop_length % 2:
+        raise ValidationError(f"{label}: les points de boucle doivent être alignés sur deux octets.")
+    if sample.loop_length:
+        if sample.loop_length < 4 or sample.loop_start + sample.loop_length > length:
+            raise ValidationError(f"{label}: boucle trop courte ou en dehors du sample.")
+    elif sample.loop_start or any(sample.pcm[:2]):
+        raise ValidationError(f"{label}: un son sans boucle doit commencer par deux octets nuls.")
+
+
+def validate_cell(value: Cell, row: int, channel: int, pattern_index: int,
+                 sample_count: int, order_count: int) -> None:
+    # No PC panning extensions, pattern loops, pattern delays or destructive EFx
+    # in v1. All supported effects are delegated to the reference replay engines.
+    simple_commands = {0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15}
+    extended_commands = {0, 1, 2, 4, 5, 9, 10, 11, 12, 13}
+    where = f"Pattern {pattern_index}, ligne {row}, voie {channel}"
+    require_int(row, where, 0, 63)
+    require_int(channel, where, 0, 3)
+    require_int(value.period, f"{where} période", 0, 4095)
+    if value.period and value.period not in PERIOD_TO_NOTE:
+        raise ValidationError(f"{where}: période {value.period} hors des 36 notes du profil.")
+    require_int(value.sample, f"{where} sample", 0, sample_count)
+    require_int(value.command, f"{where} effet", 0, 15)
+    require_int(value.param, f"{where} paramètre", 0, 255)
+    if value.command == 14:
+        if value.param >> 4 not in extended_commands:
+            raise ValidationError(f"{where}: effet {value.effect} non pris en charge par le profil v1.")
+        if value.param >> 4 == 0 and value.param not in (0, 1):
+            raise ValidationError(f"{where}: seul E00/E01 est accepté pour le filtre.")
+    elif value.command not in simple_commands:
+        raise ValidationError(f"{where}: effet {value.effect} hors du profil ProTracker v1.")
+    if value.command == 12 and value.param > 64:
+        raise ValidationError(f"{where}: volume Cxx supérieur à 40 hexadécimal.")
+    if value.command == 11 and value.param >= order_count:
+        raise ValidationError(f"{where}: Bxx pointe en dehors de la liste d'ordres.")
+    if value.command == 13:
+        tens, units = value.param >> 4, value.param & 15
+        if units > 9 or tens > 6 or tens * 10 + units > 63:
+            raise ValidationError(f"{where}: Dxx attend une ligne décimale codée BCD de 00 à 63.")
+    if value.command == 15 and value.param in (0, 32):
+        raise ValidationError(f"{where}: F00 et F20 ont un comportement ambigu et sont exclus.")
+
+
 def validate(module: Module) -> None:
     ascii_field(module.title, 20, "Titre MOD")
     if not 1 <= len(module.samples) <= 31:
@@ -121,57 +177,11 @@ def validate(module: Module) -> None:
         raise ValidationError("Le dernier pattern stocké doit apparaître dans la liste d'ordres.")
 
     for index, sample in enumerate(module.samples, 1):
-        label = f"Sample {index}"
-        ascii_field(sample.name, 22, label)
-        require_int(sample.volume, f"{label} volume", 0, 64)
-        require_int(sample.finetune, f"{label} finetune", -8, 7)
-        length = len(sample.pcm)
-        if length % 2 or length > 65_534 or length in (1, 2):
-            raise ValidationError(f"{label}: longueur paire, de 4 à 65534 octets, ou sample vide.")
-        if any(type(value) is not int or not -128 <= value <= 127 for value in sample.pcm):
-            raise ValidationError(f"{label}: valeurs PCM signées 8 bits attendues (-128 à 127).")
-        require_int(sample.loop_start, f"{label} loop_start", 0, length)
-        require_int(sample.loop_length, f"{label} loop_length", 0, length)
-        if sample.loop_start % 2 or sample.loop_length % 2:
-            raise ValidationError(f"{label}: les points de boucle doivent être alignés sur deux octets.")
-        if sample.loop_length:
-            if sample.loop_length < 4 or sample.loop_start + sample.loop_length > length:
-                raise ValidationError(f"{label}: boucle trop courte ou en dehors du sample.")
-        elif sample.loop_start or any(sample.pcm[:2]):
-            raise ValidationError(f"{label}: un son sans boucle doit commencer par deux octets nuls.")
+        validate_sample(sample, index)
 
-    # No PC panning extensions, pattern loops, pattern delays or destructive EFx
-    # in v1. All supported effects are delegated to the reference replay engines.
-    simple_commands = {0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15}
-    extended_commands = {0, 1, 2, 4, 5, 9, 10, 11, 12, 13}
     for pattern_index, pattern in enumerate(module.patterns):
         for (row, channel), value in pattern.cells.items():
-            where = f"Pattern {pattern_index}, ligne {row}, voie {channel}"
-            require_int(row, where, 0, 63)
-            require_int(channel, where, 0, 3)
-            require_int(value.period, f"{where} période", 0, 4095)
-            if value.period and value.period not in PERIOD_TO_NOTE:
-                raise ValidationError(f"{where}: période {value.period} hors des 36 notes du profil.")
-            require_int(value.sample, f"{where} sample", 0, len(module.samples))
-            require_int(value.command, f"{where} effet", 0, 15)
-            require_int(value.param, f"{where} paramètre", 0, 255)
-            if value.command == 14:
-                if value.param >> 4 not in extended_commands:
-                    raise ValidationError(f"{where}: effet {value.effect} non pris en charge par le profil v1.")
-                if value.param >> 4 == 0 and value.param not in (0, 1):
-                    raise ValidationError(f"{where}: seul E00/E01 est accepté pour le filtre.")
-            elif value.command not in simple_commands:
-                raise ValidationError(f"{where}: effet {value.effect} hors du profil ProTracker v1.")
-            if value.command == 12 and value.param > 64:
-                raise ValidationError(f"{where}: volume Cxx supérieur à 40 hexadécimal.")
-            if value.command == 11 and value.param >= len(module.orders):
-                raise ValidationError(f"{where}: Bxx pointe en dehors de la liste d'ordres.")
-            if value.command == 13:
-                tens, units = value.param >> 4, value.param & 15
-                if units > 9 or tens > 6 or tens * 10 + units > 63:
-                    raise ValidationError(f"{where}: Dxx attend une ligne décimale codée BCD de 00 à 63.")
-            if value.command == 15 and value.param in (0, 32):
-                raise ValidationError(f"{where}: F00 et F20 ont un comportement ambigu et sont exclus.")
+            validate_cell(value, row, channel, pattern_index, len(module.samples), len(module.orders))
 
 
 def playback_plan(module: Module) -> dict:

@@ -6,6 +6,24 @@ Le nom du programme est désormais **ChipLoom**. Le paquet Python et les anciens
 
 ChipLoom est conçu pour être utilisé par un agent tel que **Codex** ou **Hermès Agent** : l'agent compose et révise, le logiciel valide et produit un vrai MOD. La fenêtre sert à l'humain ; l'agent utilise le JSON, Python et la ligne de commande. Aucun modèle n'est embarqué, aucun entraînement n'est réalisé, et aucun serveur MCP n'est encore implémenté. Le [guide des agents](AGENT_GUIDE.md) explique la démarche.
 
+## Écouter les exemples et composer avec Hermès
+
+**[Écouter Pixel Rush et Voltage Odyssey V2](https://arthurreboulsalze.github.io/ChipLoom/)** : deux lecteurs MP3 avec les MOD et les projets téléchargeables. Les morceaux et leurs samples ont été créés pour ChipLoom.
+
+Un test utilisateur avec **Hermès / glm-5.3-flash sur Debian 13** a abouti à deux compositions originales. Le [retour documenté](HERMES_FEEDBACK.md) distingue ce résultat de la CI et de la fenêtre Linux, qui reste à valider.
+
+Depuis la version 0.5.0, tu peux planifier la durée, regrouper les erreurs et écouter un passage :
+
+```sh
+python -m tracker4agents estimate --orders 8 --speed 6 --bpm 128
+python -m tracker4agents validate examples/pixel_rush.project.json --report
+python -m tracker4agents render docs/listen/media/voltage_odyssey_v2.mod --from-order 6 --seconds 10 --output exports/drop.wav
+```
+
+À vitesse constante, durée = lignes × speed × 2,5 / BPM : huit ordres de 64 lignes à speed 6 et 128 BPM donnent une minute. `validate` tient compte des changements et sauts réels. Au-delà de 120 secondes, il émet un avertissement sans invalider le MOD. Le rapport rassemble les erreurs indépendantes, avec une première erreur par champ/sample/événement et les collisions ; les erreurs dépendantes peuvent demander une nouvelle validation après correction.
+
+`--from-order` compte les ordres à partir de zéro. La prélecture conserve les instruments et effets actifs avant l'extrait ; la coupe suit le temps théorique, avec de petits écarts possibles selon le moteur. Limites : 600 secondes de prélecture et 120 secondes d'extrait.
+
 ## Générer une page HTML à la demande
 
 Les deux possibilités restent disponibles. Pour créer un bundle d'écoute à partir d'un projet existant :
@@ -20,7 +38,7 @@ La [nouvelle sélection de quinze modules](../references/SELECTION_FR.md) est é
 
 ## Fenêtre de travail
 
-Sous Windows, double-clique **`Lancer tracker4agents.cmd`**. L'environnement `.venv` est déjà préparé sur cette machine. Sur une autre installation, exécute d'abord `Installer interface Windows.cmd` avec Python 3.12 ou plus récent disponible.
+Sous Windows, installe Python 3.12 ou plus récent, puis exécute **`Install ChipLoom.cmd`** et **`Launch ChipLoom.cmd`**. Les anciens lanceurs français restent disponibles pour compatibilité.
 
 La fenêtre permet de :
 

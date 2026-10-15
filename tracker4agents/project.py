@@ -7,7 +7,10 @@ import os
 from pathlib import Path
 import tempfile
 
-from .model import EMPTY, PROFILE, Module, Pattern, Sample, ValidationError, cell, validate
+from .model import (
+    EMPTY, PROFILE, Module, Pattern, Sample, ValidationError, ascii_field, cell,
+    require_int, validate, validate_cell, validate_sample,
+)
 from .synth import from_recipe
 
 SCHEMA = "tracker4agents.project.v1"
@@ -45,6 +48,21 @@ def _keys(value: object, allowed: set[str], label: str) -> dict:
     return value
 
 
+def _sample_from_dict(item: object, index: int) -> Sample:
+    item = _keys(item, {"name", "volume", "finetune", "recipe", "pcm", "loop_start", "loop_length"}, f"Sample {index}")
+    name, volume, tune = item.get("name", ""), item.get("volume", 40), item.get("finetune", 0)
+    if "recipe" in item:
+        if any(key in item for key in ("pcm", "loop_start", "loop_length")):
+            raise ValidationError("Une recette définit son PCM et sa boucle ; ne les duplique pas.")
+        sample = from_recipe(name, item["recipe"], volume, tune)
+    else:
+        pcm = item.get("pcm")
+        if not isinstance(pcm, list) or len(pcm) > 65_534:
+            raise ValidationError(f"Sample {index}: liste PCM manquante ou trop longue.")
+        sample = Sample(name, tuple(pcm), volume, tune, item.get("loop_start", 0), item.get("loop_length", 0))
+    return sample
+
+
 def from_dict(data: object) -> Module:
     data = _keys(data, {"schema", "profile", "title", "samples", "patterns", "orders", "metadata"}, "Projet")
     if data.get("schema") != SCHEMA or data.get("profile") != PROFILE:
@@ -58,17 +76,7 @@ def from_dict(data: object) -> Module:
         raise ValidationError("orders: tableau attendu.")
     samples = []
     for index, item in enumerate(samples_data, 1):
-        item = _keys(item, {"name", "volume", "finetune", "recipe", "pcm", "loop_start", "loop_length"}, f"Sample {index}")
-        name, volume, tune = item.get("name", ""), item.get("volume", 40), item.get("finetune", 0)
-        if "recipe" in item:
-            if any(key in item for key in ("pcm", "loop_start", "loop_length")):
-                raise ValidationError("Une recette définit son PCM et sa boucle ; ne les duplique pas.")
-            sample = from_recipe(name, item["recipe"], volume, tune)
-        else:
-            pcm = item.get("pcm")
-            if not isinstance(pcm, list) or len(pcm) > 65_534:
-                raise ValidationError(f"Sample {index}: liste PCM manquante ou trop longue.")
-            sample = Sample(name, tuple(pcm), volume, tune, item.get("loop_start", 0), item.get("loop_length", 0))
+        sample = _sample_from_dict(item, index)
         samples.append(sample)
     patterns = []
     for index, item in enumerate(patterns_data):
@@ -79,16 +87,21 @@ def from_dict(data: object) -> Module:
         pattern = Pattern(item.get("name", f"Pattern {index:02X}"))
         if not isinstance(pattern.name, str):
             raise ValidationError(f"Pattern {index}: nom textuel attendu.")
-        seen = set()
-        for event in events:
+        seen = {}
+        for event_index, event in enumerate(events):
             event = _keys(event, {"row", "channel", "note", "sample", "effect"}, f"Événement du pattern {index}")
             row, channel = event.get("row"), event.get("channel")
-            # Validate coordinates before using them as keys.
             value = cell(event.get("note"), event.get("sample", 0), event.get("effect", "000"))
-            pattern.put(row, channel, value)
+            # Check coordinates before hashing and preserve the first writer.
+            require_int(row, "row", 0, 63)
+            require_int(channel, "channel", 0, 3)
             if (row, channel) in seen:
-                raise ValidationError(f"Pattern {index}: cellule ({row}, {channel}) définie deux fois.")
-            seen.add((row, channel))
+                previous_index, previous = seen[row, channel]
+                raise ValidationError(f"Pattern {index}: cellule ({row}, {channel}) définie deux fois — "
+                                      f"events[{previous_index}] existant: {previous.text()} / "
+                                      f"events[{event_index}] nouveau: {value.text()}.")
+            seen[row, channel] = event_index, value
+            pattern.put(row, channel, value)
         patterns.append(pattern)
     metadata = data.get("metadata", {})
     if not isinstance(metadata, dict):
@@ -130,3 +143,81 @@ def to_dict(module: Module, recipes: bool = True) -> dict:
 
 def load(path: Path) -> Module:
     return from_dict(read_json(path))
+
+
+def diagnose(data: object) -> list[dict]:
+    """Read-only independent diagnostics; never repair or export partial input.
+
+    Collect one primary error per field/sample/event, plus collisions. Invalid
+    containers cannot be descended into; dependent playback checks run only
+    after all structural checks pass. Uses the same validators as normal load.
+    """
+    errors = []
+
+    def check(path, operation):
+        try:
+            return operation()
+        except (ValueError, TypeError, OverflowError) as exc:
+            errors.append({"path": path, "message": str(exc)})
+            return None
+
+    if not isinstance(data, dict):
+        return [{"path": "$", "message": "Projet: objet JSON attendu."}]
+    check("$", lambda: _keys(data, {"schema", "profile", "title", "samples", "patterns", "orders", "metadata"}, "Projet"))
+    for key, expected in (("schema", SCHEMA), ("profile", PROFILE)):
+        if data.get(key) != expected:
+            errors.append({"path": key, "message": f"Valeur attendue : {expected}."})
+    check("title", lambda: ascii_field(data.get("title", ""), 20, "Titre MOD"))
+    if not isinstance(data.get("metadata", {}), dict):
+        errors.append({"path": "metadata", "message": "metadata: objet JSON attendu."})
+    containers = {}
+    for key, limit in (("samples", 31), ("patterns", 64), ("orders", 128)):
+        value = data.get(key)
+        if not isinstance(value, list) or not 1 <= len(value) <= limit:
+            errors.append({"path": key, "message": f"{key}: tableau de 1 à {limit} entrées attendu."})
+        else:
+            containers[key] = value
+    samples, patterns, orders = (containers.get(key, []) for key in ("samples", "patterns", "orders"))
+    for index, item in enumerate(samples):
+        def inspect_sample(item=item, index=index):
+            validate_sample(_sample_from_dict(item, index + 1), index + 1)
+        check(f"samples[{index}]", inspect_sample)
+    if patterns and orders:
+        before = len(errors)
+        for index, value in enumerate(orders):
+            check(f"orders[{index}]", lambda value=value, index=index:
+                  require_int(value, f"orders[{index}]", 0, len(patterns) - 1))
+        if len(errors) == before and max(orders) != len(patterns) - 1:
+            errors.append({"path": "orders", "message": "Le dernier pattern stocké doit apparaître dans la liste d'ordres."})
+    for index, item in enumerate(patterns):
+        path = f"patterns[{index}]"
+        check(path, lambda item=item: _keys(item, {"name", "events"}, path))
+        if not isinstance(item, dict):
+            continue
+        if not isinstance(item.get("name", ""), str):
+            errors.append({"path": path + ".name", "message": "Nom textuel attendu."})
+        events = item.get("events")
+        if not isinstance(events, list) or len(events) > 256:
+            errors.append({"path": path + ".events", "message": "Liste d'événements invalide (256 maximum)."})
+            continue
+        seen = {}
+        for event_index, event in enumerate(events):
+            location = f"{path}.events[{event_index}]"
+            def inspect_event(event=event):
+                _keys(event, {"row", "channel", "note", "sample", "effect"}, location)
+                row, channel = event.get("row"), event.get("channel")
+                require_int(row, "row", 0, 63)
+                require_int(channel, "channel", 0, 3)
+                if (row, channel) in seen:
+                    previous_index, previous = seen[row, channel]
+                    errors.append({"path": location, "message":
+                        f"Pattern {index}: cellule ({row}, {channel}) définie deux fois — "
+                        f"events[{previous_index}] existant: {previous!r} / events[{event_index}] nouveau: {event!r}."})
+                else:
+                    seen[row, channel] = event_index, event
+                value = cell(event.get("note"), event.get("sample", 0), event.get("effect", "000"))
+                validate_cell(value, row, channel, index, len(samples) if samples else 31, len(orders) if orders else 128)
+            check(location, inspect_event)
+    if not errors:
+        check("$", lambda: from_dict(data))
+    return errors

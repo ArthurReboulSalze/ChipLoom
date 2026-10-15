@@ -32,7 +32,8 @@ class TestInfo(C.Structure):
     _fields_ = [("name", C.c_char * 64), ("type", C.c_char * 64)]
 
 
-def render(source: Path, output: Path, seconds: float, sample_rate: int, library: Path) -> dict:
+def render(source: Path, output: Path, seconds: float, sample_rate: int, library: Path,
+           start_seconds: float = 0.0) -> dict:
     dll = C.CDLL(str(library))
     prototypes = {
         "xmp_create_context": ([], C.c_void_p),
@@ -65,6 +66,8 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
     loaded = started = False
     frames_written = 0
     target_frames = round(seconds * sample_rate)
+    skip_frames = round(start_seconds * sample_rate)
+    frames_decoded = 0
     trace = []
     try:
         checked(dll.xmp_set_player(ctx, 10, 70), "default pan")
@@ -82,7 +85,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
         frame = FrameInfo()
         with wave.open(str(output), "wb") as audio:
             audio.setparams((2, 2, sample_rate, 0, "NONE", "not compressed"))
-            for _ in range(50_000):
+            for _ in range(100_000):
                 if frames_written >= target_frames:
                     break
                 code = dll.xmp_play_frame(ctx)
@@ -94,14 +97,19 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
                     raise RuntimeError("Taille de frame native invalide.")
                 if frame.buffer_size % 4:
                     raise RuntimeError("Frame PCM stéréo non alignée.")
+                native_count = frame.buffer_size // 4
+                offset = min(native_count, max(0, skip_frames - frames_decoded))
+                frames_decoded += native_count
+                if offset == native_count:
+                    continue
                 if frame.frame == 0:
                     trace.append({
                         "seconds": round(frames_written / sample_rate, 9),
                         "order": frame.pos, "pattern": frame.pattern, "row": frame.row,
                         "speed": frame.speed, "bpm": frame.bpm, "loop_count": frame.loop_count,
                     })
-                count = min(frame.buffer_size // 4, target_frames - frames_written)
-                pcm = C.string_at(frame.buffer, count * 4)
+                count = min(native_count - offset, target_frames - frames_written)
+                pcm = C.string_at(frame.buffer + offset * 4, count * 4)
                 if sys.byteorder != "little":
                     from array import array
                     samples = array("h", pcm)
@@ -129,7 +137,8 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
 
 if __name__ == "__main__":
     try:
-        result = render(Path(sys.argv[1]), Path(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]))
+        result = render(Path(sys.argv[1]), Path(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]),
+                        float(sys.argv[6]) if len(sys.argv) > 6 else 0.0)
         print(json.dumps(result))
     except (OSError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

@@ -2,7 +2,9 @@
 
 The original project source and documentation are released under MIT by Arthur Reboul Salze; see the root LICENSE.
 
-The included example scores and sample-generation recipes were created for this project. Generated demo outputs can be rebuilt locally and are not committed as media bundles.
+The included example scores and sample-generation recipes were created for this project. At the owner's request, two curated original demos, **Pixel Rush** and **Voltage Odyssey V2**, are published with MOD, MP3 and editable projects in `docs/listen/media/`. Their samples were synthesized for ChipLoom; no historical reference PCM or recordings are included. The manifest records file hashes. Other generated exports remain outside Git.
+
+The header logo was generated for ChipLoom with the built-in image generation tool and approved by the owner. Its prompt and transparent PNG are in `docs/assets/`.
 
 User-supplied historical modules are reference inputs only. Their source archives, MOD files, PCM samples and audio renders are not distributed in this repository. Aggregate reports include filenames, internal titles, hashes, structural counts and pattern relationships. Filenames and internal text are not independent verification of authorship or provenance. The MIT license does not grant rights to those third-party compositions.
 

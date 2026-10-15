@@ -10,7 +10,7 @@ In Codex, open the cloned project and begin a task there. The repository's `AGEN
 
 In Hermes Agent, use a session whose terminal/file tools can access this checkout, and ask it to read `AGENTS.md` and this guide. With a remote or container terminal, clone the project there as well; a Windows path is not automatically accessible to that environment. The CLI workflow does not require changing Hermes core or installing an MCP integration. A reusable Hermes skill may be added later; no skill is automatically installed by this repository. [Official Hermes skills documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills).
 
-The command workflow is exercised by this project's tests and by Codex during development. A live Hermes session has not yet been used for end-to-end validation.
+The command workflow is exercised by this project's tests and by Codex during development. A user-reported Hermes run with glm-5.3-flash completed two original MOD compositions on Debian 13, Python 3.13.5 and FFmpeg 7.1.5. This confirms that reported headless workflow, not every model/provider or the Linux GUI. See [the feedback and follow-up](HERMES_FEEDBACK.md).
 
 ## A complete composition loop
 
@@ -34,6 +34,36 @@ python -m tracker4agents preview exports/my-song/project.json --output exports/m
 Use the interpreter installed on the same host as the files. Successful CLI responses are JSON on stdout. Data/render errors return JSON on stderr and exit code 2. `--help`, `--version` and argparse usage errors use normal CLI text.
 
 The preview command exports its own complete bundle from the same project. To avoid stale or accidentally overwritten media, choose a fresh bundle directory for each revision. Share the entire bundle. HTML generation is optional; the agent never needs to open a browser or desktop window to compose.
+
+## Plan the duration before composing
+
+At constant timing, **seconds per row = speed × 2.5 / BPM**. An order is an entry in the playback list: it selects a pattern, which can be repeated in other orders. A full pattern has 64 rows. At speed 6 and **125 BPM**, this gives 7.68 seconds per full order; it is not a fixed duration at every tempo.
+
+| BPM | Speed | Seconds / 64-row order | Eight full orders |
+| --- | --- | --- | --- |
+| 125 | 6 | 7.68 | 61.44 s |
+| 128 | 6 | 7.50 | 60.00 s |
+| 160 | 6 | 6.00 | 48.00 s |
+| 164 | 6 | 5.8537 | 46.8293 s |
+
+```sh
+python -m tracker4agents estimate --orders 8 --speed 6 --bpm 128
+```
+
+For shorter phrases, `--rows 32` estimates 32 played rows per order; the actual score still needs an early `D00` break. Timing changes, Bxx jumps and Dxx breaks invalidate the constant-timing estimate. Validate the finished score for its playback plan.
+
+`validate` and `inspect` include a `warnings` array when the first cycle exceeds the 120-second render limit. The MOD remains valid. Render a bounded excerpt with `--seconds`, or shorten the arrangement; full-cycle HTML previews remain limited to 120 seconds.
+
+## Diagnose and audition a section
+
+```sh
+python -m tracker4agents validate exports/my-song/project.json --report
+python -m tracker4agents render exports/my-song/my-song.mod --from-order 6 --seconds 10 --output exports/my-song/drop.wav
+```
+
+The read-only report collects independent JSON errors with paths such as `patterns[4].events[12]`, including collisions and both writers. It reports one primary problem per field/sample/event plus collisions; repair these and run it again for any dependent problems. Invalid containers cannot be inspected further. Malformed JSON and binary MOD parsing still stop at the first decoding error. Reports never produce a repaired score.
+
+`--from-order` is a **zero-based order index**, not a pattern number. It selects the first visit to that order in the first playback cycle, including a nonzero entry row after Dxx. The renderer decodes from the beginning and discards the prefix, preserving sample/effect state. The cut uses the playback plan's nominal timestamp; native engine timing can differ by milliseconds. Preroll is bounded to 600 seconds and the output to 120 seconds. Without `--seconds`, the excerpt runs to the end of the first cycle. Unreachable orders are rejected.
 
 ## Editing through Python
 
@@ -63,7 +93,7 @@ The schema is `tracker4agents.project.v1`; `examples/*.project.json` are complet
 {"row": 8, "channel": 3, "note": "E-3", "sample": 8, "effect": "C27"}
 ```
 
-`C27` sets volume to hexadecimal 27 (decimal 39). Sample 0 keeps the current sample. A sample/effect without a new note is meaningful and must not be discarded. Tracker note names `C-1` through `B-3` are the profile's period-table labels, not scientific octave numbers.
+`C27` sets volume to hexadecimal 27 (decimal 39). Sample 0 keeps the current sample. A sample/effect without a new note is meaningful and must not be discarded. Sharps have no extra hyphen: `C-3`, `G#3`, `A#2` are valid; `G#-3` is not. Tracker note names `C-1` through `B-3` are the profile's period-table labels, not scientific octave numbers.
 
 Samples can use signed 8-bit PCM or a deterministic recipe. Drawing means defining amplitude points; synthesis recipes include `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` and `pluck`. Read the included recipes before constructing one. Their parameters are validated data, never executable source code. Seeds preserve reproducible noise.
 

@@ -27,6 +27,7 @@ def describe(module: Module, pattern_index: int | None = None) -> dict:
         "title": module.title, "profile": PROFILE, "channels": 4,
         "orders": module.orders, "patterns": len(module.patterns),
         "duration_seconds": plan["duration_seconds"], "loop_start_seconds": plan["loop_start_seconds"],
+        "warnings": audio.duration_warnings(plan["duration_seconds"]),
         "sample_count": sum(bool(sample.pcm) for sample in module.samples),
         "samples": [{
             "index": index, "name": sample.name, "bytes": len(sample.pcm),
@@ -118,6 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chiploom", description="ChipLoom: an agent-driven four-channel MOD tracker.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
+    estimate = commands.add_parser("estimate", help="Estimate duration before writing a score (constant timing).")
+    estimate.add_argument("--orders", type=int, required=True)
+    estimate.add_argument("--rows", type=int, default=64, help="Rows played per order, default 64.")
+    estimate.add_argument("--speed", type=int, default=6)
+    estimate.add_argument("--bpm", type=int, default=125)
     desktop = commands.add_parser("gui", help="Ouvrir la fenêtre de tracker (option desktop requise).")
     desktop.add_argument("source", type=Path, nargs="?", help="MOD ou projet JSON à ouvrir.")
     desktop.add_argument("--state-dir", type=Path, help="Dossier local de session et de cache audio.")
@@ -146,11 +152,14 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("source", type=Path)
         if name == "inspect":
             command.add_argument("--pattern", type=int)
+        if name == "validate":
+            command.add_argument("--report", action="store_true", help="Collect independent JSON project errors in one read-only report.")
         if name in ("export", "import", "render"):
             command.add_argument("--output", type=Path, required=True)
         if name == "render":
             command.add_argument("--engine", choices=("openmpt", "xmp"), default="openmpt")
             command.add_argument("--seconds", type=float)
+            command.add_argument("--from-order", type=int, help="Start at the first visit to this zero-based order; preserve prior replay state.")
             command.add_argument("--sample-rate", type=int, default=48000)
             command.add_argument("--ffmpeg")
             command.add_argument("--xmp-library", type=Path)
@@ -172,7 +181,18 @@ def main(argv: list[str] | None = None) -> int:
                     raise RuntimeError("L'interface demande PySide6. Exécute python -m pip install -e '.[desktop]' dans un environnement virtuel.") from exc
                 raise
             return desktop_main(args.source, args.state_dir, not args.no_restore)
-        if args.command == "demo":
+        if args.command == "estimate":
+            require_int(args.orders, "orders", 1, 128)
+            require_int(args.rows, "rows", 1, 64)
+            require_int(args.speed, "speed", 1, 31)
+            require_int(args.bpm, "bpm", 33, 255)
+            per_order = args.rows * args.speed * 2.5 / args.bpm
+            duration = args.orders * per_order
+            result = {"ok": True, "orders": args.orders, "rows_per_order": args.rows,
+                      "speed": args.speed, "bpm": args.bpm, "seconds_per_order": round(per_order, 9),
+                      "duration_seconds": round(duration, 9), "warnings": audio.duration_warnings(duration),
+                      "assumptions": "Constant speed/BPM, no jumps or early breaks. Validate the finished score for its playback plan."}
+        elif args.command == "demo":
             result = create_demo(args)
         elif args.command == "preview":
             from .preview import create_bundle
@@ -188,9 +208,17 @@ def main(argv: list[str] | None = None) -> int:
                   "source_unchanged": result["source_unchanged"]})
             return 0 if result["ok"] else 2
         elif args.command in ("inspect", "validate"):
+            if args.command == "validate" and args.report and args.source.suffix.lower() == ".json":
+                errors = project.diagnose(project.read_json(args.source))
+                if errors:
+                    emit({"ok": False, "error": "ValidationError", "message": "Project validation failed.",
+                          "errors": errors, "error_count": len(errors)}, stream=sys.stderr)
+                    return 2
             module = load(args.source)
             validate(module)
             result = {"ok": True, **describe(module, getattr(args, "pattern", None))}
+            if getattr(args, "report", False):
+                result.update(errors=[], error_count=0)
         elif args.command in ("export", "import"):
             if args.source.resolve() == args.output.resolve():
                 raise ValidationError("La sortie doit être distincte du fichier source.")
@@ -206,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "render":
             result = {"ok": True, **audio.render(
                 args.source, args.output, args.engine, args.seconds, args.sample_rate,
-                args.ffmpeg, args.xmp_library,
+                args.ffmpeg, args.xmp_library, from_order=args.from_order,
             )}
             if args.mp3_output:
                 result["optional_mp3"] = audio.export_mp3(args.output, args.mp3_output, args.ffmpeg)
