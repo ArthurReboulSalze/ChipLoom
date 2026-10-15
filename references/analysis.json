@@ -1,0 +1,1561 @@
+{
+  "purpose": "Structural reference analysis; no source PCM or note sequence copied",
+  "modules": [
+    {
+      "source": "2000AD - Creatures To The Rescue +3 trn.mod",
+      "sha256": "df76f2fc85ddf95f76913fedc443e92d22af8dcef256e2cac08e4898e85368a7",
+      "title": "kortis",
+      "bytes": 13712,
+      "channels": 4,
+      "orders": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        6,
+        7
+      ],
+      "stored_patterns": 8,
+      "duration_seconds": 65.24822695,
+      "loop_start_seconds": 0.0,
+      "played_rows": 736,
+      "timing_values": [
+        [
+          5,
+          141
+        ]
+      ],
+      "pcm_bytes": 4436,
+      "samples": [
+        {
+          "slot": 1,
+          "bytes": 956,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "9471aa3a62b19cb9bd3665671d9181cd8ca5377c1df9910bd4ee1179af731d6c"
+        },
+        {
+          "slot": 2,
+          "bytes": 1194,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 1194,
+          "pcm_sha256": "7ef42993079ab6254dd0dc5ffceff567d6bcb198a801b77f39b51c213a59044c"
+        },
+        {
+          "slot": 3,
+          "bytes": 44,
+          "volume": 54,
+          "finetune": 0,
+          "loop_start": 16,
+          "loop_length": 28,
+          "pcm_sha256": "b80969f455db44a665bbd35c8dcaa1d1c6a7822b3e771530582d9cc6825bfdf6"
+        },
+        {
+          "slot": 4,
+          "bytes": 1658,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "6dfba38bd9f11c65d0f787a5481735222214a0dfebd6372b27bf356211b1e0af"
+        },
+        {
+          "slot": 6,
+          "bytes": 48,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 20,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 7,
+          "bytes": 46,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 18,
+          "loop_length": 28,
+          "pcm_sha256": "f04faa1c2907dde71d3bf50a4764236407f481a1b27eb3472f5b544c1b022a12"
+        },
+        {
+          "slot": 8,
+          "bytes": 44,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 16,
+          "loop_length": 28,
+          "pcm_sha256": "f58412e701220124a1bccfe4adc63259ca93344d75b09a3654c0f9f98124a5f8"
+        },
+        {
+          "slot": 9,
+          "bytes": 42,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 14,
+          "loop_length": 28,
+          "pcm_sha256": "87cc4a6858190e9510501724707488f12743aef4d8d0d5f1da5dea655669e9a4"
+        },
+        {
+          "slot": 10,
+          "bytes": 40,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 12,
+          "loop_length": 28,
+          "pcm_sha256": "8399ab159932ea798f4b11710d4755d8f4d6547d3cbd10745f6143e87a198125"
+        },
+        {
+          "slot": 11,
+          "bytes": 36,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 8,
+          "loop_length": 28,
+          "pcm_sha256": "d36096b632adc279f3819d5fe9195899fe3c4e0ff00ce120e3839853e59a7479"
+        },
+        {
+          "slot": 12,
+          "bytes": 28,
+          "volume": 60,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 28,
+          "pcm_sha256": "e0d5c44d139faf69573aaf4df01167cac318ed4e09f79e3063a766c4c825ef0e"
+        },
+        {
+          "slot": 13,
+          "bytes": 46,
+          "volume": 44,
+          "finetune": 0,
+          "loop_start": 18,
+          "loop_length": 28,
+          "pcm_sha256": "f04faa1c2907dde71d3bf50a4764236407f481a1b27eb3472f5b544c1b022a12"
+        },
+        {
+          "slot": 14,
+          "bytes": 44,
+          "volume": 28,
+          "finetune": 0,
+          "loop_start": 16,
+          "loop_length": 28,
+          "pcm_sha256": "f58412e701220124a1bccfe4adc63259ca93344d75b09a3654c0f9f98124a5f8"
+        },
+        {
+          "slot": 15,
+          "bytes": 42,
+          "volume": 12,
+          "finetune": 0,
+          "loop_start": 14,
+          "loop_length": 28,
+          "pcm_sha256": "87cc4a6858190e9510501724707488f12743aef4d8d0d5f1da5dea655669e9a4"
+        },
+        {
+          "slot": 16,
+          "bytes": 40,
+          "volume": 4,
+          "finetune": 0,
+          "loop_start": 12,
+          "loop_length": 28,
+          "pcm_sha256": "8399ab159932ea798f4b11710d4755d8f4d6547d3cbd10745f6143e87a198125"
+        },
+        {
+          "slot": 17,
+          "bytes": 128,
+          "volume": 64,
+          "finetune": 2,
+          "loop_start": 0,
+          "loop_length": 128,
+          "pcm_sha256": "49250bb6a6908a1ee03e7ab039215387185f22a227ef25a7ebaa31dab01e55f8"
+        }
+      ],
+      "patterns": [
+        {
+          "index": 0,
+          "played_rows": 128,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 23,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "027": 7,
+                "049": 6,
+                "038": 6,
+                "036": 5,
+                "057": 3,
+                "C08": 3,
+                "047": 2,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 29,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 21
+              },
+              "effects": {
+                "603": 15,
+                "A03": 11,
+                "4F2": 9,
+                "330": 8,
+                "101": 6,
+                "602": 4,
+                "20F": 4,
+                "C16": 1,
+                "601": 1,
+                "C06": 1,
+                "C26": 1,
+                "60A": 1,
+                "31F": 1,
+                "608": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "played_rows": 128,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 23,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "027": 7,
+                "049": 6,
+                "038": 6,
+                "036": 5,
+                "057": 3,
+                "C08": 3,
+                "047": 2,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 29,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 21
+              },
+              "effects": {
+                "603": 14,
+                "A03": 11,
+                "4F2": 10,
+                "330": 8,
+                "101": 5,
+                "602": 4,
+                "20F": 4,
+                "C16": 1,
+                "601": 1,
+                "C06": 1,
+                "C26": 1,
+                "60A": 1,
+                "31F": 1,
+                "608": 1,
+                "100": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "played_rows": 128,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 23,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "036": 11,
+                "047": 9,
+                "038": 8,
+                "037": 8,
+                "C08": 4,
+                "049": 2
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 25,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 23
+              },
+              "effects": {
+                "603": 16,
+                "A03": 14,
+                "4F2": 12,
+                "C26": 4,
+                "101": 3,
+                "330": 3,
+                "613": 2,
+                "623": 2,
+                "60A": 2,
+                "608": 1,
+                "A04": 1,
+                "604": 1,
+                "60F": 1,
+                "C2E": 1,
+                "602": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "played_rows": 32,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 23,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "049": 6,
+                "038": 6,
+                "047": 5,
+                "036": 5,
+                "027": 4,
+                "057": 3,
+                "C08": 3,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 6,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 3
+              },
+              "effects": {
+                "20F": 6,
+                "330": 3,
+                "4F2": 3,
+                "601": 2,
+                "101": 1,
+                "602": 1,
+                "C16": 1,
+                "C06": 1,
+                "C00": 1,
+                "D00": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 14,
+                "4": 3
+              },
+              "effects": {
+                "C20": 3,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 22,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "027": 7,
+                "049": 6,
+                "038": 6,
+                "036": 5,
+                "057": 3,
+                "C08": 3,
+                "047": 2,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 29,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 21
+              },
+              "effects": {
+                "603": 15,
+                "A03": 11,
+                "4F2": 9,
+                "330": 8,
+                "101": 6,
+                "602": 4,
+                "20F": 4,
+                "C1C": 1,
+                "601": 1,
+                "C0C": 1,
+                "C2C": 1,
+                "60A": 1,
+                "31F": 1,
+                "608": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 22,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "027": 7,
+                "049": 6,
+                "038": 6,
+                "036": 5,
+                "057": 3,
+                "C08": 3,
+                "047": 2,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 29,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 22
+              },
+              "effects": {
+                "603": 15,
+                "A03": 11,
+                "4F2": 9,
+                "330": 8,
+                "101": 6,
+                "602": 4,
+                "20F": 4,
+                "C2C": 2,
+                "60A": 2,
+                "C1C": 1,
+                "601": 1,
+                "C0C": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "played_rows": 128,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 22,
+                "F05": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "047": 13,
+                "037": 7,
+                "038": 6,
+                "049": 5,
+                "036": 5,
+                "C08": 4,
+                "027": 2
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 64
+              },
+              "effects": {
+                "A02": 32,
+                "C1C": 32
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 32,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "17": 24
+              },
+              "effects": {
+                "A02": 23,
+                "602": 22,
+                "F8D": 1,
+                "4F2": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 28,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "6": 3,
+                "7": 5,
+                "8": 5,
+                "9": 5,
+                "10": 4,
+                "11": 4,
+                "12": 2
+              },
+              "effects": {
+                "C10": 22,
+                "037": 9,
+                "027": 7,
+                "049": 6,
+                "068": 6,
+                "069": 5,
+                "057": 3,
+                "C08": 3,
+                "047": 2,
+                "C09": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 6,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "3": 3
+              },
+              "effects": {
+                "20F": 6,
+                "330": 3,
+                "4F2": 3,
+                "602": 2,
+                "101": 1,
+                "C1C": 1,
+                "601": 1,
+                "C0C": 1,
+                "C00": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 33,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 15,
+                "4": 2
+              },
+              "effects": {
+                "C20": 2,
+                "F05": 1,
+                "C00": 1
+              }
+            }
+          ]
+        }
+      ],
+      "byte_exact_decode_encode": true
+    },
+    {
+      "source": "ACME (Melboorn) - PC Flanc - Who Easykg.MOD",
+      "sha256": "6c7c17aeddc67f00936a74f688ae9033ef778f7a5ecd0d5811085cf65290744b",
+      "title": "monday",
+      "bytes": 15960,
+      "channels": 4,
+      "orders": [
+        1,
+        0,
+        2,
+        3,
+        4,
+        5,
+        5,
+        6
+      ],
+      "stored_patterns": 7,
+      "duration_seconds": 61.44,
+      "loop_start_seconds": 0.0,
+      "played_rows": 512,
+      "timing_values": [
+        [
+          6,
+          125
+        ]
+      ],
+      "pcm_bytes": 7708,
+      "samples": [
+        {
+          "slot": 1,
+          "bytes": 1280,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "839c180c9c3ec577669ba234a96e02ec1cc8fcd03214e94eef0a1237d850a3f8"
+        },
+        {
+          "slot": 2,
+          "bytes": 4096,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "e18c9af07cde381bdcba4eaffb70416ccf7afd50ddfc7d12b68f746821c86cc5"
+        },
+        {
+          "slot": 3,
+          "bytes": 512,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "dd593a1aaa900fa37552436ab75404517c6f8840f8bf29b68a3891519e074f2e"
+        },
+        {
+          "slot": 4,
+          "bytes": 1280,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 0,
+          "pcm_sha256": "2f20b1be37a21063dbc034f4a39f732bf6879de963bd0e0a5f536f63758c6b44"
+        },
+        {
+          "slot": 5,
+          "bytes": 126,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 14,
+          "loop_length": 112,
+          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+        },
+        {
+          "slot": 6,
+          "bytes": 48,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 20,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 7,
+          "bytes": 48,
+          "volume": 61,
+          "finetune": 0,
+          "loop_start": 18,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 8,
+          "bytes": 48,
+          "volume": 58,
+          "finetune": 0,
+          "loop_start": 16,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 9,
+          "bytes": 48,
+          "volume": 55,
+          "finetune": 0,
+          "loop_start": 14,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 10,
+          "bytes": 48,
+          "volume": 52,
+          "finetune": 0,
+          "loop_start": 12,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 11,
+          "bytes": 48,
+          "volume": 49,
+          "finetune": 0,
+          "loop_start": 8,
+          "loop_length": 28,
+          "pcm_sha256": "5d83e4aab240c7326099d9cec0acc98aa56aed04c5385ebb70d0259ab3b1d186"
+        },
+        {
+          "slot": 12,
+          "bytes": 126,
+          "volume": 64,
+          "finetune": 0,
+          "loop_start": 0,
+          "loop_length": 28,
+          "pcm_sha256": "070b65fe13b122af6a02ac498ee44fb8b3075d20ee000ae4d8b4d22d64bc9bde"
+        }
+      ],
+      "patterns": [
+        {
+          "index": 0,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 1,
+                "7": 38,
+                "12": 25
+              },
+              "effects": {
+                "A0A": 38,
+                "037": 8,
+                "047": 7,
+                "038": 3,
+                "049": 3,
+                "077": 2,
+                "057": 1,
+                "0A7": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 16,
+              "sample_changes_without_note": 15,
+              "samples": {
+                "6": 16,
+                "7": 6,
+                "8": 3,
+                "9": 6
+              },
+              "effects": {
+                "400": 25,
+                "300": 7,
+                "31F": 3,
+                "C00": 2,
+                "104": 2,
+                "4F1": 1,
+                "306": 1,
+                "307": 1,
+                "A0F": 1,
+                "208": 1,
+                "A07": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 32,
+                "3": 16
+              },
+              "effects": {
+                "C0C": 16
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 37,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 9,
+                "5": 28
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 11,
+                "400": 2,
+                "4A2": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "7": 38,
+                "12": 26
+              },
+              "effects": {
+                "A0A": 38,
+                "037": 8,
+                "047": 8,
+                "038": 3,
+                "049": 3,
+                "077": 2,
+                "057": 1,
+                "0A7": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 17,
+              "sample_changes_without_note": 14,
+              "samples": {
+                "6": 17,
+                "7": 6,
+                "8": 2,
+                "9": 6
+              },
+              "effects": {
+                "400": 23,
+                "300": 7,
+                "31F": 2,
+                "C00": 2,
+                "103": 2,
+                "E01": 1,
+                "4F1": 1,
+                "306": 1,
+                "307": 1,
+                "A0F": 1,
+                "206": 1,
+                "A07": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 32,
+                "3": 16
+              },
+              "effects": {
+                "C0C": 16,
+                "F06": 1
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 37,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 9,
+                "5": 28
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 11,
+                "400": 2,
+                "4A2": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "7": 6,
+                "8": 10,
+                "9": 14,
+                "10": 18,
+                "11": 10,
+                "12": 6
+              },
+              "effects": {
+                "A02": 32,
+                "A04": 28,
+                "A03": 4
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 11,
+              "sample_changes_without_note": 17,
+              "samples": {
+                "6": 11,
+                "7": 7,
+                "8": 7,
+                "9": 3
+              },
+              "effects": {
+                "400": 31,
+                "304": 2,
+                "305": 2,
+                "103": 2,
+                "32E": 2,
+                "C00": 2,
+                "302": 1,
+                "303": 1,
+                "4F1": 1,
+                "206": 1,
+                "A0F": 1,
+                "325": 1,
+                "300": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 32,
+                "3": 16
+              },
+              "effects": {
+                "C0C": 16
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 41,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 9,
+                "5": 32
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 11,
+                "400": 2,
+                "4A2": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 63,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 3,
+                "5": 2,
+                "7": 8,
+                "8": 6,
+                "9": 11,
+                "10": 17,
+                "11": 10,
+                "12": 6
+              },
+              "effects": {
+                "A04": 28,
+                "A02": 25,
+                "A03": 4,
+                "C37": 1,
+                "C27": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 10,
+              "sample_changes_without_note": 15,
+              "samples": {
+                "6": 10,
+                "7": 6,
+                "8": 7,
+                "9": 2
+              },
+              "effects": {
+                "400": 32,
+                "325": 2,
+                "103": 2,
+                "31F": 2,
+                "312": 1,
+                "313": 1,
+                "324": 1,
+                "4F1": 1,
+                "206": 1,
+                "A0F": 1,
+                "32E": 1,
+                "C00": 1,
+                "304": 1,
+                "305": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 17,
+                "2": 30,
+                "3": 17
+              },
+              "effects": {
+                "C0C": 15
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 39,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "5": 31
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 10,
+                "400": 2,
+                "4A2": 1,
+                "A0F": 1
+              }
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 25,
+              "sample_changes_without_note": 9,
+              "samples": {
+                "6": 7,
+                "7": 19,
+                "8": 2,
+                "9": 3,
+                "10": 1,
+                "11": 1,
+                "12": 1
+              },
+              "effects": {
+                "400": 16,
+                "300": 6,
+                "102": 4,
+                "C00": 3,
+                "C30": 2,
+                "C20": 2,
+                "C10": 2,
+                "31F": 2,
+                "204": 2,
+                "C3A": 1,
+                "C35": 1,
+                "C2A": 1,
+                "C25": 1,
+                "C1A": 1,
+                "C15": 1,
+                "C0A": 1,
+                "C05": 1,
+                "C01": 1,
+                "A0F": 1,
+                "C07": 1,
+                "C17": 1,
+                "C27": 1,
+                "4F1": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 38,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 2,
+                "2": 2,
+                "3": 2,
+                "6": 1,
+                "8": 19,
+                "9": 12
+              },
+              "effects": {
+                "A01": 10,
+                "301": 8,
+                "C0C": 2,
+                "C05": 1,
+                "C0A": 1,
+                "C10": 1,
+                "C15": 1,
+                "C1A": 1,
+                "C20": 1,
+                "C25": 1,
+                "C2A": 1,
+                "C30": 1,
+                "C35": 1,
+                "C3A": 1,
+                "C40": 1,
+                "C3C": 1,
+                "C38": 1,
+                "C34": 1,
+                "C31": 1,
+                "C2C": 1,
+                "C28": 1,
+                "C24": 1,
+                "C21": 1,
+                "C1C": 1,
+                "C18": 1,
+                "C14": 1,
+                "C11": 1,
+                "C08": 1,
+                "C04": 1,
+                "C01": 1,
+                "C00": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 32,
+                "3": 16
+              },
+              "effects": {
+                "C0C": 16
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 48,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 9,
+                "5": 39
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 11
+              }
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "played_rows": 128,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 36,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "12": 36
+              },
+              "effects": {
+                "C00": 28,
+                "073": 18,
+                "083": 13,
+                "074": 5
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 9,
+              "sample_changes_without_note": 21,
+              "samples": {
+                "6": 2,
+                "7": 4,
+                "8": 4,
+                "9": 3,
+                "10": 4,
+                "11": 4,
+                "12": 9
+              },
+              "effects": {
+                "400": 25,
+                "302": 4,
+                "300": 4,
+                "303": 3,
+                "203": 3,
+                "4F1": 1,
+                "31F": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 16,
+                "2": 32,
+                "3": 16
+              },
+              "effects": {
+                "C0C": 16
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 51,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "5": 43
+              },
+              "effects": {}
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "played_rows": 64,
+          "channels": [
+            {
+              "channel": 0,
+              "notes": 63,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 3,
+                "5": 2,
+                "7": 8,
+                "8": 6,
+                "9": 11,
+                "10": 17,
+                "11": 10,
+                "12": 6
+              },
+              "effects": {
+                "A04": 28,
+                "A02": 25,
+                "A03": 4,
+                "C37": 1,
+                "C27": 1
+              }
+            },
+            {
+              "channel": 1,
+              "notes": 12,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "7": 12
+              },
+              "effects": {
+                "400": 32,
+                "C00": 1,
+                "31F": 1
+              }
+            },
+            {
+              "channel": 2,
+              "notes": 64,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "1": 17,
+                "2": 30,
+                "3": 17
+              },
+              "effects": {
+                "C0C": 15
+              }
+            },
+            {
+              "channel": 3,
+              "notes": 39,
+              "sample_changes_without_note": 0,
+              "samples": {
+                "4": 8,
+                "5": 31
+              },
+              "effects": {
+                "A01": 11,
+                "A02": 10,
+                "400": 2,
+                "4A2": 1,
+                "A0F": 1
+              }
+            }
+          ]
+        }
+      ],
+      "byte_exact_decode_encode": true
+    }
+  ]
+}

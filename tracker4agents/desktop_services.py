@@ -1,0 +1,86 @@
+"""Portable local state and audio cache; this module has no Qt dependency."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+import wave
+
+from . import __version__, audio, mod, project
+from .document import listening_copy
+from .i18n import LANGUAGES
+from .model import Module, ValidationError, playback_plan
+from .themes import THEMES
+
+
+class AppState:
+    def __init__(self, directory: Path):
+        self.directory = directory
+        self.path = directory / "session.json"
+        self.values = {"recent_files": [], "volume": 65, "loop": True, "follow": True,
+                       "language": "en", "theme": "midnight"}
+        try:
+            if self.path.stat().st_size < 100_000:
+                loaded = json.loads(self.path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    self.values.update(loaded)
+        except (OSError, ValueError):
+            pass
+        volume = self.values.get("volume")
+        self.values["volume"] = max(0, min(100, volume)) if type(volume) is int else 65
+        for key in ("loop", "follow"):
+            if type(self.values.get(key)) is not bool:
+                self.values[key] = True
+        if self.values.get("language") not in LANGUAGES:
+            self.values["language"] = "en"
+        if not isinstance(self.values.get("theme"), str) or self.values["theme"] not in THEMES:
+            self.values["theme"] = "midnight"
+
+    def recent(self) -> list[Path]:
+        paths = self.values.get("recent_files", [])
+        return [Path(path) for path in paths[:12] if isinstance(path, str)] if isinstance(paths, list) else []
+
+    def remember(self, path: Path):
+        current = str(path.resolve())
+        self.values["recent_files"] = [current] + [str(other) for other in self.recent() if str(other) != current][:11]
+        self.values["last_file"] = current
+
+    def save(self):
+        project.write_json(self.path, self.values)
+
+
+class AudioCache:
+    def __init__(self, directory: Path):
+        self.directory = directory
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def prepare(self, module: Module, audible: tuple[bool, ...] = (True, True, True, True)) -> Path:
+        duration = playback_plan(module)["duration_seconds"]
+        if duration > 120:
+            raise ValidationError("L'écoute de cette version est limitée aux cycles de 120 secondes ; le module reste consultable et éditable.")
+        rendered_module = listening_copy(module, audible)
+        payload = mod.encode(rendered_module)
+        key = hashlib.sha256(payload + f"desktop-{__version__}-48000-openmpt".encode()).hexdigest()
+        source, destination = self.directory / f"{key}.mod", self.directory / f"{key}.wav"
+        if destination.is_file():
+            try:
+                with wave.open(str(destination), "rb") as stream:
+                    if stream.getnframes() > 0 and stream.getframerate() == 48000 and stream.getnchannels() == 2:
+                        return destination
+            except (OSError, EOFError, wave.Error):
+                pass
+        project.atomic_bytes(source, payload)
+        audio.render(source, destination, seconds=duration)
+        return destination
+
+    def sample(self, module: Module, index: int) -> Path:
+        sample = module.samples[index]
+        if not sample.pcm:
+            raise ValidationError("Cet emplacement de sample est vide.")
+        payload = bytes(value & 255 for value in sample.pcm)
+        key = hashlib.sha256(payload + str((sample.loop_start, sample.loop_length, sample.finetune, sample.volume)).encode()).hexdigest()
+        destination = self.directory / f"sample-{key}.wav"
+        if not destination.is_file():
+            audio.sample_preview(sample, destination)
+        return destination

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracker4agents"
+version = "0.4.0"
+description = "ChipLoom: an agent-driven MOD tracker with desktop and HTML listening views"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+desktop = ["PySide6>=6.10,<7"]
+
+[project.scripts]
+chiploom = "tracker4agents.cli:main"
+tracker4agents = "tracker4agents.cli:main"
+
+[project.gui-scripts]
+chiploom-desktop = "tracker4agents.desktop:main"
+tracker4agents-desktop = "tracker4agents.desktop:main"
+
+[tool.setuptools]
+packages = ["tracker4agents"]

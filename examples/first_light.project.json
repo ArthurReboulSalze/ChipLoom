@@ -1,0 +1,4434 @@
+{
+  "schema": "tracker4agents.project.v1",
+  "profile": "protracker-4ch-pal-v1",
+  "title": "First Light",
+  "samples": [
+    {
+      "name": "01 Pulse kick",
+      "volume": 52,
+      "finetune": 0,
+      "recipe": {
+        "type": "kick",
+        "seed": 104729
+      }
+    },
+    {
+      "name": "02 Noise snare",
+      "volume": 43,
+      "finetune": 0,
+      "recipe": {
+        "type": "snare",
+        "seed": 104730
+      }
+    },
+    {
+      "name": "03 Closed hat",
+      "volume": 23,
+      "finetune": 0,
+      "recipe": {
+        "type": "hat",
+        "seed": 104731
+      }
+    },
+    {
+      "name": "04 Kick and hat",
+      "volume": 52,
+      "finetune": 0,
+      "recipe": {
+        "type": "kick_hat",
+        "seed": 104732
+      }
+    },
+    {
+      "name": "05 Snare and hat",
+      "volume": 43,
+      "finetune": 0,
+      "recipe": {
+        "type": "snare_hat",
+        "seed": 104733
+      }
+    },
+    {
+      "name": "06 Drawn bass",
+      "volume": 34,
+      "finetune": 0,
+      "recipe": {
+        "type": "draw",
+        "frequency": 130.812783,
+        "cycles": 16,
+        "peak": 0.82,
+        "points": [
+          0,
+          0.85,
+          1,
+          0.95,
+          0.55,
+          -0.6,
+          -0.8,
+          -0.75,
+          -0.7,
+          -0.65,
+          -0.6,
+          -0.55,
+          -0.5,
+          -0.4,
+          -0.25,
+          -0.1
+        ]
+      }
+    },
+    {
+      "name": "07 Glass arpeggio",
+      "volume": 21,
+      "finetune": 0,
+      "recipe": {
+        "type": "draw",
+        "frequency": 261.625565,
+        "cycles": 16,
+        "peak": 0.78,
+        "points": [
+          0,
+          0.7,
+          1,
+          0.6,
+          0,
+          -0.15,
+          0,
+          0.15,
+          0,
+          -0.6,
+          -1,
+          -0.7,
+          0,
+          0.15,
+          0,
+          -0.15
+        ]
+      }
+    },
+    {
+      "name": "08 Amber lead",
+      "volume": 39,
+      "finetune": 0,
+      "recipe": {
+        "type": "pluck",
+        "frequency": 261.625565,
+        "duration": 0.36,
+        "duty": 0.3,
+        "peak": 0.86,
+        "seed": 104736
+      }
+    }
+  ],
+  "patterns": [
+    {
+      "name": "A - Signal",
+      "events": [
+        {
+          "row": 0,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4,
+          "effect": "F06"
+        },
+        {
+          "row": 0,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "F7D"
+        },
+        {
+          "row": 0,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 0,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "E01"
+        },
+        {
+          "row": 1,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 1,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 2,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 2,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 2,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 3,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 4,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 4,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 4,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 5,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 5,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 5,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 6,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 6,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 8,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 8,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 8,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 8,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 9,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 9,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 10,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 10,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 10,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 11,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 12,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 12,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 12,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 13,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 13,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 13,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 14,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 14,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 15,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 16,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 16,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 16,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 16,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 17,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 17,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 18,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 18,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 18,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 19,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 20,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 20,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 20,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 21,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 21,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 21,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 22,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 22,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 22,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 24,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 24,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 24,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 24,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 25,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 25,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 26,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 26,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 26,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 27,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 28,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 28,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 28,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 29,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 29,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 29,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 30,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 30,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 30,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 31,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 32,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 32,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 32,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 32,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 33,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 33,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 34,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 34,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 34,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 35,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 35,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 35,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 36,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 36,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 37,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 37,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 37,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 38,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 38,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 38,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 39,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 39,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 40,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 40,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 40,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 41,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 41,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 42,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 42,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 42,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 43,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 43,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 43,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 44,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 44,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 45,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 45,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 45,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 46,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 46,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 46,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 47,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 48,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 48,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 48,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 48,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 49,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 49,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 50,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 50,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 50,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 51,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 51,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 51,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 52,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 52,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 53,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 53,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 53,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 54,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 54,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 54,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 55,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 55,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 56,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 56,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 56,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 57,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 57,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 58,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 58,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 58,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 59,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 59,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 59,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 60,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 60,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 3,
+          "note": "E-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 61,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 61,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 61,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 62,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 62,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 62,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 63,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 3,
+          "effect": "C00"
+        }
+      ]
+    },
+    {
+      "name": "B - Main theme",
+      "events": [
+        {
+          "row": 0,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 0,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 0,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 0,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 1,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 2,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 2,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 2,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 2,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 3,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 3,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 4,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 4,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 4,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 5,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 5,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 6,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 6,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 6,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 6,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 7,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 8,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 8,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 8,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 8,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 9,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 10,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 10,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 10,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 10,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 11,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 11,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 12,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 12,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 12,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 13,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 13,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 14,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 14,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 14,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 14,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 15,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 16,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 16,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 16,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 16,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 17,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 18,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 18,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 18,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 18,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 19,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 19,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 20,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 20,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 20,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 21,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 21,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 22,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 22,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 22,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 22,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 23,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 24,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 24,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 24,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 24,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 25,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 26,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 26,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 26,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 26,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 27,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 27,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 28,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 28,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 28,
+          "channel": 3,
+          "note": "F-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 29,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 29,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 30,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 30,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 30,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 30,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 31,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 32,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 32,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 32,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 32,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 33,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 34,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 34,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 34,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 34,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 35,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 35,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 36,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 37,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 37,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 38,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 38,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 38,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 38,
+          "channel": 3,
+          "note": "G-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 39,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 40,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 40,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 41,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 42,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 42,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 42,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 42,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 43,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 43,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 44,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 45,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 45,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 46,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 46,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 46,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 46,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 47,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 48,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 48,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 48,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 48,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 49,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 50,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 50,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 50,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 50,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 51,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 51,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 52,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 53,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 53,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 54,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 54,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 54,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 54,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 55,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 56,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 56,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 3,
+          "note": "G-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 57,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 58,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 58,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 58,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 58,
+          "channel": 3,
+          "note": "F-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 59,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 59,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 60,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 61,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 61,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 62,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 62,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 62,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 62,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 63,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 2,
+          "effect": "C00"
+        }
+      ]
+    },
+    {
+      "name": "C - Answer",
+      "events": [
+        {
+          "row": 0,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 0,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 0,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 0,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 1,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 1,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 2,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 2,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 2,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 3,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 4,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 4,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 4,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 5,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 5,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 5,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 6,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 6,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 6,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 8,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 8,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 8,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 8,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 9,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 9,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 10,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 10,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 10,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 11,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 12,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 12,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 12,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 13,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 13,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 13,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 14,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 14,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 14,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 15,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 16,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 16,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 16,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 16,
+          "channel": 3,
+          "note": "F-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 17,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 17,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 18,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 18,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 18,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 19,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 20,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 20,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 20,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 21,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 21,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 21,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 22,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 22,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 22,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 24,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 24,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 24,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 24,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 25,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 25,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 26,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 26,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 26,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 27,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 28,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 28,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 28,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 29,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 29,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 29,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 30,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 30,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 30,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 31,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 32,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 32,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 32,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 32,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 33,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 33,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 34,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 34,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 34,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 35,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 35,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 35,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 36,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 36,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 3,
+          "note": "G-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 37,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 37,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 37,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 38,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 38,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 38,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 39,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 39,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 40,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 40,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 40,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 41,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 41,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 42,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 42,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 42,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 43,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 43,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 43,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 44,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 44,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 45,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 45,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 45,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 46,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 46,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 46,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 47,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 48,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 48,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 48,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 48,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 49,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 49,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 50,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 50,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 50,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 51,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 51,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 51,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 52,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 52,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 53,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 53,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 53,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 54,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 54,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 54,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 55,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 55,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 56,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 56,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 56,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 57,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 57,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 58,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 58,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 58,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 59,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 59,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 59,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 60,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 60,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 61,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 61,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 61,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 62,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 62,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 62,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 63,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 3,
+          "effect": "C00"
+        }
+      ]
+    },
+    {
+      "name": "D - Turnaround",
+      "events": [
+        {
+          "row": 0,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 0,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 0,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 0,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 1,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 1,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 2,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 2,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 2,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 3,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 3,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 4,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 4,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 4,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 5,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 5,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 5,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 6,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 6,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 6,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 7,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 8,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 8,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 8,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 8,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 9,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 9,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 10,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 10,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 10,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 1,
+          "note": "A-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 11,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 11,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 12,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 12,
+          "channel": 2,
+          "note": "A-1",
+          "sample": 7,
+          "effect": "037"
+        },
+        {
+          "row": 12,
+          "channel": 3,
+          "note": "G-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 13,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 13,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 13,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 14,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 14,
+          "channel": 1,
+          "note": "E-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 14,
+          "channel": 2,
+          "effect": "037"
+        },
+        {
+          "row": 15,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 15,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 16,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 16,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 16,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 16,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 17,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 17,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 18,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 18,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 18,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 19,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 19,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 20,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 20,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 20,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 21,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 21,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 21,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 22,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 22,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 22,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 23,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 24,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 24,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 24,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 24,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 25,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 25,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 26,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 26,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 26,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 1,
+          "note": "F-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 27,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 27,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 28,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 28,
+          "channel": 2,
+          "note": "F-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 28,
+          "channel": 3,
+          "note": "F-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 29,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 29,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 29,
+          "channel": 3,
+          "effect": "412"
+        },
+        {
+          "row": 30,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 30,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 30,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 31,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 31,
+          "channel": 3,
+          "effect": "C00"
+        },
+        {
+          "row": 32,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 32,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 32,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 32,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 33,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 34,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 34,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 34,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 34,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 35,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 35,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 36,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 36,
+          "channel": 3,
+          "note": "E-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 37,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 37,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 38,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 38,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 38,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 38,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 39,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 40,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 40,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 40,
+          "channel": 3,
+          "note": "C-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 41,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 42,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 42,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 42,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 42,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 43,
+          "channel": 1,
+          "note": "C-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 43,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 44,
+          "channel": 2,
+          "note": "C-2",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 44,
+          "channel": 3,
+          "note": "E-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 45,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 45,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 46,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 46,
+          "channel": 1,
+          "note": "G-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 46,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 46,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 47,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 47,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 48,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 48,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 48,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 48,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 49,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 50,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 50,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 50,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 50,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 51,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 51,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 5
+        },
+        {
+          "row": 52,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 52,
+          "channel": 3,
+          "note": "G-3",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 53,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 53,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 54,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 54,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 54,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 54,
+          "channel": 3,
+          "note": "D-3",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 55,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 4
+        },
+        {
+          "row": 56,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C22"
+        },
+        {
+          "row": 56,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 56,
+          "channel": 3,
+          "note": "B-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 57,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 58,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 3
+        },
+        {
+          "row": 58,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 58,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 58,
+          "channel": 3,
+          "note": "A-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 59,
+          "channel": 1,
+          "note": "G-1",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 59,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 2,
+          "effect": "C24"
+        },
+        {
+          "row": 60,
+          "channel": 2,
+          "note": "G-1",
+          "sample": 7,
+          "effect": "047"
+        },
+        {
+          "row": 60,
+          "channel": 3,
+          "note": "G-2",
+          "sample": 8,
+          "effect": "C27"
+        },
+        {
+          "row": 61,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 61,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 62,
+          "channel": 0,
+          "note": "C-2",
+          "sample": 2,
+          "effect": "C1C"
+        },
+        {
+          "row": 62,
+          "channel": 1,
+          "note": "D-2",
+          "sample": 6,
+          "effect": "C1B"
+        },
+        {
+          "row": 62,
+          "channel": 2,
+          "effect": "047"
+        },
+        {
+          "row": 62,
+          "channel": 3,
+          "note": "E-2",
+          "sample": 8,
+          "effect": "C20"
+        },
+        {
+          "row": 63,
+          "channel": 0,
+          "effect": "B00"
+        },
+        {
+          "row": 63,
+          "channel": 1,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 2,
+          "effect": "C00"
+        },
+        {
+          "row": 63,
+          "channel": 3,
+          "effect": "C00"
+        }
+      ]
+    }
+  ],
+  "orders": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "metadata": {
+    "description": "Original 16-bar Amiga/cracktro test loop; no imported music or samples.",
+    "seed": 104729,
+    "author": "tracker4agents / agent prototype",
+    "channel_names": [
+      "Drums",
+      "Bass",
+      "Arpeggio",
+      "Lead"
+    ],
+    "note_convention": "ProTracker C-1..B-3, not scientific octave numbers",
+    "timing": {
+      "mode": "PAL CIA",
+      "speed": 6,
+      "bpm": 125
+    },
+    "sample_reference": "C-2 period 428 at PAL clock 3546895 Hz"
+  }
+}

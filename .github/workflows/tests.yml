@@ -1,0 +1,34 @@
+name: Tests
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install core only
+        run: python -m pip install -e .
+      - name: Install Linux audio renderer
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Run tests (GUI tests require optional dependencies)
+        run: python -m unittest discover -s tests -v
+      - name: Build MOD without GUI or external decoder
+        run: python -m tracker4agents demo --song pixel-rush --no-audio --output exports/ci-demo
+      - name: Validate exported MOD
+        run: python -m tracker4agents validate exports/ci-demo/pixel_rush.mod
