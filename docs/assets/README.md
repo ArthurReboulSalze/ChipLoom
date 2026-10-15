@@ -1,5 +1,7 @@
 # ChipLoom logo
 
+`chiploom-desktop.png` is an unmodified screenshot supplied by the project owner for the public README. It shows the Windows desktop, October Letters, the Violet theme and English controls.
+
 `chiploom-logo.png` is the approved header logo. It is an RGBA PNG with genuine transparent pixels, intended to read on light and dark backgrounds. The original generated alpha channel is preserved.
 
 Created with the built-in image generation tool using the `imagegen` skill. Final prompt:

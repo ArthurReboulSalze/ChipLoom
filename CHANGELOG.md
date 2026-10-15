@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-10-15
+
+- Apply feedback from a reported Hermes / glm-5.3-flash composition session on Debian 13; document its environment and verification scope.
+- Explain note spelling and duplicate cells with both values and event indices. Add `validate --report` for independent JSON diagnostics.
+- Add constant-timing duration planning with `estimate` and warnings when an otherwise valid score exceeds the 120-second render limit.
+- Add `render --from-order` to both engines, decoding prior state before trimming a bounded excerpt. Test its PCM against a full render with inherited instruments and timing.
+- Refresh the public README with the approved transparent logo, a Windows interface screenshot, clearer setup and original musical examples.
+- Publish Pixel Rush and Voltage Odyssey V2 with MP3 players, MODs and editable scores on a dedicated English/French GitHub Pages listening page. Keep the publication audit restricted to these approved media hashes.
+
 ## 0.4.0 — 2026-10-15
 
 - Name the application ChipLoom; retain the tracker4agents package, project schema and session directory. Add ChipLoom CLI and desktop launch aliases.

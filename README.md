@@ -56,6 +56,12 @@ Musical brief → Agent → JSON score + sample recipes → Validate → MOD
 | Duration estimates, grouped diagnostics and section renders | Four themes; English and French UI |
 | Standard-library core, independent of the agent provider | Portable HTML listening bundles |
 
+<p align="center">
+  <img src="docs/assets/chiploom-desktop.png" alt="ChipLoom desktop on Windows: October Letters in the Violet theme, with four tracker channels, mute and solo buttons, song controls and a sample waveform editor." width="1100">
+</p>
+
+<p align="center"><em>The Windows desktop companion, showing October Letters in the Violet theme. The agent works through JSON and the CLI; the window is for the human.</em></p>
+
 **No embedded model, model-weight training or MCP server.** Your agent provides the composition decisions; ChipLoom provides the musical tools. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
 
 ## Get started
