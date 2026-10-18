@@ -13,6 +13,7 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | `render` | Strict MOD | WAV from the actual MOD; optional MP3 |
 | `preview` | Strict MOD or JSON | New portable HTML/media directory |
 | `analyze` | Reference MOD or ZIP | Read-only aggregate report; broader than editable profile |
+| `samples` | Local sample bank, reference MOD/ZIP or project | Extract, search, inspect, audition, edit labels, insert and audit |
 | `gui` | Optional MOD or JSON | Native human window, optional dependency required |
 
 ## Common commands
@@ -50,6 +51,90 @@ The analysis command returns a compact report location and count to stdout, with
 Export, import, render and analysis may replace the explicitly requested output file after validation. Preview refuses an existing output directory. Demo output is reproducible generated content and may be refreshed in its designated directory. Always choose output paths separate from user-supplied references.
 
 Generated files can contain the project's user-authored metadata and music. Review a bundle before publishing it. ChipLoom does not upload it automatically.
+
+## Local sample library
+
+The library is optional and uses only the standard library. Its default location is
+`exports/sample_library`, relative to the working directory. Every subcommand accepts
+`--library PATH` after the subcommand. Library data and its private provenance stay local.
+
+```sh
+python -m tracker4agents samples extract path/to/selection.zip --library exports/sample_library
+python -m tracker4agents samples audit
+python -m tracker4agents samples list --category cycle --tag bass-candidate --compatible --limit 10
+python -m tracker4agents samples list --query smooth --offset 0 --limit 10
+python -m tracker4agents samples inspect SMP-0001
+python -m tracker4agents samples preview SMP-0001 --note C-2 --seconds 1 --output exports/auditions/pulse.wav
+python -m tracker4agents samples edit SMP-0001 --name "Warm Pulse" --category cycle --tag bass-candidate --tag warm
+python -m tracker4agents samples add SMP-0001 --project exports/song/project.json --output exports/song/with-pulse.project.json
+```
+
+`extract` accepts the same bounded 31-sample layouts as structural analysis, including
+the supplied two-channel references. Unsupported patterns/restart bytes do not prevent
+reading their samples. It validates all layouts before updating a bank; malformed or
+unsupported layouts fail rather than producing a partial import. Archive paths are never
+extracted. Limits are 512 members, 64 MiB expanded ZIP data and 4 MiB per MOD.
+
+The manifest `library.json` contains stable `SMP-0001` IDs, neutral names, PCM digests,
+playback settings, measured features and editable labels. `pcm/` holds exact signed
+8-bit bytes, with one file per distinct payload. Different loop, volume or fine-tune
+settings remain separate entries. Original filenames, titles, sample labels and source
+fingerprints exist only in `private/provenance.json`; ordinary search/inspect results
+do not include them. A generated `.gitignore` excludes bank contents from Git.
+
+Reimport preserves IDs, user-edited names/tags and playback variants. Only one writer
+may update a bank at a time. A stale `.write.lock` left by a terminated process must be
+removed only after checking that no writer is running. The manifest is replaced last;
+an interrupted update can leave unreferenced PCM files, never a partially written PCM
+or manifest. Automatic multi-process editing is not supported.
+
+Categories are `cycle`, `percussion`, `texture`, `effect`, `unclassified` and `silent`.
+Roles such as `bass-candidate` are heuristic suggestions, not a listening verdict.
+`list` supports all requested `--tag` filters, case-insensitive query words, pagination
+and `--compatible`. `inspect` returns the complete entry and checks the stored PCM.
+`audit` verifies every referenced payload and recomputes compatibility with the current
+MOD profile. It does not rewrite imported sounds.
+
+`preview` produces a mono 44.1 kHz PCM16 WAV for a tracker note C-1 through B-3, with
+0.05–5 seconds duration. It honors volume, loop and fine tune, using nearest-neighbor
+sampling and a fine-tune frequency approximation. It is an audition without pattern
+effects, not a reference MOD replay or an estimate of the original recording rate.
+Preview output must be outside the bank. Invalid loops or volumes are rejected.
+
+`add` outputs a complete editable JSON project, embedding PCM and settings. Output must
+differ from input and be outside the bank. Without `--slot`, it uses an unreferenced empty
+slot or appends a slot. Occupied slots require explicit `--slot N --replace`; MOD has at
+most 31 slots. No existing notes or sample numbers are shifted. A bank is not needed to
+reopen that JSON or play its exported MOD.
+
+`--adapt` explicitly permits two limited changes on an inserted copy of a one-shot:
+clear an inactive loop start, and prepend two zero bytes when required by the strict
+MOD profile. Original PCM is retained, and the project records the adaptations. Oversized
+samples, invalid active loops and other unsupported settings still fail validation.
+
+For a local listening catalog and the original test composition using the selected bank:
+
+```sh
+python tools/create_sample_catalog.py --library exports/sample_library --output exports/sample_catalog
+python tools/create_library_demo.py --library exports/sample_library --output exports/pocket_signals_v2 --mp3 --with-xmp
+```
+
+Both tools require a new output directory. The catalog contains neutral names and raw
+auditions; the current demo, Pocket Signals V2, uses ten selected bank IDs exclusively,
+with new notes and arrangement. It checks that every embedded sample equals its library
+entry. This demo requires the developer's private bank: it is not a generic composer
+for an arbitrary bank. For a user's own module list, use the reproducible
+[skill workflow](../skills/chiploom/references/sample-bank.md), discover that bank's
+IDs and write a new test score. New sample synthesis is deferred in the current composition workflow.
+`--with-xmp` needs the optional libxmp setup; omit it
+for libopenmpt alone. `--no-audio` builds the MOD/project without external decoders.
+
+The optional native window exposes the same bank in its bottom **Sample library**
+tab. Search and auditions run without changing the score. Insertion goes through
+`Document.insert_library_sample`, so the change is undoable and embeds PCM in the
+project. The GUI remembers its selected bank folder; the CLI's default path remains
+relative to the working directory. The human can choose a different folder without
+changing any CLI configuration. See [the French desktop guide](USAGE_FR.md#bibliothèque-de-samples-dans-la-fenêtre).
 
 ## Planning and diagnostics (v0.5.0)
 

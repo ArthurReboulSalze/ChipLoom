@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-18
+
+- Add local sample banks: exact PCM extraction from supported MOD/ZIP inputs, deduplication with playback variants, neutral names, editable categories/tags, search, audition, compatibility checks and validated insertion through CLI/Python.
+- Integrate a bottom sample browser in the human window with search, type/role filters, a waveform, note-based listening, slot selection and undo/redo. Keep all four tracker channels wide and remember the bank folder locally.
+- Provide a reusable ChipLoom agent skill with a reproducible workflow for selecting modules, building a user's own bank, refining labels and composing a test MOD without private developer sample IDs.
+- Document the library-first composition workflow, refresh the README and native Windows screenshot, and extend the publication audit and CI to keep bank PCM, manifests and private provenance out of Git.
+- Add core and optional desktop regression tests using generated fixtures. No reference bank, borrowed-sample test music or private source list is distributed.
+
 ## 0.5.2 — 2026-10-15
 
 - Remove the right sidebar and move song settings and audio exports above the tracker, alongside the transport and stereo meter. Use the title field as the song heading to keep the header compact.

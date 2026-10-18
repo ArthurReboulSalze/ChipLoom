@@ -22,6 +22,7 @@ flowchart LR
 - **HTML:** static score and sample display with relative media links. It is generated on demand and needs no Qt.
 - **Replay:** actual exported MOD decoded by FFmpeg/libopenmpt; optional libxmp gives a separate implementation for regression checks.
 - **Reference study:** a separate read-only parser for a bounded set of historical layouts. Analyzable does not imply editable or round-trip safe.
+- **Sample library:** a standard-library local bank preserving exact PCM and playback variants. The CLI and optional bottom Qt browser share `SampleLibrary`. `Document.insert_library_sample` wraps insertion in the same validated undo history as pattern edits. Qt auditions use local audio caches and the existing media player/meter; bank searches run through the window's worker pool.
 
 The original package name, JSON schema and Qt application-data identity remain `tracker4agents`. ChipLoom is the user-facing name and an additional CLI entry point. No file migration is required.
 

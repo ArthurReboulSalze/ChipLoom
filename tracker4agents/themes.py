@@ -29,6 +29,11 @@ def stylesheet(theme: str) -> str:
     return """
 QMainWindow,QWidget {{background:{bg};color:{text};font-size:13px}}
 QMenuBar,QMenu,QStatusBar {{background:{panel}}} QMenu::item:selected {{background:{selected}}}
+QTabWidget::pane {{border:0}} QTabBar::tab {{background:{button};color:{text};border:1px solid {border};padding:6px 14px;margin-right:3px}}
+QTabBar::tab:selected {{background:{selected};border-bottom-color:{accent}}}
+QWidget#sampleLibraryBrowser QPushButton {{padding:4px 8px}}
+QWidget#sampleLibraryBrowser QLabel#section {{padding-top:0}}
+QListWidget#librarySamples::item {{padding:4px}}
 QTreeWidget,QListWidget,QTableView,QLineEdit,QSpinBox,QComboBox {{background:{panel};border:1px solid {border};border-radius:5px;padding:4px;selection-background-color:{selected};selection-color:{text}}}
 QTreeWidget::item,QListWidget::item {{padding:7px}} QTreeWidget::item:selected,QListWidget::item:selected {{background:{selected}}}
 QPushButton {{background:{button};border:1px solid {border};border-radius:6px;padding:7px 12px}}

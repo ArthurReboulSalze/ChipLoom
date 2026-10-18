@@ -32,9 +32,16 @@ def main():
     parser.add_argument("--theme", choices=THEMES)
     parser.add_argument("--language", choices=("en", "fr"))
     parser.add_argument("--capture-playing", action="store_true")
+    parser.add_argument("--sample-library", type=Path, help="Open the bottom sample-bank tab for a native smoke check.")
+    parser.add_argument("--width", type=int, default=1420)
+    parser.add_argument("--height", type=int, default=900)
     args = parser.parse_args()
     app = application()
     window = TrackerWindow(args.source, args.state_dir)
+    window.resize(args.width, args.height)
+    if args.sample_library:
+        window.sample_browser.set_library(args.sample_library)
+        window.sample_tabs.setCurrentIndex(1)
     if args.theme:
         window.set_theme(args.theme)
     if args.language:
@@ -51,7 +58,7 @@ def main():
             project.write_json(args.report, {"ok": False, "message": window.statusBar().currentMessage()})
             window.close()
             app.exit(2)
-        elif phase == "loading" and window._audio_ready:
+        elif phase == "loading" and window._audio_ready and (not args.sample_library or not window.sample_browser._loading):
             window.toggle_play()
             phase = "playing"
         elif phase == "playing" and window.player.position() >= 500:
@@ -75,6 +82,16 @@ def main():
                 "meter_buffers": buffers, "meter_rms": levels, "meter_peaks": peaks,
                 "not_checked": ["physical speakers", "Linux"],
             }
+            if args.sample_library:
+                browser = window.sample_browser
+                report["sample_library"] = {"path": str(browser.library_path), "matches": browser.total,
+                    "selected": browser.entry["id"] if browser.entry else None,
+                    "tab": window.sample_tabs.tabText(1), "add_enabled": browser.add_button.isEnabled(),
+                    "window_size": [window.width(), window.height()],
+                    "last_track_visible": window.table.columnViewportPosition(11) + window.table.columnWidth(11)
+                                          <= window.table.viewport().width(),
+                    "horizontal_scroll_maximum": window.table.horizontalScrollBar().maximum(),
+                    "add_button_inside": browser.add_button.geometry().right() <= browser.width()}
             if args.screenshot:
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 report["screenshot_saved"] = window.grab().save(str(args.screenshot))

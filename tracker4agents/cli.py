@@ -147,6 +147,37 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("source", type=Path)
     analyze.add_argument("--output", type=Path, required=True)
     analyze.add_argument("--probe", action="store_true", help="Also estimate duration with ffprobe/libopenmpt.")
+    from .sample_library import CATEGORIES, DEFAULT_LIBRARY
+    samples = commands.add_parser("samples", help="Local sample library: extract, search, audition and insert.")
+    sample_commands = samples.add_subparsers(dest="sample_command", required=True)
+    for name in ("extract", "list", "inspect", "preview", "add", "edit", "audit"):
+        command = sample_commands.add_parser(name)
+        command.add_argument("--library", type=Path, default=DEFAULT_LIBRARY)
+        if name == "extract":
+            command.add_argument("source", type=Path, help="Reference MOD or ZIP; read only.")
+        if name in ("inspect", "preview", "add", "edit"):
+            command.add_argument("id", help="Stable library ID, e.g. SMP-0001.")
+        if name == "list":
+            command.add_argument("--query", default="")
+            command.add_argument("--tag", action="append", default=[])
+            command.add_argument("--category", choices=CATEGORIES)
+            command.add_argument("--compatible", action="store_true")
+            command.add_argument("--offset", type=int, default=0)
+            command.add_argument("--limit", type=int, default=20)
+        if name == "preview":
+            command.add_argument("--output", type=Path, required=True)
+            command.add_argument("--note", default="C-2")
+            command.add_argument("--seconds", type=float, default=1.0)
+        if name == "add":
+            command.add_argument("--project", type=Path, required=True)
+            command.add_argument("--output", type=Path, required=True)
+            command.add_argument("--slot", type=int)
+            command.add_argument("--replace", action="store_true")
+            command.add_argument("--adapt", action="store_true", help="Explicitly adapt an incompatible one-shot on a copy.")
+        if name == "edit":
+            command.add_argument("--name")
+            command.add_argument("--category", choices=CATEGORIES)
+            command.add_argument("--tag", action="append", default=None, help="Replaces tags; repeat for multiple tags.")
     for name in ("inspect", "validate", "export", "import", "render"):
         command = commands.add_parser(name)
         command.add_argument("source", type=Path)
@@ -197,6 +228,33 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "preview":
             from .preview import create_bundle
             result = create_bundle(args.source, args.output, args.mp3, args.ffmpeg, args.language)
+        elif args.command == "samples":
+            from .sample_library import SampleLibrary
+            bank = SampleLibrary(args.library)
+            action = args.sample_command
+            if action == "extract":
+                result = bank.extract(args.source)
+            elif action == "list":
+                result = bank.search(args.query, args.tag, args.category, args.compatible, args.offset, args.limit)
+            elif action == "inspect":
+                result = {"ok": True, "sample": bank.get(args.id)}
+            elif action == "audit":
+                result = bank.audit()
+            elif action == "preview":
+                result = bank.audition(args.id, args.output, args.note, args.seconds)
+            elif action == "edit":
+                if args.name is None and args.category is None and args.tag is None:
+                    raise ValidationError("Provide --name, --category or --tag to edit a library entry.")
+                result = {"ok": True, "sample": bank.edit(args.id, args.name, args.category, args.tag)}
+            elif action == "add":
+                output = args.output.resolve()
+                if output == args.project.resolve() or output.is_relative_to(bank.path):
+                    raise ValidationError("Output must differ from the input project and be outside the sample bank.")
+                if output.suffix.lower() != ".json":
+                    raise ValidationError("Sample insertion outputs an editable JSON project.")
+                module, info = bank.insert(project.load(args.project), args.id, args.slot, args.replace, args.adapt)
+                project.write_json(output, project.to_dict(module))
+                result = {"ok": True, "output": str(output), **info}
         elif args.command == "analyze":
             from .references import analyze_source
             if args.source.resolve() == args.output.resolve():

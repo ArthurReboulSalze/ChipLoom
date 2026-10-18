@@ -8,7 +8,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BLOCKED_PARTS = {".venv", ".tools", "__pycache__", ".playwright-mcp", "exports", "private"}
-BLOCKED_EXTENSIONS = {".mod", ".xm", ".it", ".zip", ".wav", ".mp3", ".dll", ".exe", ".pyc"}
+BLOCKED_EXTENSIONS = {".mod", ".xm", ".it", ".zip", ".wav", ".mp3", ".pcm", ".dll", ".exe", ".pyc"}
+BLOCKED_NAMES = {"library.json", "provenance.json"}
 # Owner-approved original compositions only, pinned to the reviewed bytes.
 PUBLIC_DEMOS = {
     "docs/listen/media/pixel_rush.mod": "1ce068afb51e239fb090ff8b1cf3adca9ab96991d12bad6c618573d873516281",
@@ -25,7 +26,7 @@ def main():
     for name in filter(None, names):
         path = PurePosixPath(name)
         checked += 1
-        if BLOCKED_PARTS.intersection(path.parts) or (path.suffix.lower() in BLOCKED_EXTENSIONS and name not in PUBLIC_DEMOS) or path.name.startswith(".env"):
+        if BLOCKED_PARTS.intersection(path.parts) or path.name.lower() in BLOCKED_NAMES or (path.suffix.lower() in BLOCKED_EXTENSIONS and name not in PUBLIC_DEMOS) or path.name.startswith(".env"):
             errors.append(f"Excluded local/reference file in index: {name}")
             continue
         content = subprocess.check_output(["git", "show", f":{name}"], cwd=ROOT)
@@ -35,6 +36,10 @@ def main():
             errors.append(f"Possible credential in index: {name}")
         if len(content) > 2 * 1024 * 1024 and name not in PUBLIC_DEMOS:
             errors.append(f"Unexpectedly large tracked file: {name}")
+        if path.suffix.lower() == ".json":
+            document = json.loads(content)
+            if isinstance(document, dict) and document.get("schema") in {"chiploom.sample-library.v1", "chiploom.sample-provenance.v1"}:
+                errors.append(f"Local sample bank data in index: {name}")
         if path.parts[0] == "references" and path.suffix == ".json":
             report = json.loads(content)
             def walk(value):

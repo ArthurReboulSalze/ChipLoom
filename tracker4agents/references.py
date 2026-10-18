@@ -9,9 +9,7 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
-import re
 import shutil
-import struct
 import subprocess
 import tempfile
 import zipfile
@@ -19,9 +17,7 @@ import zipfile
 from . import audio, mod
 from .i18n import error_text
 from .model import playback_plan
-
-MAX_FILE = 4 * 1024 * 1024
-MAX_ARCHIVE = 64 * 1024 * 1024
+from .reference_layout import MAX_ARCHIVE, MAX_FILE, parse_layout
 
 
 def _counts(values):
@@ -33,29 +29,12 @@ def _family(command, parameter):
 
 
 def analyze_bytes(raw: bytes, name: str, probe: bool = False) -> dict:
-    if not 1084 <= len(raw) <= MAX_FILE:
-        raise ValueError("Reference must be a MOD with a 31-sample header, at most 4 MiB.")
+    layout = parse_layout(raw)
     signature = raw[1080:1084].decode("ascii", errors="replace")
-    if signature in ("M.K.", "M!K!", "4CHN"):
-        channels = 4
-    elif re.fullmatch(r"[1-9]CHN|[1-3][0-9]CH", signature):
-        channels = int(re.match(r"\d+", signature)[0])
-    else:
-        raise ValueError(f"Unsupported signature for structural analysis: {signature!r}")
-    if channels > 32 or not 1 <= raw[950] <= 128:
-        raise ValueError("Invalid channel count or order count.")
-    orders = list(raw[952:952 + raw[950]])
-    if max(orders) >= 128:
-        raise ValueError("Invalid pattern number.")
-    headers = [struct.unpack_from(">HBBHH", raw, 42 + index * 30) for index in range(31)]
+    channels, orders, headers = layout.channels, layout.orders, layout.headers
     pcm_size = sum(header[0] * 2 for header in headers)
     stride = 64 * channels * 4
-    pattern_bytes = len(raw) - 1084 - pcm_size
-    if pattern_bytes < (max(orders) + 1) * stride or pattern_bytes % stride:
-        raise ValueError("Truncated or ambiguous pattern/sample layout; no approximate parsing.")
-    pattern_count = pattern_bytes // stride
-    if pattern_count > 128:
-        raise ValueError("Too many stored patterns for this analysis profile.")
+    pattern_bytes, pattern_count = layout.pattern_bytes, layout.pattern_count
     patterns = []
     for index in range(pattern_count):
         events = []

@@ -12,6 +12,9 @@ references/private/
 *.MOD
 *.wav
 *.mp3
+*.pcm
+library.json
+provenance.json
 .env
 .env.*
 session.json

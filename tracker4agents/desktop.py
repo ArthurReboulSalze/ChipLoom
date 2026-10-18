@@ -12,11 +12,12 @@ from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput,
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
                                QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
-                               QSpinBox, QSplitter, QTableView, QTreeWidget, QTreeWidgetItem,
+                               QSpinBox, QSplitter, QTableView, QTabWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
 from . import __version__, audio, project
 from .desktop_services import AppState, AudioCache
+from .desktop_samples import SampleBrowser
 from .document import Document
 from .i18n import error_text, translate
 from .level_meter import LevelMeter
@@ -343,6 +344,7 @@ class TrackerWindow(QMainWindow):
         self.setPalette(palette)
         self._monitor_style()
         self.waveform.update()
+        self.sample_browser.waveform.update()
         self.meter.update()
         self._show_message()
 
@@ -364,6 +366,9 @@ class TrackerWindow(QMainWindow):
         for index, theme in enumerate(THEMES.values()):
             self.theme_combo.setItemText(index, self.t(theme["name"]))
         self._fill_library()
+        self.sample_tabs.setTabText(0, self.t("Song samples"))
+        self.sample_tabs.setTabText(1, self.t("Sample library"))
+        self.sample_browser.retranslate()
         if self.document:
             self._song_labels()
             self._sample_labels()
@@ -591,21 +596,25 @@ class TrackerWindow(QMainWindow):
 
         sample_widget = QWidget()
         sample_layout = QHBoxLayout(sample_widget)
-        sample_layout.setContentsMargins(0, 8, 0, 0)
+        sample_layout.setContentsMargins(0, 4, 0, 0)
         sample_left = QVBoxLayout()
         sample_left.addWidget(self._label('SAMPLES', "section"))
         self.samples = QListWidget()
         self.samples.setObjectName("samples")
         self.samples.setMinimumWidth(195)
+        self.samples.setMinimumHeight(45)
         self.samples.setMaximumWidth(280)
         self.samples.currentRowChanged.connect(self.sample_selected)
         self.samples.itemDoubleClicked.connect(lambda item: self.play_sample())
         sample_left.addWidget(self.samples)
         sample_layout.addLayout(sample_left)
         sample_right = QVBoxLayout()
+        sample_right.setSpacing(3)
         self.sample_title = self._label('Select a sample', "section")
+        self.sample_title.setStyleSheet("padding-top:0")
         sample_right.addWidget(self.sample_title)
         self.waveform = Waveform(self)
+        self.waveform.setMinimumHeight(55)
         sample_right.addWidget(self.waveform, 1)
         self.sample_info = self._label("", "muted")
         sample_right.addWidget(self.sample_info)
@@ -622,8 +631,14 @@ class TrackerWindow(QMainWindow):
         sample_actions.addWidget(self._button('Apply', self.apply_sample))
         sample_right.addLayout(sample_actions)
         sample_layout.addLayout(sample_right, 1)
-        center.addWidget(sample_widget)
-        center.setSizes([490, 240])
+        self.sample_tabs = QTabWidget()
+        self.sample_tabs.setObjectName("sampleTabs")
+        self.sample_tabs.addTab(sample_widget, self.t("Song samples"))
+        self.sample_browser = SampleBrowser(self, Waveform)
+        self.sample_tabs.addTab(self.sample_browser, self.t("Sample library"))
+        self.sample_tabs.currentChanged.connect(lambda *_: self.sample_browser.cancel_preview())
+        center.addWidget(self.sample_tabs)
+        center.setSizes([520, 235])
 
         horizontal.setSizes([210, 1175])
         horizontal.setStretchFactor(0, 0)
@@ -764,6 +779,7 @@ class TrackerWindow(QMainWindow):
         self._refreshing = False
         self.sample_selected(self.samples.currentRow())
         self.cell_selected(self.table.currentIndex())
+        self.sample_browser.update_slots()
         self.undo_action.setEnabled(self.document.can_undo)
         self.redo_action.setEnabled(self.document.can_redo)
         self._monitor_style()
@@ -883,6 +899,7 @@ class TrackerWindow(QMainWindow):
     def toggle_play(self):
         if not self.document or self._loading_audio:
             return
+        self.sample_browser.cancel_preview()
         self.sample_player.stop()
         if not self._audio_ready:
             self.prepare_audio(True, self._resume_ms)
@@ -892,6 +909,7 @@ class TrackerWindow(QMainWindow):
             self.player.play()
 
     def stop(self):
+        self.sample_browser.cancel_preview()
         self._loop_epoch += 1
         self._want_play = False
         self._resume_ms = 0
@@ -1124,6 +1142,7 @@ class TrackerWindow(QMainWindow):
             event.ignore()
             return
         self.debounce.stop()
+        self.sample_browser.shutdown()
         self._audio_token += 1
         self.timer.stop()
         self.player.stop()

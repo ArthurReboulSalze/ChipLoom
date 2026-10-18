@@ -117,6 +117,14 @@ class Document:
 
         return self.apply("Régler le sample", change)
 
+    def insert_library_sample(self, library, sample_id: str, slot: int | None = None,
+                              replace: bool = False, adapt: bool = False) -> dict:
+        """One validated, undoable transaction; no Qt dependency in the document."""
+        candidate, info = library.insert(self.module, sample_id, slot, replace, adapt)
+        changed = self.apply("Ajouter un sample de la bibliothèque",
+                             lambda module: module.__dict__.update(candidate.__dict__))
+        return {"changed": changed, **info}
+
     def transpose(self, pattern: int, channel: int, semitones: int) -> bool:
         require_int(pattern, "pattern", 0, len(self.module.patterns) - 1)
         require_int(channel, "voie", 0, 3)

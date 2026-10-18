@@ -58,7 +58,38 @@ Les colonnes Smp et Effet ainsi que les numéros de lignes et d'ordres sont en h
 
 La fenêtre est une application **Qt Widgets / PySide6**, sans page HTML ni serveur local. L'écoute passe par le MOD réel, rendu en WAV par FFmpeg/libopenmpt en arrière-plan puis lu par Qt. Le cache évite de refaire le même rendu. Une modification demande une courte préparation avant la prochaine écoute ; ce n'est pas encore un moteur de tracker en temps réel. Les cycles audio restent limités à 120 secondes dans cette version.
 
-La session et le cache restent dans le dossier de données local choisi par Qt (`AppData/Local/tracker4agents/tracker4agents` sous Windows). La fenêtre retrouve le dernier fichier, les fichiers récents, le volume, les options de suivi et de boucle, le thème et la langue. Ces deux derniers réglages s'appliquent immédiatement, sans interrompre l'écoute ni effacer une saisie en cours. Les titres et noms de samples conservent leur texte d'origine. `--state-dir` permet de choisir un autre dossier.
+La session et le cache restent dans le dossier de données local choisi par Qt (`AppData/Local/tracker4agents/tracker4agents` sous Windows). La fenêtre retrouve le dernier fichier, les fichiers récents, le volume, les options de suivi et de boucle, le thème, la langue et le dossier de bibliothèque de samples. Thème et langue s'appliquent immédiatement, sans interrompre l'écoute ni effacer une saisie en cours. Les titres et noms de samples conservent leur texte d'origine. `--state-dir` permet de choisir un autre dossier.
+
+### Bibliothèque de samples dans la fenêtre
+
+La zone du bas propose **Samples du morceau** et **Bibliothèque**. Le tracker garde
+toute sa largeur ; le séparateur horizontal permet d'ajuster la hauteur des deux zones.
+
+1. Dans **Bibliothèque**, clique sur **Dossier…** pour choisir une banque contenant
+   `library.json`. Depuis ce dépôt, `exports/sample_library` est détecté par défaut.
+   **Actualiser** recharge les ajouts et les étiquettes modifiés par l'agent.
+2. Recherche un nom, un identifiant ou une étiquette et filtre par type ou rôle.
+   **Compatibles MOD** affiche les entrées immédiatement utilisables. Les rôles restent
+   des suggestions, à confirmer par écoute.
+3. Sélectionne un sample pour voir sa forme d'onde et ses réglages. **Écouter** ou un
+   double-clic lance l'audition à la note choisie ; **Stop** l'arrête. Le vu-mètre du haut
+   suit aussi cette audition. La lecture du morceau se met en pause pendant l'écoute.
+4. Garde **Emplacement libre**, puis clique sur **Ajouter au morceau**. Le PCM et ses
+   réglages sont incorporés au projet ; les notes de la partition ne sont pas modifiées.
+   Pour un emplacement occupé, choisis-le et coche explicitement **Remplacer**. Si les
+   31 emplacements sont remplis, ce choix devient nécessaire.
+5. **Ctrl+Z** annule l'ajout ou le remplacement ; le rétablissement est disponible.
+   Enregistre le projet ou exporte le MOD pour conserver la modification.
+
+Pour les quelques entrées nécessitant une adaptation, décoche le filtre de compatibilité
+et sélectionne le sample. **Adapter la copie** autorise la préparation limitée décrite
+dans le [contrat CLI](CLI.md#local-sample-library) ; l'original de la banque est conservé.
+Les autres incompatibilités bloquent l'ajout. Une bibliothèque absente laisse le morceau
+ouvert et éditable ; le bouton **Dossier…** permet de la retrouver.
+
+Le projet JSON et le MOD sont autonomes après insertion. La bibliothèque et les caches
+audio restent locaux. La composition courante utilise uniquement les samples de la
+banque ; aucun atelier de synthèse ou de dessin n'est ajouté dans cette tranche.
 
 ```powershell
 .venv\Scripts\python.exe -m tracker4agents gui
@@ -199,10 +230,24 @@ python -m unittest discover -s tests -v
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-La suite comprend **54 tests** : les 23 contrôles initiaux du format, des rendus et du serveur, 12 tests du document et de la session, 3 tests des traductions et thèmes, 9 tests d'intégration Qt et 7 tests des bundles HTML et de l'analyse de références. Ces derniers utilisent les vrais WAV rendus par FFmpeg, le lecteur multimédia Qt, la saisie au clavier, l'annulation, les exports et la réouverture d'une fenêtre. Ils vérifient aussi la boucle après une introduction, les résultats audio devenus obsolètes, la reprise après une erreur de rendu, les clics rapides de mute, les changements de langue et thème pendant une saisie et les niveaux audio, y compris un mix entièrement muet. Le son est coupé pendant les tests : l'avancement du lecteur et ses buffers sont vérifiés, pas les enceintes physiques. Les essais Qt sont ignorés sans PySide6 ou FFmpeg ; les essais libxmp sont ignorés sans cette bibliothèque.
+La suite couvre le format, les rendus, le serveur, le document et la session, les traductions et thèmes, les bundles HTML, l'analyse de références et la bibliothèque de samples. Elle vérifie notamment la conservation exacte du PCM, les doublons et variantes, le réimport, les noms neutres et les limites d'emplacements. Les tests Qt utilisent les vrais WAV rendus par FFmpeg, le lecteur multimédia, la saisie au clavier, l'annulation, les exports et la réouverture d'une fenêtre. Ils couvrent la recherche, les filtres, l'audition, l'ajout et le remplacement de samples, une banque absente, la boucle après une introduction, les résultats audio devenus obsolètes, les clics rapides de mute, les changements de langue et thème pendant une saisie et les niveaux audio. Le son est coupé pendant les tests : l'avancement du lecteur et ses buffers sont vérifiés, pas les enceintes physiques. Les essais Qt sont ignorés sans PySide6 ou FFmpeg ; les essais libxmp sont ignorés sans cette bibliothèque.
 
 Les quatre thèmes ont aussi été inspectés dans des fenêtres Windows natives ; les captures et rapports sont dans `exports/desktop`. Un nouveau processus a confirmé la restauration du thème et de la langue après fermeture complète.
 
 Le rapport de la démo contient **13 contrôles réussis** : reconstruction identique du MOD, signal présent, durée complète et absence de saturation PCM dans les deux lecteurs, puis correspondance des 256 lignes avec la trace d’exécution libxmp. Un test séparé vérifie deux boucles consécutives. Ces contrôles ne remplacent pas l’écoute musicale.
 
 La conception retenue et les limites actuelles sont décrites dans [CONCEPTION.md](../CONCEPTION.md).
+
+## Skill agent et banque personnelle
+
+Le [skill ChipLoom](../skills/chiploom/SKILL.md) permet de reproduire le travail avec
+tes propres modules. Demande à ton agent de le lire depuis le dépôt, ou copie le
+dossier complet `skills/chiploom` dans son dossier de skills. Aucun skill n'est
+installé automatiquement et aucun sample de référence n'est fourni.
+
+Tu peux lui donner une liste de MOD, une archive ZIP, ou un dossier dans lequel
+choisir une sélection. La [procédure de banque](../skills/chiploom/references/sample-bank.md)
+contient une liste JSON et une boucle Python reproductible : import dans une même
+banque, déduplication, noms neutres, classement à affiner après écoute, audit puis
+petit MOD original de test. Les identifiants sont découverts dans ta banque.
+Sources, banque, provenance et morceaux utilisant ces samples restent locaux.

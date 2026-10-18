@@ -3,6 +3,32 @@
 LANGUAGES = ("en", "fr")
 
 FR = {
+    "Song samples": "Samples du morceau", "Sample library": "Bibliothèque",
+    "Search samples…": "Rechercher un sample…", "All types": "Tous les types",
+    "Cyclic waves": "Ondes cycliques", "Percussion": "Percussions", "Textures": "Textures",
+    "Effects": "Effets", "Unclassified": "Non classés", "Silent": "Silencieux",
+    "All roles": "Tous les rôles", "Bass": "Basse", "Lead": "Mélodie", "Arpeggio": "Arpège",
+    "MOD compatible": "Compatibles MOD", "Folder…": "Dossier…", "Refresh": "Actualiser",
+    "Select a library sample": "Sélectionne un sample de la bibliothèque", "Listen": "Écouter",
+    "Slot": "Emplacement", "Replace": "Remplacer", "Adapt copy": "Adapter la copie",
+    "Add to song": "Ajouter au morceau", "New / free slot": "Emplacement libre", "Empty": "Vide",
+    "Choose a sample library folder": "Choisir le dossier de bibliothèque de samples",
+    "Loading…": "Chargement…", "{count} samples": "{count} samples",
+    "Sample library unavailable": "Bibliothèque indisponible",
+    "Choose a folder containing library.json.": "Choisis un dossier contenant library.json.",
+    "No matching samples": "Aucun sample correspondant",
+    "{size} bytes · {loop} · fine tune {tune} · volume {volume}":
+        "{size} octets · {loop} · accord fin {tune} · volume {volume}",
+    "Existing notes using this slot will use the replacement.":
+        "Les notes utilisant cet emplacement joueront le nouveau sample.",
+    "Prepare a compatible copy for MOD; keep the library original.":
+        "Préparer une copie compatible MOD en conservant l'original de la bibliothèque.",
+    "This sample needs a compatible copy before adding.": "Ce sample nécessite une copie adaptée avant l'ajout.",
+    "No free slot. Select an existing slot to replace.": "Aucun emplacement libre. Choisis un emplacement à remplacer.",
+    "Check Replace to use this occupied slot.": "Coche Remplacer pour utiliser cet emplacement occupé.",
+    "Library sample unavailable: {detail}": "Sample de bibliothèque indisponible : {detail}",
+    "Cannot add library sample: {detail}": "Ajout du sample impossible : {detail}",
+    "Added {name} to slot {slot} · Ctrl+Z to undo": "{name} ajouté à l'emplacement {slot} · Ctrl+Z pour annuler",
     "File": "Fichier", "Edit": "Édition", "Help": "Aide",
     "Open a MOD or project…": "Ouvrir un MOD ou un projet…",
     "Save project…": "Enregistrer le projet…", "Save project as…": "Enregistrer le projet sous…",

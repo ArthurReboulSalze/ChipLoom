@@ -19,6 +19,7 @@
 <p align="center">
   <a href="https://arthurreboulsalze.github.io/ChipLoom/">Listen to the demos</a> ·
   <a href="#get-started">Get started</a> ·
+  <a href="skills/chiploom/SKILL.md">Agent skill</a> ·
   <a href="docs/AGENT_GUIDE.md">Agent guide</a> ·
   <a href="docs/CLI.md">CLI reference</a> ·
   <a href="docs/USAGE_FR.md">Français</a>
@@ -39,10 +40,10 @@ Two original compositions made with ChipLoom, using newly synthesized samples. T
 
 ## Built for the agent, shared with the musician
 
-ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: write notes and effects, draw waveforms or synthesize samples, validate a score, render it, and revise it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker.
+ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: build a local sample bank from selected modules, choose sounds, write notes and effects, validate a score, render it, and revise it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker. Deterministic synthesis remains supported for existing projects; our current composition workflow uses library samples.
 
 ```text
-Musical brief → Agent → JSON score + sample recipes → Validate → MOD
+Musical brief → Agent → JSON score + local samples → Validate → MOD
                                                                 ├─ WAV / MP3
                                                                 ├─ HTML listening page
                                                                 └─ Desktop tracker
@@ -53,14 +54,15 @@ Musical brief → Agent → JSON score + sample recipes → Validate → MOD
 | Structured JSON responses and editable scores | Optional Qt desktop window |
 | Python API and CLI; no display required | Pattern editing, undo/redo and sample previews |
 | Deterministic sample recipes, including drawn waves | Channel mute/solo and stereo level meter |
+| Local sample banks: neutral names, search, audition and insertion | Bottom sample browser: filters, listening and undoable insertion |
 | Duration estimates, grouped diagnostics and section renders | Four themes; English and French UI |
 | Standard-library core, independent of the agent provider | Portable HTML listening bundles |
 
 <p align="center">
-  <img src="docs/assets/chiploom-desktop-v052.png" alt="ChipLoom desktop on Windows: the integrated logo, October Letters in the Violet theme, full-width tracker channels, mute and solo buttons, top song controls and audio exports, a stereo meter and a sample waveform editor." width="1100">
+  <img src="docs/assets/chiploom-desktop-library.png" alt="ChipLoom on Windows: four full-width tracker channels above the bottom sample library, with search, type and role filters, MOD compatibility, a waveform, note-based audition and Add to song controls. English UI in the Violet theme." width="1100">
 </p>
 
-<p align="center"><em>The Windows desktop companion, showing October Letters in the Violet theme. The agent works through JSON and the CLI; the window is for the human.</em></p>
+<p align="center"><em>The Windows companion with the new bottom sample browser. Search, filter, listen and add sounds while keeping the tracker wide. The screenshot uses a local bank; its samples and the displayed test song are not distributed.</em></p>
 
 **No embedded model, model-weight training or MCP server.** Your agent provides the composition decisions; ChipLoom provides the musical tools. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
 
@@ -105,9 +107,9 @@ The CLI alias is `chiploom`; `python -m tracker4agents` remains supported. Comma
 
 ## Give your agent a musical brief
 
-Open the checkout in Codex, or give Hermes terminal and file access to it. Ask the agent to read `AGENTS.md` and `docs/AGENT_GUIDE.md`, then describe what you want:
+Open the checkout in Codex, or give Hermes terminal and file access to it. Ask the agent to read [`skills/chiploom/SKILL.md`](skills/chiploom/SKILL.md), then describe what you want. The skill covers composition and building a bank from your own selection. It can also be copied as a complete `chiploom` skill folder into your agent's skill directory; cloning the repository does not install it automatically.
 
-> Compose an original 45-second, four-channel chiptune with a memorable melody, a short breakdown and a stronger final chorus. Create the samples yourself. Plan the duration, save a new JSON project, validate it, export a real MOD, and deliver an MP3 and an HTML listening page. Preserve the existing examples and references.
+> Use the ChipLoom skill to compose an original 45-second, four-channel chiptune with a memorable melody, a short breakdown and a stronger final chorus. Choose a coherent palette from my local sample bank, preserving its PCM. Plan the duration, save a new JSON project, validate it, export a real MOD, and deliver an MP3 and an HTML listening page. Preserve the existing examples and references.
 
 ```sh
 # Plan first: eight full orders at speed 6 / 160 BPM = 48 seconds
@@ -121,15 +123,49 @@ python -m tracker4agents export exports/my-song/project.json --output exports/my
 # Audition ten seconds from order 6 (indices start at zero)
 python -m tracker4agents render exports/my-song/song.mod --from-order 6 --seconds 10 --output exports/my-song/section.wav
 
+# Search your local sample bank and audition a returned ID
+python -m tracker4agents samples list --tag bass-candidate --compatible --limit 8
+python -m tracker4agents samples preview SMP-0001 --note A-1 --output exports/my-song/audition.wav
+
 # Create a complete, shareable listening bundle in a NEW directory
 python -m tracker4agents preview exports/my-song/project.json --output exports/my-song-review --mp3
 ```
 
 **Tested outside this development workspace:** a user-reported Hermes session with `glm-5.3-flash` completed two original MOD compositions on **Debian 13 / Python 3.13.5 / FFmpeg 7.1.5**. That feedback drove the diagnostics and excerpt workflow in v0.5.0. [Environment, findings and scope →](docs/HERMES_FEEDBACK.md)
 
+## Build your own local sample bank
+
+**Bring your own modules.** No reference bank or borrowed sample audio is included.
+Give your agent a list of MOD files, a ZIP selection, or a folder from which to choose:
+
+> Read the ChipLoom skill. From the modules in this folder, select complementary percussion, bass and melodic sounds. Build a local bank, keep neutral names, check duplicates and compatibility, then refine the categories by audition. Make a short original test MOD using only that bank. Keep my sources, bank and generated audio local.
+
+```sh
+# Import a MOD or a ZIP of selected modules; repeat for more files in the same bank
+python -m tracker4agents samples extract path/to/selection.zip --library exports/sample_library
+python -m tracker4agents samples audit --library exports/sample_library
+python -m tracker4agents samples list --library exports/sample_library --compatible --limit 10
+```
+
+The [skill's bank workflow](skills/chiploom/references/sample-bank.md) includes a
+reproducible JSON source list and Python import loop. Extraction keeps exact PCM,
+loops, fine tune and volume. Duplicate PCM shares storage; playback variants keep
+separate entries. Samples receive stable local IDs and neutral names. Categories
+and role tags are editable suggestions that need listening; IDs differ between banks.
+
+In the window, open the bottom **Sample library** tab, choose the bank **Folder**,
+then search by name, ID or tag and filter by type, role or MOD compatibility. Select
+a note and **Listen**, then **Add to song**. Insertion supports undo/redo; replacing
+an occupied slot requires an explicit choice. The chosen bank folder is remembered
+locally. Projects and exported MODs embed their samples and reopen without the bank.
+
+The bank, original labels, private provenance, source lists, auditions and music made
+with those samples remain local. This repository publishes the tools and skill,
+alongside only the two approved original demos above. [Sample commands →](docs/CLI.md#local-sample-library)
+
 ## Two ways to listen and edit
 
-**Desktop:** open a MOD or JSON project, edit cells, preview samples, mute/solo tracks and reload agent changes with F5. English is the default; French and four themes are available. Playback prepares a WAV in the background, so edits are not yet mixed in real time. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
+**Desktop:** open a MOD or JSON project, edit cells, browse your sample bank, mute/solo tracks and reload agent changes with F5. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser stays below it. English is the default; French and four themes are available. Playback prepares a WAV in the background, so edits are not yet mixed in real time. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
 
 **HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 
@@ -150,6 +186,7 @@ The included [reference study](references/SELECTION_FR.md) covers 15 historical 
 | Strict four-channel `M.K.` MOD import/export | XM and IT |
 | 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Arrangement/block editor and interactive sample drawing |
 | Signed 8-bit mono samples with deterministic synthesis | Real-time tracker mixer |
+| Local sample banks, agent skill and bottom desktop browser | Richer instrument and phrase editing |
 | Render up to 120 seconds per request, including excerpts | MCP protocol adapter |
 | Windows desktop; Windows/Linux core CI and reported Debian agent use | Linux desktop validation |
 
@@ -161,7 +198,7 @@ Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx
 python -m unittest discover -s tests -v
 ```
 
-Tests cover binary round trips, malformed inputs, synthesis, editing, diagnostics, partial renders, HTML bundles, archives and optional Qt integration. Unavailable optional dependencies produce skips. For a second replay engine, `python tools/setup_reference.py` builds pinned libxmp locally; no replay-engine binaries are committed. [CLI contracts](docs/CLI.md) · [Agent workflow](docs/AGENT_GUIDE.md)
+Tests cover binary round trips, malformed inputs, synthesis, editing, diagnostics, partial renders, HTML bundles, archives, sample banks and optional Qt integration. Bank checks include exact PCM, variants, neutral labels, reimports, compatibility and slot limits. Desktop checks include search, audition, insertion, undo and session restoration. Unavailable optional dependencies produce skips. For a second replay engine, `python tools/setup_reference.py` builds pinned libxmp locally; no replay-engine binaries are committed. [CLI contracts](docs/CLI.md) · [Agent workflow](docs/AGENT_GUIDE.md)
 
 ## License
 

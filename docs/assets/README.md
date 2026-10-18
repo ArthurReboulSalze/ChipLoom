@@ -1,6 +1,8 @@
 # ChipLoom visual assets
 
-`chiploom-desktop-v052.png` is a capture of the Windows application, version 0.5.2, with October Letters playing in the Violet theme and English controls. Song settings, audio exports and the stereo meter sit above the full-width tracker. It is the current README screenshot.
+`chiploom-desktop-library.png` is the current README screenshot, captured from the native Windows window with English controls and the Violet theme. It shows the bottom sample bank browser: search, type/role filters, compatibility, a waveform, note-based audition and insertion, below the full-width tracker. The displayed bank and Pocket Signals V2 test music remain local; neither is included as audio or project data.
+
+`chiploom-desktop-v052.png` records the previous Windows layout, version 0.5.2, with October Letters playing in the Violet theme and English controls. Song settings, audio exports and the stereo meter sit above the full-width tracker.
 
 `chiploom-desktop-v051.png` is a capture of the running Windows application, version 0.5.1, with October Letters playing in the Violet theme and English controls. It shows the integrated logo, simplified sidebar and live stereo meter. It records the previous sidebar layout.
 

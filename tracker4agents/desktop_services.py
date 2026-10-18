@@ -36,6 +36,8 @@ class AppState:
             self.values["language"] = "en"
         if not isinstance(self.values.get("theme"), str) or self.values["theme"] not in THEMES:
             self.values["theme"] = "midnight"
+        if not isinstance(self.values.get("sample_library"), str):
+            self.values["sample_library"] = None
 
     def recent(self) -> list[Path]:
         paths = self.values.get("recent_files", [])
@@ -83,4 +85,13 @@ class AudioCache:
         destination = self.directory / f"sample-{key}.wav"
         if not destination.is_file():
             audio.sample_preview(sample, destination)
+        return destination
+
+    def library_sample(self, library, sample_id: str, note: str = "C-2") -> Path:
+        entry = library.get(sample_id)
+        identity = [entry[key] for key in ("pcm_sha256", "loop_start", "loop_length", "finetune", "volume")]
+        key = hashlib.sha256(json.dumps([*identity, note, "library-audition-v1"]).encode()).hexdigest()
+        destination = self.directory / f"library-{key}.wav"
+        if not destination.is_file():
+            library.audition(sample_id, destination, note=note)
         return destination

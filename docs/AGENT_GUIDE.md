@@ -8,15 +8,15 @@ Clone the repository and use a local Python 3.12+ environment. Install `-e .` fo
 
 In Codex, open the cloned project and begin a task there. The repository's `AGENTS.md` gives project guidance. Codex's own configuration controls tool access and approval behavior. [Official project-instruction documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
 
-In Hermes Agent, use a session whose terminal/file tools can access this checkout, and ask it to read `AGENTS.md` and this guide. With a remote or container terminal, clone the project there as well; a Windows path is not automatically accessible to that environment. The CLI workflow does not require changing Hermes core or installing an MCP integration. A reusable Hermes skill may be added later; no skill is automatically installed by this repository. [Official Hermes skills documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills).
+In Hermes Agent, use a session whose terminal/file tools can access this checkout, and ask it to read `AGENTS.md` and this guide. With a remote or container terminal, clone the project there as well; a Windows path is not automatically accessible to that environment. The CLI workflow does not require changing Hermes core or installing an MCP integration. The repository now provides a reusable [ChipLoom skill](../skills/chiploom/SKILL.md), including a [source-selection and bank-building workflow](../skills/chiploom/references/sample-bank.md). Ask the agent to read it, or copy the complete skill folder into your agent's skill directory. Cloning the repository does not install it automatically.
 
 The command workflow is exercised by this project's tests and by Codex during development. A user-reported Hermes run with glm-5.3-flash completed two original MOD compositions on Debian 13, Python 3.13.5 and FFmpeg 7.1.5. This confirms that reported headless workflow, not every model/provider or the Linux GUI. See [the feedback and follow-up](HERMES_FEEDBACK.md).
 
 ## A complete composition loop
 
-1. Establish duration, approximate tempo, mood, target MOD profile and whether the user wants new samples or explicitly authorizes reuse.
+1. Establish duration, approximate tempo, mood and target MOD profile. The current owner-approved workflow uses the local sample library exclusively; new sample synthesis and waveform drawing are deferred until the owner resumes them.
 2. Inspect an included project and, when useful, read the reference study. Use a reference's construction ideas without assuming its samples or melody should be copied.
-3. Create a **new** project JSON with sample recipes, patterns and order list. Avoid replacing the included examples.
+3. Create a **new** project JSON with embedded library PCM, patterns and order list. Record the library IDs and select a coherent palette before writing the arrangement. Avoid replacing the included examples.
 4. Validate. Fix any rejected note range, sample loop or unsupported effect before exporting.
 5. Export the actual MOD, then render that exported file. Generate an HTML listening bundle if useful.
 6. Check duration, signal levels, transitions and loop behavior. Explain which checks were performed; listening quality is still a musical judgment.
@@ -95,9 +95,62 @@ The schema is `tracker4agents.project.v1`; `examples/*.project.json` are complet
 
 `C27` sets volume to hexadecimal 27 (decimal 39). Sample 0 keeps the current sample. A sample/effect without a new note is meaningful and must not be discarded. Sharps have no extra hyphen: `C-3`, `G#3`, `A#2` are valid; `G#-3` is not. Tracker note names `C-1` through `B-3` are the profile's period-table labels, not scientific octave numbers.
 
-Samples can use signed 8-bit PCM or a deterministic recipe. Drawing means defining amplitude points; synthesis recipes include `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` and `pluck`. Read the included recipes before constructing one. Their parameters are validated data, never executable source code. Seeds preserve reproducible noise.
+Samples can use signed 8-bit PCM or a deterministic recipe. The current composition workflow uses library PCM only. Recipe support remains available for existing projects and future work: drawing defines amplitude points, and synthesis recipes include `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` and `pluck`. Their parameters are validated data, never executable source code. Seeds preserve reproducible noise.
 
 A JSON project preserves recipe provenance. Importing a MOD preserves its PCM but cannot reconstruct the recipe that produced it. Do not label imported sounds as agent-created.
+
+## Using a local sample bank
+
+Reuse of the owner's local bank is authorized for the current composition workflow.
+Use `samples` to extract a reference selection into
+a local bank, search its neutral labels, audition candidates, and insert a chosen entry
+into a new project. See [CLI sample commands](CLI.md#local-sample-library). The bank's
+original reference labels stay in private provenance; use IDs and neutral names in
+compositions and public documentation. Signal-based role suggestions need listening.
+
+A fresh clone ships no reference bank. To reproduce the workflow with a user's own
+collection, use the [bank-building skill reference](../skills/chiploom/references/sample-bank.md):
+select authorized MODs or a ZIP, save the local source list, import each into the same
+bank, audit, audition and refine neutral labels, then write a short original test MOD.
+Imports are atomic per input, not across a list. Report partial failures and discover
+IDs in the new bank rather than relying on the developer's fixed demo palette.
+
+```sh
+python -m tracker4agents samples list --tag bass-candidate --compatible --limit 8
+python -m tracker4agents samples inspect SMP-0001
+python -m tracker4agents samples preview SMP-0001 --note A-1 --output exports/song/audition.wav
+python -m tracker4agents samples add SMP-0001 --project exports/song/project.json --output exports/song/with-bass.project.json
+```
+
+Inspect the sample's loop and fine tune before assigning musical notes. A sample slot
+or tracker note is not a standardized instrument pitch. Start with compatible entries;
+use `--adapt` only when the documented one-shot adaptation is desired. The inserted
+project embeds the audio and keeps neutral provenance in `metadata.sample_sources`.
+
+Python access uses the same standard-library implementation:
+
+```python
+from pathlib import Path
+from tracker4agents import project
+from tracker4agents.sample_library import SampleLibrary
+
+bank = SampleLibrary(Path("exports/sample_library"))
+candidates = bank.search(tags=["bass-candidate"], compatible_only=True, limit=8)
+sample, adaptations = bank.sample(candidates["samples"][0]["id"])
+module, insertion = bank.insert(project.load(Path("exports/song/project.json")),
+                                candidates["samples"][0]["id"])
+project.write_json(Path("exports/song/with-bass.project.json"), project.to_dict(module))
+```
+
+Insertion returns a validated copy and its slot number. Respect occupied slots and
+the 31-slot limit. Use a library-only palette, then validate, export and render the
+actual MOD. Prefer compatible tuning and a consistent percussion character; raw waveform
+size alone is not a musical suitability test. Keep new synthesis deferred. Do not copy reference patterns merely to
+demonstrate sample reuse. The native window now has a bottom **Song samples / Sample
+library** area with search, type/role filters, note-based audition and undoable insertion.
+The agent still uses CLI/Python; the human can choose a bank folder, reload it and add
+the same entries without narrowing the tracker. Occupied slots require an explicit
+replacement choice. The selected bank folder is stored in local desktop preferences.
 
 ## Studying references
 
