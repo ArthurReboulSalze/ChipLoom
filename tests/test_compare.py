@@ -79,7 +79,7 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
         result = self.build(seed=3)
         out = self.root / "out"
         self.assertTrue(result["ok"])
-        self.assertEqual(Path(result["page"]), out / "index.html")
+        self.assertEqual(Path(result["page"]).resolve(), (out / "index.html").resolve())
         self.assertEqual(sorted(path.name for path in out.iterdir()),
                          ["comparison.json", "index.html", "x.mod", "x.wav", "y.mod", "y.wav"])
         self.assertEqual(set(result["answer_key"]), {"x", "y", "labels"})

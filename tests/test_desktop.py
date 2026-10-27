@@ -199,7 +199,7 @@ class DesktopTests(unittest.TestCase):
         replacement.output.setMuted(True)
         replacement.show()
         self.wait_for_audio()
-        self.assertEqual(replacement.document.path, source)
+        self.assertEqual(replacement.document.path, source.resolve())
         self.assertEqual(replacement.volume.value(), 0)
         self.assertEqual(replacement.output.volume(), 0)
         self.assertFalse(replacement.loop.isChecked())

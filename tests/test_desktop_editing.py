@@ -27,7 +27,7 @@ try:
     from PySide6.QtWidgets import QApplication
     from tracker4agents.desktop import TrackerWindow
 except ModuleNotFoundError:
-    TrackerWindow = None
+    TrackerWindow = Qt = None
 
 from tracker4agents.desktop_input import (format_block, hex_digit, note_name, parse_block, resolve_layout,
                                           semitone, valid_layout)
@@ -38,7 +38,9 @@ from tracker4agents.patch import pattern_grid
 from tracker4agents.themes import THEMES
 
 ROOT = Path(__file__).resolve().parents[1]
-CTRL, ALT, SHIFT = Qt.KeyboardModifier.ControlModifier, Qt.KeyboardModifier.AltModifier, Qt.KeyboardModifier.ShiftModifier
+# Without PySide6 the window tests are skipped; the Qt-free input tests still run.
+CTRL, ALT, SHIFT = ((Qt.KeyboardModifier.ControlModifier, Qt.KeyboardModifier.AltModifier,
+                     Qt.KeyboardModifier.ShiftModifier) if Qt else (None, None, None))
 
 
 def song() -> Module:
@@ -139,7 +141,9 @@ class EditingTests(unittest.TestCase):
         self.assertTrue(predicate(), self.window.statusBar().currentMessage())
 
     # --- helpers ---------------------------------------------------------------------
-    def press(self, text="", key=None, modifiers=Qt.KeyboardModifier.NoModifier):
+    def press(self, text="", key=None, modifiers=None):
+        if modifiers is None:
+            modifiers = Qt.KeyboardModifier.NoModifier
         if key is None:
             key = ord(text.upper()) if text and text.isascii() else int(Qt.Key.Key_unknown)
         for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):

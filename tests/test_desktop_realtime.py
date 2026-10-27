@@ -27,6 +27,7 @@ try:
     from tracker4agents.desktop import TrackerWindow
 except ModuleNotFoundError:
     TrackerWindow = None
+    QObject, Signal = object, lambda *types: None  # Lets the fake sink class be defined; its tests are skipped.
 
 from tracker4agents.desktop_services import AppState
 from tracker4agents.document import Document, fingerprint
