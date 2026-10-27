@@ -174,6 +174,17 @@ The bank, original labels, private provenance, source lists, auditions and music
 with those samples remain local. This repository publishes the tools and skill,
 alongside only the two approved original demos above. [Sample commands →](docs/CLI.md#local-sample-library)
 
+## Songs made only with created samples
+
+Library samples are the default. On request, an agent can make a song from samples it creates itself: `chiploom synth palette` writes a starter project with 13 balanced instruments (drums, basses, pulse leads, chords, noise), `synth preview` auditions a recipe, and `synth add` or the `recipe_sample` patch operation inserts one. Created samples are loudness-matched to your sample bank per role (kick, snare, hat, bass, lead, texture), and a project marked `"sample_source": "synthesized"` refuses library samples, so the two modes never mix by accident.
+
+```sh
+python -m tracker4agents synth palette --output exports/synth-song/project.json --title "Synth Song"
+python -m tracker4agents validate exports/synth-song/project.json --sample-source synthesized
+```
+
+[Synth commands →](docs/CLI.md) · [Agent guide →](docs/AGENT_GUIDE.md)
+
 ## Compose together with your agent
 
 When the window is open, your agent can edit the song you are looking at. In the **Agent** menu, **Live collaboration** is on by default; the status bar shows *Live: off*, *listening* or *agent connected*. The agent finds the window with `chiploom live`.
@@ -203,7 +214,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 - **Work with blocks:** **Ctrl+C / X / V** copy, cut and paste. The clipboard holds the same grid text the agent prints, so you can paste what the agent wrote. **Alt+arrows** move the block, **Ctrl+↑/↓** transpose by a semitone and **Ctrl+Shift+↑/↓** by an octave.
 - **Edit the arrangement:** the order editor offers Insert, New, Duplicate, Remove, ↑/↓ and Rename….
 - **Follow outside changes:** when the file changes on disk, the window reloads it. Without local edits that is one undoable "Agent changes" step; with unsaved edits it does a three-way merge, lists conflicts in the status bar and keeps the file's version. Changed cells flash. **F5** still reloads by hand.
-- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows build bundles libxmp when it was built.
+- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows build bundles libxmp when it was built.
 
 **HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in the browser is on the [roadmap](docs/ROADMAP.md). Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 
@@ -223,7 +234,7 @@ The included [reference study](references/SELECTION_FR.md) covers 15 historical 
 | :--- | :--- |
 | Strict four-channel `M.K.` MOD import/export | XM and IT |
 | 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Interactive sample drawing (deferred by the current library-only policy) |
-| Signed 8-bit mono samples with deterministic synthesis | Wider MOD import (`E6x`, `EEx`, other signatures) |
+| Signed 8-bit mono samples; synthesized-only songs on request, loudness-matched to your bank | Wider MOD import (`E6x`, `EEx`, other signatures) |
 | Local sample banks, agent skill and bottom desktop browser | Richer instrument and phrase editing |
 | Compact v2 projects, `patch`, `migrate`, stable error codes | Browser editing session |
 | `report`, blind `compare`, `feedback` | Publishing to PyPI and a GitHub release |

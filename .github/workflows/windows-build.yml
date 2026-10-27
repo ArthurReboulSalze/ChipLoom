@@ -6,7 +6,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write  # attach the zip to the GitHub release of a pushed tag
 
 jobs:
   windows:
@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Install build requirements
         run: python -m pip install -e ".[desktop]" pyinstaller
+      - name: Build pinned libxmp for real-time playback
+        run: python tools/setup_reference.py
       - name: Build the standalone folder
         run: python tools/build_windows.py --zip
       - name: Smoke-test the console tool
@@ -31,3 +33,9 @@ jobs:
           name: ChipLoom-windows
           path: build/windows/ChipLoom-*-windows.zip
           if-no-files-found: error
+      - name: Attach the zip to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" build/windows/ChipLoom-*-windows.zip --clobber --repo "${GITHUB_REPOSITORY}"

@@ -26,10 +26,12 @@ This release groups what was first planned as four releases (0.7 to 1.0). See th
 - Reload automatically when the file changes on disk: a clean window applies one undoable "Agent changes" step; unsaved local edits are merged three ways, with conflicts listed in the status bar and the file's version kept. Changed cells flash. F5 still reloads by hand.
 - Add live collaboration (Agent menu, on by default, with a status-bar indicator). Agent edits appear at once, highlighted and undoable with Ctrl+Z. A bottom Agent tab shows proposals (preview overlay, Accept with Ctrl+Enter, Reject, Listen to proposal, Clear preview, and a conflict dialog that asks whether to accept anyway) and takes (Open take).
 - Play in real time through libxmp when it is available, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg/libopenmpt, so small differences are possible. Without libxmp the window falls back to rendered playback.
+- Run real-time audio in a dedicated thread, so moving the window or opening dialogs no longer starves the sound card (0 underruns measured with the GUI blocked for 600 ms). Add Playback → Audio buffer (80, 150, 300 or 600 ms; default 150), applied without stopping playback and remembered.
+- Give the tracker column a 10 px gap from the library panel and roomier Agent tab columns.
 
 **Distribution and project**
 
-- Add `python tools/build_windows.py [--zip]` for a standalone Windows folder with `ChipLoom.exe` (window) and `chiploom-cli.exe` (command line). FFmpeg is not bundled. Prepare the package for PyPI; it is not yet published.
+- Add `python tools/build_windows.py [--zip]` for a standalone Windows folder with `ChipLoom.exe` (window) and `chiploom-cli.exe` (command line). FFmpeg is not bundled; libxmp is, when it has been built. The Windows build workflow builds libxmp and attaches the zip to tagged GitHub releases. Prepare the package for PyPI; it is not yet published.
 - Run Ruff and a package build check in CI, and run the desktop tests on Windows and Linux (the Linux job does not block while it proves stable).
 - Remove the French launcher scripts `Lancer tracker4agents.cmd`, `Installer interface Windows.cmd` and `lancer-tracker4agents.sh`; `Install ChipLoom.cmd`, `Launch ChipLoom.cmd` and `launch-chiploom.sh` remain.
 - Add a roadmap and move the earlier French planning notes to `docs/history/`.

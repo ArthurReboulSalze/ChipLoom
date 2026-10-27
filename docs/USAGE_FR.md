@@ -85,6 +85,8 @@ Sans fenêtre, `chiploom live serve MORCEAU.json` héberge la même session sans
 
 La fenêtre est une application **Qt Widgets / PySide6**, sans page HTML. Lorsque libxmp est disponible, elle joue le morceau **en temps réel** : les modifications, les coupures de voies et les solos s'entendent aussitôt, sans nouveau rendu. Les exports et les copies d'écoute restent rendus par FFmpeg/libopenmpt ; de petites différences entre les deux moteurs sont possibles. Sans libxmp, la fenêtre revient à l'écoute rendue : le MOD réel est rendu en WAV en arrière-plan puis lu par Qt, avec un cache, et une modification demande une courte préparation avant la prochaine écoute. Sous Windows, `python tools/setup_reference.py` construit la libxmp épinglée ; sous Linux, le paquet `libxmp4` convient. Les cycles audio rendus restent limités à 120 secondes.
 
+Le temps réel tourne dans son propre fil d'exécution : déplacer la fenêtre ou ouvrir une boîte de dialogue ne coupe plus le son. **Lecture → Tampon audio** règle la latence (80, 150, 300 ou 600 ms, 150 par défaut) ; un tampon plus court fait entendre une modification plus vite, un tampon plus long laisse plus de marge à une machine chargée. Le réglage s'applique sans arrêter la lecture et reste mémorisé.
+
 La session et le cache restent dans le dossier de données local choisi par Qt (`AppData/Local/tracker4agents/tracker4agents` sous Windows). La fenêtre retrouve le dernier fichier, les fichiers récents, le volume, les options de suivi et de boucle, le thème, la langue et le dossier de bibliothèque de samples. Thème et langue s'appliquent immédiatement, sans interrompre l'écoute ni effacer une saisie en cours. Les titres et noms de samples conservent leur texte d'origine. `--state-dir` permet de choisir un autre dossier.
 
 ### Bibliothèque de samples dans la fenêtre
@@ -115,8 +117,8 @@ Les autres incompatibilités bloquent l'ajout. Une bibliothèque absente laisse 
 ouvert et éditable ; le bouton **Dossier…** permet de la retrouver.
 
 Le projet JSON et le MOD sont autonomes après insertion. La bibliothèque et les caches
-audio restent locaux. La composition courante utilise uniquement les samples de la
-banque ; aucun atelier de synthèse ou de dessin n'est ajouté dans cette tranche.
+audio restent locaux. Par défaut, la composition utilise uniquement les samples de la banque. Sur demande,
+un morceau peut être fait uniquement de samples créés (voir plus bas).
 
 ```powershell
 .venv\Scripts\python.exe -m tracker4agents gui
@@ -240,6 +242,17 @@ Les samples stockent `pcm_base64` avec une empreinte `pcm_sha256` vérifiée au 
 `effect` contient trois chiffres hexadécimaux. Ici, `C27` fixe le volume à 39 sur une échelle de 0 à 64. Un événement sans note peut modifier le volume, le vibrato ou un autre effet de la voix déjà en cours. Une cellule absente est vide. Un pattern emploie soit `rows`, soit `events`, jamais les deux.
 
 `chiploom migrate ancien.json --output nouveau.json` réécrit un projet v1 (ou un MOD) en v2 sans changer le MOD exporté : `voltage_odyssey_v2` passe de 690 Ko à 117 Ko et `pixel_rush` de 192 Ko à 34 Ko. `inspect --pattern N --grid` affiche un pattern dans ce même texte.
+
+### Morceaux faits uniquement de samples créés
+
+La banque reste le mode par défaut. Sur demande, l'agent peut composer un morceau uniquement avec des samples qu'il crée. `synth palette` écrit un projet de départ avec 13 instruments équilibrés (batterie, basses, leads pulse, accords, bruit) ; `synth preview` fait écouter une recette ; `synth add` ou l'opération de patch `recipe_sample` en ajoute une. Les recettes `wave` produisent des ondes bouclées propres et accordées (pulse, triangle, dent de scie, sinus, bruit).
+
+Le volume des samples créés est calé sur ta banque, rôle par rôle : la grosse caisse sur le quartile haut des percussions, la caisse claire sur la médiane, le charleston sur le quartile bas, et les basses, leads et textures sur la médiane de leur famille. `synth levels` affiche ces références, et `report` signale un sample à plus de 6 dB de la sienne. Un projet marqué `"sample_source": "synthesized"` refuse les samples de la banque, et inversement ; `validate --sample-source synthesized` le vérifie.
+
+```powershell
+python -m tracker4agents synth palette --output exports/morceau-synth/project.json --title "Morceau synth"
+python -m tracker4agents validate exports/morceau-synth/project.json --sample-source synthesized
+```
 
 ### Modifier par lots avec `patch`
 
