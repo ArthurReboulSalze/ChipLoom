@@ -133,7 +133,7 @@ Samples store `pcm_base64` with a verified `pcm_sha256` (plus loop fields), or a
 
 `C27` sets volume to hexadecimal 27 (decimal 39). Sample 0 keeps the current sample. A sample/effect without a new note is meaningful and must not be discarded. Sharps have no extra hyphen: `C-3`, `G#3`, `A#2` are valid; `G#-3` is not. Tracker note names `C-1` through `B-3` are the profile's period-table labels, not scientific octave numbers.
 
-Samples can use signed 8-bit PCM or a deterministic recipe. The current composition workflow uses library PCM only. Recipe support remains available for existing projects and future work: drawing defines amplitude points, and synthesis recipes include `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` and `pluck`. Their parameters are validated data, never executable source code. Seeds preserve reproducible noise.
+Samples can use signed 8-bit PCM or a deterministic recipe. **The default composition workflow uses library PCM only.** Recipes are for existing projects and for the owner-requested mode [Songs made only with created samples](#songs-made-only-with-created-samples): `wave` (pulse, triangle, saw, sine, noise), `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` and `pluck`; `chiploom synth types` lists their parameters. Their parameters are validated data, never executable source code. Seeds preserve reproducible noise.
 
 A JSON project preserves recipe provenance. Importing a MOD preserves its PCM but cannot reconstruct the recipe that produced it. Do not label imported sounds as agent-created.
 
@@ -183,12 +183,44 @@ project.write_json(Path("exports/song/with-bass.project.json"), project.to_dict(
 Insertion returns a validated copy and its slot number. Respect occupied slots and
 the 31-slot limit. Use a library-only palette, then validate, export and render the
 actual MOD. Prefer compatible tuning and a consistent percussion character; raw waveform
-size alone is not a musical suitability test. Keep new synthesis deferred. Do not copy reference patterns merely to
+size alone is not a musical suitability test. Do not create new samples in library mode; the created-samples mode below is only for when the owner asks for it. Do not copy reference patterns merely to
 demonstrate sample reuse. The native window now has a bottom **Song samples / Sample
 library** area with search, type/role filters, note-based audition and undoable insertion.
 The agent still uses CLI/Python; the human can choose a bank folder, reload it and add
 the same entries without narrowing the tracker. Occupied slots require an explicit
 replacement choice. The selected bank folder is stored in local desktop preferences.
+
+## Songs made only with created samples
+
+Use this mode **only when the owner asks for a song made with created samples**. Library mode stays the default: without that request, take samples from the owner's bank. Do not mix the two in one song unless the owner asks for it. Early synthesized samples sounded uneven, so the mode is built around a tested palette, auditions with measurements, and loudness matched to the owner's library.
+
+The loop is palette, audition, tune, compose:
+
+```sh
+# 1. A starter palette: 13 samples, sample_source "synthesized", one empty pattern, volumes matched to the bank
+python -m tracker4agents synth palette --output exports/my-song/v1.project.json --title "My Song"
+# 2. Audition anything you add or change (no FFmpeg needed); read tuning_cents and loudness in the result
+python -m tracker4agents synth preview --recipe '{"type": "wave", "shape": "pulse", "duty": 0.125, "frequency": 261.63}' \
+  --note C-2 --output exports/my-song/audition.wav
+# 3. Add timbres in free slots (14-31); the volume is matched to the role's level
+python -m tracker4agents synth add exports/my-song/v1.project.json --name "Saw bass" --role bass \
+  --recipe '{"type": "wave", "shape": "saw", "frequency": 130.81}' --output exports/my-song/v2.project.json
+# 4. Compose with patch ops (slot numbers are in the palette output), then check and export
+python -m tracker4agents patch exports/my-song/v2.project.json --ops ops.json --output exports/my-song/v3.project.json
+python -m tracker4agents validate exports/my-song/v3.project.json --sample-source synthesized
+python -m tracker4agents report exports/my-song/v3.project.json
+```
+
+Palette slots: 1 Kick, 2 Snare, 3 Hat, 4 Kick+hat, 5 Snare+hat, 6 Triangle bass, 7 Pulse bass, 8 / 9 / 10 pulse leads at 12.5 / 25 / 50 %, 11 Triangle chord, 12 Noise texture, 13 Pluck lead. See [the CLI reference](CLI.md#starter-palette) for roles and uses.
+
+Keeping timbres coherent:
+
+- Build the arrangement from a few families (the palette's pulses and triangles share one oscillator character) and add a new recipe only for a reason you can state, such as a missing register or a pulse width.
+- Pitch is part of the recipe: `frequency` is what you hear at note C-2, and the preview reports the error in cents. Palette waves are within a couple of cents; if you give `cycles` yourself, read `tuning_cents`. Use bass samples at 130.81 Hz and lead and chord samples at 261.63 Hz so the usual note ranges (bass in octaves 1 and 2, leads in 2 and 3) keep the same spacing as the palette.
+- Move between the three pulse leads mid-note (`sample` only, no note) for pulse-width movement; use `C00` to cut bass and chords, arpeggio effects `037` and `047` for chords, and `drive` 0.3 on drum recipes, which the palette already uses.
+- Treat loudness as measured, not heard. `synth add` and `synth palette` land each sample on its role's level in the owner's bank (or on fixed reference levels without a bank): the median of its group, except that kicks aim at the upper quartile of the percussion and hats at the lower quartile, so hats sit below snares and snares below kicks. `report` flags a played sample more than 6 dB from its reference. That compares samples one by one at their default volume; it does not say how the mix sounds. Texture and drums sit near full scale because the bank's do. Listen, and lower volume with `Cxx` where a part masks the others.
+- Save `sample_source` in the project (the palette does it). `validate` checks a declared source on its own; add `--sample-source synthesized` as the explicit final check. Library samples are then refused in that project; set `"sample_source": "mixed"` in the JSON only when the owner asks for both.
+- Describe what you measured as measurements (tuning, loudness, peak) and what you think of the sound as a judgment.
 
 ## Studying references
 
@@ -255,7 +287,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## MCP adapter
 
-`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 29 tools (estimate, validate, inspect, patch, export, render, preview, report, compare, feedback, migrate, four `samples_*` tools and the `live_*` set) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`.
+`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 34 tools (estimate, validate, inspect, patch, export, render, preview, report, compare, feedback, migrate, four `samples_*` tools, five `synth_*` tools and the `live_*` set) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`.
 
 A client that launches stdio servers can use this shape (field names vary by client):
 

@@ -332,6 +332,18 @@ def _library_sample(module: Module, op: dict) -> dict:
     return info
 
 
+def _recipe_sample(module: Module, op: dict) -> dict:
+    """Insert a created sample (a recipe) like `library_sample` inserts a library one."""
+    _fields(op, {"name", "recipe"}, {"slot", "volume", "finetune", "replace", "role", "match", "library"})
+    from .synth_tools import insert_recipe, resolve_reference
+    match = op.get("match", "defaults")
+    if "library" in op and match != "library":
+        raise ValidationError("'library' is only used with \"match\": \"library\".", "PATCH_FIELD")
+    reference = None if op.get("volume") is not None else resolve_reference(match, op.get("library"))
+    return insert_recipe(module, op["name"], op["recipe"], op.get("slot"), op.get("volume"),
+                         op.get("finetune", 0), op.get("replace", False), op.get("role"), reference)
+
+
 OPERATIONS = {
     "set": _set, "write": _write, "clear": _clear,
     "copy": lambda module, op: _copy_or_move(module, op, False),
@@ -339,7 +351,7 @@ OPERATIONS = {
     "transpose": _transpose, "add_pattern": _add_pattern, "remove_pattern": _remove_pattern,
     "rename_pattern": _rename_pattern, "set_orders": _set_orders, "insert_order": _insert_order,
     "remove_order": _remove_order, "move_order": _move_order, "title": _title, "timing": _timing,
-    "sample": _sample, "library_sample": _library_sample,
+    "sample": _sample, "library_sample": _library_sample, "recipe_sample": _recipe_sample,
 }
 
 

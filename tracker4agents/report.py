@@ -12,10 +12,12 @@ import copy
 from datetime import datetime, timezone
 import math
 
+from . import loudness, sample_source
 from .model import NOTES, PITCHES, Module, ValidationError, playback_plan
 
 SCHEMA = "chiploom.report.v1"
 LONG_SILENCE_SECONDS = 2.0
+LEVEL_WARNING_DB = 6.0
 MAX_FEEDBACK_TEXT = 2000
 MAX_TEMPO_EVENTS = 32
 BLOCK_SIZES = (4, 8, 16)
@@ -118,8 +120,12 @@ def _block_stats(signatures: list, size: int, empty_row: object) -> dict:
             "repeated_fraction": _round(1 - len(distinct) / non_empty) if non_empty else None}
 
 
-def analyze(module: Module) -> dict:
-    """Deterministic, JSON-serializable measurements of the played score."""
+def analyze(module: Module, reference: dict | None = None) -> dict:
+    """Deterministic, JSON-serializable measurements of the played score.
+
+    `reference` (see `synth_tools.resolve_reference`) gives the loudness each group is compared with;
+    without it the fixed reference levels in `loudness.DEFAULT_REFERENCE_DB` are used.
+    """
     plan = playback_plan(module)  # Validates the module as well.
     timeline = plan["timeline"]
     rows = len(timeline)
@@ -256,6 +262,7 @@ def analyze(module: Module) -> dict:
     }
 
     # Sample usage over the whole song.
+    sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
     samples = []
     never_played = []
     empty_slots = []
@@ -264,13 +271,28 @@ def analyze(module: Module) -> dict:
             empty_slots.append(slot)
             continue
         count = sum(channel_samples[channel].get(slot, 0) for channel in range(4))
+        recorded = sources.get(str(slot)) if isinstance(sources, dict) else None
+        key = loudness.sample_role(sample, recorded.get("role") if isinstance(recorded, dict) else None)
+        group = loudness.ROLES.get(key, key)
+        level = loudness.measure(sample)["loudness_db"]
+        wanted = loudness.target_db(key, reference)
         samples.append({"slot": slot, "name": sample.name, "bytes": len(sample.pcm), "looped": bool(sample.loop_length),
                         "volume": sample.volume, "note_ons": count,
-                        "channels": sorted(channel + 1 for channel in sample_channels.get(slot, ()))})
+                        "channels": sorted(channel + 1 for channel in sample_channels.get(slot, ())),
+                        "source": "recipe" if sample.recipe is not None else "embedded_pcm",
+                        "loudness_db": level, "peak_db": loudness.measure(sample)["peak_db"], "group": group,
+                        "reference_db": wanted, "deviation_db": round(level - wanted, 2)})
         if not count:
             never_played.append(slot)
+    found = sample_source.counts(module)
     sample_usage = {"slots_with_audio": len(samples), "empty_slots": empty_slots,
-                    "never_played_slots": never_played, "slots": samples}
+                    "never_played_slots": never_played,
+                    "sources": {"recipe": found["recipe"], "embedded_pcm": found["embedded_pcm"],
+                                "declared": module.metadata.get("sample_source")},
+                    "loudness_note": "loudness_db: RMS of the audible PCM x volume / 64, dB re full scale, at the "
+                                     "sample's default volume (Cxx and arpeggios are not applied). reference_db: "
+                                     f"the median level of its group ({'sample bank' if reference else 'fixed defaults'}).",
+                    "slots": samples}
 
     # Factual flags only.
     warnings = []
@@ -285,6 +307,13 @@ def analyze(module: Module) -> dict:
     for slot in never_played:
         warnings.append({"code": "sample_never_played", "slot": slot,
                          "message": f"Sample slot {slot} ({module.samples[slot - 1].name!r}) holds audio but no note plays it."})
+    for entry in samples:
+        if abs(entry["deviation_db"]) > LEVEL_WARNING_DB and entry["note_ons"]:
+            warnings.append({"code": "sample_level_off_reference", "slot": entry["slot"],
+                             "deviation_db": entry["deviation_db"],
+                             "message": f"Sample slot {entry['slot']} ({entry['name']!r}) is {abs(entry['deviation_db']):.1f} dB "
+                                        f"{'above' if entry['deviation_db'] > 0 else 'below'} the {entry['group']} "
+                                        f"reference ({entry['reference_db']} dB); more than {LEVEL_WARNING_DB:.0f} dB apart."})
     if no_note["seconds"] > LONG_SILENCE_SECONDS:
         warnings.append({"code": "long_stretch_without_note", "seconds": no_note["seconds"],
                          "message": f"No channel starts a note for {no_note['seconds']:.2f} s "

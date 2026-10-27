@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -20,7 +21,7 @@ _LIVE_HOME = tempfile.mkdtemp(prefix="chiploom-home-")
 os.environ.setdefault("CHIPLOOM_HOME", _LIVE_HOME)
 atexit.register(shutil.rmtree, _LIVE_HOME, True)
 try:
-    from PySide6.QtCore import QObject, Signal
+    from PySide6.QtCore import QObject, QThread, QTimer, Signal
     from PySide6.QtGui import QFontDatabase
     from PySide6.QtWidgets import QApplication
     from tracker4agents import desktop_playback
@@ -58,12 +59,13 @@ class FakeSink(QObject):
     stateChanged = Signal(object)
     instances: list = []
 
-    def __init__(self, volume=1.0):
+    def __init__(self, volume=1.0, frames=RATE // 4):
         super().__init__()
-        self.size = RATE // 4 * FRAME
+        self.size = frames * FRAME
         self.queued = 0
         self.volume = volume
         self.writes: list[tuple[float, bytes]] = []
+        self.thread = threading.get_ident()
         self.starts = 0
         self._last = time.monotonic()
         FakeSink.instances.append(self)
@@ -177,14 +179,16 @@ class RealtimePlaybackTests(unittest.TestCase):
         window.toggle_play()
         self.assertTrue(rt.playing)
         self.assertEqual(window.play_button.text(), "Pause")
+        self.assertIsNot(QThread.currentThread(), rt.thread)  # the sound is made in the audio thread
         self.pause(.9)
+        self.assertEqual(self.sink().thread, rt.core_thread_id())
         milliseconds, marker = self.heard()
         self.assertTrue(500 < milliseconds < 1500, milliseconds)
         self.assertEqual((marker["order"], marker["row"] >= 0), (0, True))
         # The heard position trails what was rendered: it is the written frames minus those still queued.
-        queued = rt._queued_frames()
-        self.assertTrue(0 < queued <= desktop_playback.BUFFER_FRAMES)
-        self.assertLess(milliseconds, rt._rendered * 1000 / RATE)
+        queued = rt.queued_frames
+        self.assertTrue(0 < queued <= desktop_playback.buffer_frames(rt.latency_ms))
+        self.assertLess(milliseconds, rt.rendered_frames * 1000 / RATE)
         self.assertGreater(window.seek.value(), 400)
         window._sync_position()
         _, marker = self.heard()
@@ -213,6 +217,7 @@ class RealtimePlaybackTests(unittest.TestCase):
         window.toggle_play()
         self.assertFalse(rt.playing)
         self.assertEqual(window.play_button.text(), "Play")
+        self.assertTrue(rt.wait_idle())
         paused = rt.position_ms()
         self.assertTrue(500 < paused < 1500, paused)
         self.pause(.3)
@@ -239,7 +244,6 @@ class RealtimePlaybackTests(unittest.TestCase):
         window.stop()
         window.seek_to(8000)
         self.assertEqual(rt.position_ms(), 8000)
-        window.seek_row(0)
         window.toggle_play()
         self.pause(.3)
         self.assertGreaterEqual(rt.position_ms(), 7800)
@@ -258,10 +262,11 @@ class RealtimePlaybackTests(unittest.TestCase):
         self.assertGreater(peak(before), 1000)
         pattern = window.document.module.orders[2]
         reloads, order = rt.reloads, self.heard()[1]["order"]
-        edited_at = time.monotonic()
         self.assertTrue(window.apply_patch([{"op": "clear", "pattern": pattern, "row": 0, "rows": 64, "channel": 0,
                                             "channels": 4}], "Silence"))
         self.assertEqual(rt.reloads, reloads + 1)  # immediate, no debounce
+        self.assertTrue(rt.wait_idle())            # the audio thread has swapped the module in
+        edited_at = time.monotonic()
         self.assertTrue(rt.playing)
         self.pause(.5)
         self.assertTrue(rt.playing)
@@ -310,12 +315,14 @@ class RealtimePlaybackTests(unittest.TestCase):
         self.pause(.2)
         reloads = rt.reloads
         window.mutes[0].click()
-        self.assertEqual(rt.engine.audible, (False, True, True, True))
+        self.assertEqual(rt.audible, (False, True, True, True))
         window.solos[1].click()
-        self.assertEqual(rt.engine.audible, (False, True, False, False))
+        self.assertEqual(rt.audible, (False, True, False, False))
         window.solos[1].click()
         window.mutes[0].click()
-        self.assertEqual(rt.engine.audible, (True, True, True, True))
+        self.assertEqual(rt.audible, (True, True, True, True))
+        self.assertTrue(rt.wait_idle())
+        self.assertEqual(rt.core.engine.audible, (True, True, True, True))
         self.assertEqual(rt.reloads, reloads)
         self.assertTrue(rt.playing)
         window.cache.prepare.assert_not_called()
@@ -333,27 +340,31 @@ class RealtimePlaybackTests(unittest.TestCase):
         Document(short_song()).save_project(path)
         self.assertTrue(window.open_document(path))
         self.wait_until(lambda: window.document.module.title == "Short" and window._audio_ready)
-        self.assertTrue(rt.engine.loop)
+        self.assertTrue(rt.loop)
         window.toggle_play()
         self.pause(2.4)  # looped at least twice (the song lasts about one second)
         self.assertTrue(rt.playing)
         window.loop.setChecked(False)
-        self.assertFalse(rt.engine.loop)
+        self.assertFalse(rt.loop)
         self.wait_until(lambda: not rt.playing, 6)
         self.assertEqual(rt.position_ms(), 0)
         self.assertEqual(window.play_button.text(), "Play")
         window.toggle_play()  # plays again from the start
         self.assertTrue(rt.playing)
         window.loop.setChecked(True)
-        self.assertTrue(rt.engine.loop)
+        self.assertTrue(rt.loop)
+        self.assertTrue(rt.wait_idle())
+        self.assertTrue(rt.core.engine.loop)
 
     def test_volume_and_preferences(self):
         window = self.window
         window.volume.setValue(30)
         self.assertEqual(window.rt.volume, .3)
         window.toggle_play()
+        self.assertTrue(window.rt.wait_idle())
         self.assertAlmostEqual(self.sink().volume, .3)
         window.volume.setValue(80)
+        self.assertTrue(window.rt.wait_idle())
         self.assertAlmostEqual(self.sink().volume, .8)
         window.realtime_action.setChecked(False)  # back to the rendered path
         self.assertIsNone(window.rt)
@@ -415,9 +426,138 @@ class RealtimePlaybackTests(unittest.TestCase):
         window = self.window
         with patch.object(window.rt.engine, "load", side_effect=desktop_playback.RealtimeError("boom")):
             window.prepare_audio(False, 0)
+            self.wait_until(lambda: window.rt is None)  # the audio thread reports it; the window falls back
         self.assertIsNone(window.rt)
         self.assertIn("boom", window.play_button.toolTip())
         self.wait_until(lambda: window._audio_ready or window._loading_audio, 5)
+
+    # --- audio buffer ----------------------------------------------------------------------
+    def test_buffer_menu_defaults_persists_and_validates_the_session_value(self):
+        window = self.window
+        self.assertEqual(window.audio_buffer, "normal")
+        self.assertEqual([window.buffer_actions[key].isChecked() for key, _ in desktop_playback.BUFFER_CHOICES],
+                         [False, True, False, False])
+        self.assertEqual(window.rt.latency_ms, 150)
+        self.assertIn("150 ms", window.play_button.toolTip())
+        self.assertIn("150 ms", window.buffer_actions["normal"].toolTip())
+        self.assertEqual(window.buffer_actions["low"].text(), "Low · 80 ms")
+        window.buffer_actions["low"].trigger()
+        self.assertEqual((window.audio_buffer, window.rt.latency_ms), ("low", 80))
+        self.assertEqual(AppState(self.directory / "state").values["audio_buffer"], "low")
+        self.assertIn("80 ms", window.play_button.toolTip())
+        window.set_language("fr")
+        self.assertEqual(window.buffer_actions["very_high"].text(), "Très élevé · 600 ms")
+        self.assertIn("Latence audio d'environ 80 ms", window.buffer_actions["low"].toolTip())
+        self.assertIn("tampon audio 80 ms", window.play_button.toolTip())
+        window.set_language("en")
+        window.close()
+        self.window = self.make_window(self.path)
+        self.assertEqual((self.window.audio_buffer, self.window.rt.latency_ms), ("low", 80))
+        for junk in ("loud", 7, None, ["low"]):
+            self.window.close()   # closing saves the session; the bad value is written afterwards
+            state = AppState(self.directory / "state")
+            state.values["audio_buffer"] = junk
+            state.save()
+            self.window = self.make_window(self.path)
+            self.assertEqual(self.window.audio_buffer, "normal", junk)
+
+    def test_changing_the_buffer_while_playing_keeps_position_and_intent(self):
+        window, rt = self.window, self.window.rt
+        window.toggle_play()
+        self.pause(.8)
+        before = rt.position_ms()
+        sinks = len(FakeSink.instances)
+        window.set_audio_buffer("very_high")
+        self.assertTrue(rt.wait_idle())
+        self.assertTrue(rt.playing)
+        self.assertEqual(len(FakeSink.instances), sinks + 1)  # a new sink of the new size
+        self.assertEqual(self.sink().size, desktop_playback.buffer_frames(600) * FRAME)
+        self.pause(.7)
+        after = rt.position_ms()
+        self.assertTrue(before - 150 <= after - 600 <= before + 300, (before, after))  # about 0.7 s later
+        self.assertTrue(rt.playing)
+        # The queue itself follows the setting: about 600 ms now, about 80 ms after switching down.
+        self.assertTrue(24000 < rt.queued_frames <= 28800, rt.queued_frames)
+        window.set_audio_buffer("low")
+        self.pause(.4)
+        self.assertTrue(2000 < rt.queued_frames <= 3840 + 480, rt.queued_frames)
+        self.assertEqual(self.sink().size, desktop_playback.buffer_frames(80) * FRAME)
+        window.cache.prepare.assert_not_called()
+
+    def test_changing_the_buffer_while_paused_stays_paused_at_the_same_place(self):
+        window, rt = self.window, self.window.rt
+        window.seek_to(4000)
+        window.set_audio_buffer("normal")
+        self.assertFalse(rt.playing)
+        self.assertEqual(rt.position_ms(), 4000)
+        window.toggle_play()
+        self.pause(.4)
+        self.assertEqual(self.sink().size, desktop_playback.buffer_frames(150) * FRAME)
+        self.assertGreaterEqual(rt.position_ms(), 3800)
+
+    def test_the_queue_length_follows_each_setting(self):
+        window, rt = self.window, self.window.rt
+        for key, milliseconds in desktop_playback.BUFFER_CHOICES:
+            window.set_audio_buffer(key)
+            window.stop()
+            window.toggle_play()
+            self.pause(.5 + milliseconds / 1000)
+            frames = rt.queued_frames
+            target = RATE * milliseconds // 1000
+            self.assertTrue(target * .7 <= frames <= target + 480, (key, frames, target))
+            self.assertTrue(rt.playing)
+
+    # --- stalls ----------------------------------------------------------------------------
+    def test_a_stalled_gui_thread_cannot_starve_the_audio_thread_at_any_buffer_size(self):
+        window, rt = self.window, self.window.rt
+        for key, _ in desktop_playback.BUFFER_CHOICES:
+            window.set_audio_buffer(key)
+            window.stop()
+            window.toggle_play()
+            self.pause(.5)
+            begin, before = time.monotonic(), rt.position_ms()
+            stalls = QTimer()
+            stalls.setInterval(250)
+            stalls.timeout.connect(lambda: time.sleep(.4))   # a window drag: the GUI thread is gone for 400 ms
+            stalls.start()
+            self.pause(1.8)
+            stalls.stop()
+            elapsed = (time.monotonic() - begin) * 1000
+            self.assertEqual(rt.underruns, 0, key)
+            self.assertAlmostEqual(rt.position_ms() - before, elapsed, delta=250, msg=key)  # no gap, no drift
+
+    def test_commands_stay_ordered_and_the_thread_survives_a_flood(self):
+        window, rt = self.window, self.window.rt
+        window.toggle_play()
+        for index in range(60):
+            window.seek_to(500 + index * 120)
+            window.mutes[index % 4].click()
+            window.loop.setChecked(index % 2 == 0)
+            rt.reload()
+            self.app.processEvents()
+        window.stop()
+        for control in window.mutes:
+            control.setChecked(False)
+        window.loop.setChecked(True)
+        window.seek_to(2500)
+        self.assertTrue(rt.wait_idle(10))
+        self.assertTrue(rt.thread.isRunning())
+        self.assertEqual((rt.audible, rt.loop, rt.position_ms()), ((True,) * 4, True, 2500))
+        flooded = rt.underruns  # 60 seeks and reloads in a row may well drain the queue; afterwards it must hold
+        window.toggle_play()
+        self.pause(.6)
+        self.assertGreaterEqual(rt.position_ms(), 2400)
+        self.assertEqual(rt.underruns, flooded)
+
+    def test_closing_the_window_joins_the_audio_thread(self):
+        window, rt = self.window, self.window.rt
+        window.toggle_play()
+        self.pause(.3)
+        self.assertTrue(rt.thread.isRunning())
+        window.close()
+        self.assertFalse(rt.thread.isRunning())
+        self.assertTrue(rt.core.sink is None)
+        window.close()  # closing twice is harmless
 
     def test_documents_are_never_modified_by_playback(self):
         window = self.window
@@ -428,6 +568,41 @@ class RealtimePlaybackTests(unittest.TestCase):
         window.stop()
         self.assertEqual(fingerprint(window.document.module), original)
         self.assertFalse(window.document.dirty)
+
+
+@unittest.skipUnless(TrackerWindow is not None and find_library(), "PySide6 and libxmp required")
+class StarvationTests(unittest.TestCase):
+    """What a stalled feeder costs at each buffer size: the audio core driven by hand, one stall at a time."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication(["starvation-tests"])
+
+    def underruns(self, milliseconds: int, stall: float) -> int:
+        from tracker4agents import project
+        from tracker4agents.realtime import XmpEngine
+        core = desktop_playback.AudioCore(XmpEngine(sample_rate=RATE), FakeSink, milliseconds, lambda snapshot: None)
+        try:
+            core.start()
+            core.cmd_load(project.load(ROOT / "examples/pixel_rush.project.json"), False, 0, (True,) * 4, True)
+            core.cmd_play()
+            deadline = time.monotonic() + .5
+            while time.monotonic() < deadline:   # a healthy feeder, one tick every 10 ms
+                core.feed()
+                time.sleep(.01)
+            time.sleep(stall)                    # the feeder stalls
+            for _ in range(5):
+                core.feed()
+                time.sleep(.01)
+            return core.underruns
+        finally:
+            core.shutdown()
+
+    def test_a_stall_longer_than_the_queue_starves_the_sink_and_a_bigger_buffer_survives_it(self):
+        measured = {stall: {key: self.underruns(ms, stall) for key, ms in desktop_playback.BUFFER_CHOICES}
+                    for stall in (.2, .4)}
+        self.assertEqual(measured[.2], {"low": 1, "normal": 1, "high": 0, "very_high": 0})
+        self.assertEqual(measured[.4], {"low": 1, "normal": 1, "high": 1, "very_high": 0})
 
 
 @unittest.skipUnless(TrackerWindow is not None and find_library(), "PySide6 and libxmp required")
@@ -451,7 +626,7 @@ class RealSinkSmokeTest(unittest.TestCase):
             while time.monotonic() < deadline:
                 app.processEvents()
                 time.sleep(.005)
-            self.assertIn(window.rt.sink.state().name, ("ActiveState", "IdleState"))
+            self.assertIn(window.rt.sink_state, ("ActiveState", "IdleState"))
             self.assertGreater(window.rt.position_ms(), 500)
             self.assertLessEqual(window.rt.underruns, 2)
             window.close()

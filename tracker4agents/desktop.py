@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo, QModelIndex, QStandardPaths, Qt, QThreadPool, QTimer, QTranslator, QUrl
-from PySide6.QtGui import QAction, QColor, QFontDatabase, QKeySequence, QPalette, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
                                QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -20,7 +20,7 @@ from . import __version__, audio, project
 from .desktop_live import AgentPanel, LiveBridge, status_label
 from .desktop_input import LAYOUTS, resolve_layout, valid_layout
 from .desktop_orders import OrderEditor
-from .desktop_playback import LIBXMP_HINT, RealtimeTransport, unavailable_reason
+from .desktop_playback import (BUFFER_CHOICES, LIBXMP_HINT, RealtimeTransport, unavailable_reason, valid_buffer)
 from .desktop_pattern import PatternModel, PatternView, input_locale_name
 from .desktop_samples import SampleBrowser
 from .desktop_services import AppState, AudioCache
@@ -50,6 +50,9 @@ ABOUT_TEXT = (
     "ProTracker M.K. profile; XM and IT are planned.")
 PATTERN_HINT = ("Edit mode (Ctrl+E): piano keys enter notes, hex digits fill Smp and Effect · Ctrl+C/X/V: blocks · "
                 "Alt+arrows: move block · Ctrl+↑/↓: transpose · Double-click: edit a cell · Click a row number: seek")
+CENTER_GAP = 10  # px between the library panel's divider and the pattern/tabs column
+BUFFER_LABELS = {"low": "Low · 80 ms", "normal": "Normal · 150 ms", "high": "High · 300 ms",
+                 "very_high": "Very high · 600 ms"}
 __all__ = ["ASSETS", "PatternModel", "PatternView", "STYLE", "Task", "TaskSignals", "TrackerWindow", "Waveform",
            "application", "brand_icon", "button", "clock", "label", "main", "sample_name"]
 
@@ -90,6 +93,7 @@ class TrackerWindow(QMainWindow):
         self.sample_player.setAudioOutput(self.sample_output)
         self.live = LiveBridge(self)
         self.rt: RealtimeTransport | None = None
+        self.audio_buffer = valid_buffer(self.state.values.get("audio_buffer"))
         self._rt_notice = None
         self._build_ui()
         self._setup_realtime()
@@ -183,7 +187,8 @@ class TrackerWindow(QMainWindow):
         self.state.values.update(language=self.language, theme=self.theme, volume=self.volume.value(),
                                  loop=self.loop.isChecked(), follow=self.follow.isChecked(),
                                  keyboard=self.keyboard_combo.currentData(), edit_octave=self.edit_octave.value(),
-                                 edit_step=self.edit_step.value(), live=self.live.enabled)
+                                 edit_step=self.edit_step.value(), live=self.live.enabled,
+                                 audio_buffer=self.audio_buffer)
         try:
             self.state.save()
         except OSError as exc:
@@ -228,6 +233,7 @@ class TrackerWindow(QMainWindow):
         self.sample_tabs.setTabText(1, self.t("Sample library"))
         self.sample_browser.retranslate()
         self.agent_panel.retranslate()
+        self._update_buffer_ui()
         self.live.update_status()
         if self.document:
             self._song_labels()
@@ -310,6 +316,16 @@ class TrackerWindow(QMainWindow):
         self.realtime_action.setCheckable(True)
         self.realtime_action.toggled.connect(self.set_realtime)
         playback_menu.addAction(self.realtime_action)
+        buffer_menu = self._bind(playback_menu.addMenu(""), "Audio buffer", "setTitle")
+        buffer_menu.setToolTipsVisible(True)
+        self.buffer_actions, group = {}, QActionGroup(self)
+        for key, milliseconds in BUFFER_CHOICES:
+            action = self._action(BUFFER_LABELS[key])
+            action.setCheckable(True)
+            action.setActionGroup(group)
+            action.triggered.connect(lambda checked=False, key=key: self.set_audio_buffer(key))
+            buffer_menu.addAction(action)
+            self.buffer_actions[key] = action
         self.live_action = self._action("Live collaboration")
         self.live_action.setCheckable(True)
         self.live_action.setChecked(self.live.enabled)
@@ -431,7 +447,13 @@ class TrackerWindow(QMainWindow):
         horizontal.addWidget(library)
 
         center = QSplitter(Qt.Orientation.Vertical)
-        horizontal.addWidget(center)
+        # A comfortable gap between the library panel and the whole center column (pattern area and
+        # bottom tabs alike): the splitter handle would otherwise touch their left edge.
+        center_column = QWidget()
+        center_layout = QVBoxLayout(center_column)
+        center_layout.setContentsMargins(CENTER_GAP, 0, 0, 0)
+        center_layout.addWidget(center)
+        horizontal.addWidget(center_column)
         patterns_widget = QWidget()
         patterns_layout = QVBoxLayout(patterns_widget)
         patterns_layout.setContentsMargins(0, 0, 0, 0)
@@ -1105,13 +1127,14 @@ class TrackerWindow(QMainWindow):
         self.rt = None
         if reason is None:
             try:
-                self.rt = RealtimeTransport(self)
+                self.rt = RealtimeTransport(self, latency_ms=dict(BUFFER_CHOICES)[self.audio_buffer])
             except RealtimeError:
                 reason = "libxmp"
         if self.rt is not None:
             self.rt.state_changed.connect(self._transport_labels)
             self.rt.state_changed.connect(self.live.context_changed)
             self.rt.finished.connect(self.meter.reset)
+            self.rt.failed.connect(self._rt_failed)
             self.rt.set_volume(self.volume.value() / 100)
         self._rt_notice = {"libxmp": LIBXMP_HINT,
                            "output": "Real-time playback needs an audio output device: playing rendered audio instead."
@@ -1121,8 +1144,8 @@ class TrackerWindow(QMainWindow):
         self.realtime_action.setChecked(self.rt is not None)
         self.realtime_action.setEnabled(not forced)
         self.realtime_action.blockSignals(False)
-        self.play_button.setToolTip(self.t(self._rt_notice) if self._rt_notice else "")
         self._rt_unavailable = reason
+        self._update_buffer_ui()
 
     def set_realtime(self, on: bool):
         """Switch between real-time (libxmp) and rendered (WAV + media player) playback."""
@@ -1148,7 +1171,39 @@ class TrackerWindow(QMainWindow):
         self.realtime_action.blockSignals(False)
         self._rt_notice = "Real-time playback failed ({detail}): playing rendered audio instead."
         self._rt_notice = self.t(self._rt_notice, detail=exc)
+        self._update_buffer_ui()
         self.play_button.setToolTip(self._rt_notice)
+
+    def _rt_failed(self, message: str, fatal: bool):
+        """The audio thread reported a problem: a module libxmp cannot load ends real-time playback."""
+        if fatal and self.rt is not None:
+            self._realtime_failed(message)
+            self.prepare_audio(False, self._resume_ms)
+        elif not fatal:
+            self.message("Real-time playback failed: {detail}", True, detail=message)
+
+    def set_audio_buffer(self, key: str):
+        """Resize the audio queue and the sink now; a playing song continues on the row being heard."""
+        self.audio_buffer = valid_buffer(key)
+        if self.rt is not None:
+            self.rt.set_latency(dict(BUFFER_CHOICES)[self.audio_buffer])
+        self._update_buffer_ui()
+        self._save_preferences()
+
+    def _update_buffer_ui(self):
+        """Check the current choice and show the latency in the tooltips."""
+        for key, milliseconds in BUFFER_CHOICES:
+            action = self.buffer_actions[key]
+            action.blockSignals(True)
+            action.setChecked(key == self.audio_buffer)
+            action.blockSignals(False)
+            action.setToolTip(self.t("Audio latency about {ms} ms. A larger buffer rides out window moves and heavy "
+                                     "redraws without crackling, but sound reacts a little later to edits.", ms=milliseconds))
+        milliseconds = dict(BUFFER_CHOICES)[self.audio_buffer]
+        if self.rt is not None:
+            self.play_button.setToolTip(self.t("Real-time playback (libxmp) · audio buffer {ms} ms", ms=milliseconds))
+        else:
+            self.play_button.setToolTip(self.t(self._rt_notice) if self._rt_notice else "")
 
     def is_playing(self) -> bool:
         if self.rt is not None:
@@ -1375,7 +1430,7 @@ class TrackerWindow(QMainWindow):
         self.state.values.update(volume=self.volume.value(), loop=self.loop.isChecked(), follow=self.follow.isChecked(),
                                  theme=self.theme, language=self.language, keyboard=self.keyboard_combo.currentData(),
                                  edit_octave=self.edit_octave.value(), edit_step=self.edit_step.value(),
-                                 live=self.live.enabled)
+                                 live=self.live.enabled, audio_buffer=self.audio_buffer)
         try:
             self.state.save()
         except OSError:

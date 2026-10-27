@@ -8,12 +8,13 @@ import json
 from pathlib import Path
 import sys
 
-from . import __version__, audio, demo, mod, pixel_rush, project
+from . import __version__, audio, demo, mod, pixel_rush, project, sample_source
 from .document import Document
 from .errors import diagnostic_payload, error_payload
 from .patch import pattern_grid, summarize
 from .model import PROFILE, Module, ValidationError, playback_plan, require_int, validate
 from .review import write_preview
+from .synth_cli import add_parser as add_synth_parser, run as run_synth
 
 
 def emit(value: object, stream=None) -> None:
@@ -255,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--name")
             command.add_argument("--category", choices=CATEGORIES)
             command.add_argument("--tag", action="append", default=None, help="Replaces tags; repeat for multiple tags.")
+    add_synth_parser(commands)
     migrate_parser = commands.add_parser("migrate", help="Rewrite a project (v1 or v2) or MOD as a schema v2 project.")
     migrate_parser.add_argument("source", type=Path)
     migrate_parser.add_argument("--output", type=Path, required=True, help="New .json project; must differ from the source.")
@@ -267,6 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--in-place", action="store_true", help="Allow --output to be the source project.")
     report = commands.add_parser("report", help="Measure a composition: density, ranges, gaps, repetition, estimated key.")
     report.add_argument("source", type=Path)
+    report.add_argument("--library", type=Path, help="Sample bank whose median levels are the loudness reference "
+                                                     "(default: fixed reference levels).")
     compare = commands.add_parser("compare", help="Build a blind A/B listening page for two versions in a new directory.")
     compare.add_argument("first", type=Path)
     compare.add_argument("second", type=Path)
@@ -298,6 +302,9 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--rows", type=int, help="Number of rows shown with --pattern.")
         if name == "validate":
             command.add_argument("--report", action="store_true", help="Collect independent JSON project errors in one read-only report.")
+            command.add_argument("--sample-source", choices=("synthesized", "library"),
+                                 help="Require every sample to be a created recipe (synthesized) or a library sample "
+                                      "(no recipe). Without it, a declared metadata.sample_source is checked.")
         if name in ("export", "import", "render"):
             command.add_argument("--output", type=Path, required=True)
         if name == "render":
@@ -368,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
                 module, info = bank.insert(project.load(args.project), args.id, args.slot, args.replace, args.adapt)
                 project.write_json(output, project.to_dict(module))
                 result = {"ok": True, "output": str(output), **info}
+        elif args.command == "synth":
+            result = run_synth(args)
         elif args.command == "analyze":
             from .references import analyze_source
             if args.source.resolve() == args.output.resolve():
@@ -380,17 +389,29 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["ok"] else 2
         elif args.command in ("inspect", "validate"):
             if args.command == "validate" and args.report and args.source.suffix.lower() == ".json":
-                errors = project.diagnose(project.read_json(args.source))
-                if errors:
+                data = project.read_json(args.source)
+                entries = [diagnostic_payload(entry) for entry in project.diagnose(data)]
+                if not entries:
+                    try:
+                        _, problems = sample_source.violations(project.from_dict(data), args.sample_source)
+                    except sample_source.SampleSourceError as exc:
+                        problems = exc.violations
+                    entries = [{"path": f"samples[{item['slot'] - 1}]" if item.get("slot") else "metadata.sample_source",
+                                "code": "SAMPLE_SOURCE",
+                                "message": item["reason"] + (f" ({item['name']!r})" if item.get("name") else "")}
+                               for item in problems]
+                if entries:
                     emit({"ok": False, "error": "ValidationError", "code": "PROJECT_INVALID",
                           "message": "Project validation failed.",
-                          "errors": [diagnostic_payload(entry) for entry in errors],
-                          "error_count": len(errors)}, stream=sys.stderr)
+                          "errors": entries, "error_count": len(entries)}, stream=sys.stderr)
                     return 2
             module = load(args.source)
             validate(module)
+            source_check = sample_source.enforce(module, getattr(args, "sample_source", None))                 if args.command == "validate" else None
             result = {"ok": True, **describe(module, getattr(args, "pattern", None), getattr(args, "grid", False),
                                              getattr(args, "row", 0), getattr(args, "rows", None))}
+            if source_check is not None:
+                result["sample_source"] = source_check
             if getattr(args, "report", False):
                 result.update(errors=[], error_count=0)
         elif args.command in ("export", "import"):
@@ -410,7 +431,11 @@ def main(argv: list[str] | None = None) -> int:
             result = patch_project(args)
         elif args.command == "report":
             from .report import analyze
-            result = {"ok": True, **analyze(load(args.source))}
+            reference = None
+            if args.library is not None:
+                from .synth_tools import resolve_reference
+                reference = resolve_reference("library", args.library)
+            result = {"ok": True, **analyze(load(args.source), reference)}
         elif args.command == "compare":
             from .compare import create_comparison
             result = create_comparison(args.first, args.second, args.output, mp3=args.mp3, ffmpeg=args.ffmpeg,

@@ -491,6 +491,27 @@ class EditingTests(unittest.TestCase):
         model.clear_flashes()
         self.assertFalse(model.flashed())
 
+    def test_center_column_keeps_a_gap_from_the_library_and_the_tracker_never_scrolls_sideways(self):
+        window = self.window
+        panel = window.library.parentWidget()
+        for width, height in ((1080, 710), (1420, 900)):
+            window.resize(width, height)
+            for theme in THEMES:
+                for language in ("en", "fr"):
+                    window.set_theme(theme)
+                    window.set_language(language)
+                    self.app.processEvents()
+                    label = (width, theme, language)
+                    panel_edge = window.library.mapTo(window, window.library.rect().topRight()).x()
+                    for widget in (window.table, window.sample_tabs, window.orders):
+                        left = widget.mapTo(window, widget.rect().topLeft()).x()
+                        self.assertGreaterEqual(left - panel_edge, 18, (label, widget.objectName()))  # 10 + divider + 10
+                    self.assertEqual(window.table.mapTo(window, window.table.rect().topLeft()).x(),
+                                     window.sample_tabs.mapTo(window, window.sample_tabs.rect().topLeft()).x(), label)
+                    self.assertEqual(window.table.horizontalScrollBar().maximum(), 0, label)
+                    self.assertLess(window.table.columnViewportPosition(11), window.table.viewport().width(), label)
+        self.assertIsNotNone(panel)
+
     def test_block_selection_survives_refresh_and_pattern_edits(self):
         self.block_song()
         self.table.select_block(1, 3, 0, 2)

@@ -28,6 +28,9 @@ B = {"type": "boolean"}
 OPS = {"type": "array", "items": {"type": "object"},
        "description": "Patch operations, e.g. {\"op\": \"write\", \"pattern\": 0, \"channel\": 1, \"row\": 0, "
                       "\"cells\": [\"C-2 01 ...\", \"\", \"E-2 01 C20\"]}. See docs/CLI.md#patch-operations."}
+RECIPE = {"type": "object", "description": "Sample recipe, e.g. {\"type\": \"wave\", \"shape\": \"pulse\", "
+          "\"duty\": 0.25, \"frequency\": 130.81}. See synth_types."}
+ROLE = {"enum": ["kick", "snare", "hat", "bass", "lead", "chord", "texture"]}
 LIBRARY = {"type": "string", "description": "Sample library folder (default exports/sample_library)."}
 
 
@@ -65,8 +68,8 @@ TOOLS = [
           {"orders": I, "rows": I, "speed": I, "bpm": I}, ["orders"],
           lambda a: ["estimate", *_flags(a, {"orders": "--orders", "rows": "--rows", "speed": "--speed", "bpm": "--bpm"})], True),
     _tool("validate", "Validate a JSON project or MOD; with report=true, list every independent problem with codes.",
-          {"source": S, "report": B}, ["source"],
-          lambda a: ["validate", a["source"], *_flags(a, {"report": "--report"})], True),
+          {"source": S, "report": B, "sample_source": {"enum": ["synthesized", "library"]}}, ["source"],
+          lambda a: ["validate", a["source"], *_flags(a, {"report": "--report", "sample_source": "--sample-source"})], True),
     _tool("inspect", "Summarize a project or MOD. With pattern (and grid=true), show that pattern as tracker grid text.",
           {"source": S, "pattern": I, "grid": B, "row": I, "rows": I}, ["source"],
           lambda a: ["inspect", a["source"], *_flags(a, {"pattern": "--pattern", "grid": "--grid", "row": "--row", "rows": "--rows"})], True),
@@ -83,8 +86,10 @@ TOOLS = [
     _tool("preview", "Build a portable HTML listening bundle in a new directory.",
           {"source": S, "output": S, "mp3": B, "language": {"enum": ["en", "fr"]}}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),
-    _tool("report", "Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples.",
-          {"source": S}, ["source"], lambda a: ["report", a["source"]], True),
+    _tool("report", "Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, "
+          "sample sources and loudness against the reference levels.",
+          {"source": S, "library": LIBRARY}, ["source"],
+          lambda a: ["report", a["source"], *_flags(a, {"library": "--library"})], True),
     _tool("compare", "Build a blind A/B listening page comparing two versions in a new directory.",
           {"first": S, "second": S, "output": S, "mp3": B, "language": {"enum": ["en", "fr"]}, "seed": I, "seconds": N},
           ["first", "second", "output"],
@@ -114,6 +119,32 @@ TOOLS = [
           ["id", "project", "output"],
           lambda a: ["samples", "add", a["id"], "--project", a["project"], "--output", a["output"], *_flags(a, {
               "library": "--library", "slot": "--slot", "replace": "--replace", "adapt": "--adapt"})]),
+    # Songs made only with created samples (owner's request; library samples stay the default).
+    _tool("synth_types", "List the sample recipe types with parameters, ranges, defaults and purpose.", {}, (),
+          lambda a: ["synth", "types"], True),
+    _tool("synth_levels", "Reference loudness per role group (aggregate medians of a sample bank, or fixed defaults).",
+          {"library": LIBRARY}, (), lambda a: ["synth", "levels", *_flags(a, {"library": "--library"})], True),
+    _tool("synth_preview", "Render a recipe to a WAV at a tracker note, with measured peak, RMS and loudness.",
+          {"recipe": RECIPE, "name": S, "output": S, "note": S, "seconds": N, "volume": I, "finetune": I, "role": ROLE},
+          ["recipe", "output"],
+          lambda a: ["synth", "preview", *_flags(a, {"recipe": "--recipe", "name": "--name", "output": "--output",
+                                                    "note": "--note", "seconds": "--seconds", "volume": "--volume",
+                                                    "finetune": "--finetune", "role": "--role"})]),
+    _tool("synth_add", "Insert a created sample (recipe) into a project and write a new project; the volume is "
+          "matched to the reference level of its role unless volume is given.",
+          {"project": S, "recipe": RECIPE, "name": S, "output": S, "slot": I, "replace": B, "volume": I,
+           "finetune": I, "role": ROLE, "match_library": LIBRARY, "no_match": B},
+          ["project", "recipe", "name", "output"],
+          lambda a: ["synth", "add", a["project"], *_flags(a, {
+              "recipe": "--recipe", "name": "--name", "output": "--output", "slot": "--slot", "replace": "--replace",
+              "volume": "--volume", "finetune": "--finetune", "role": "--role", "match_library": "--match-library",
+              "no_match": "--no-match"})]),
+    _tool("synth_palette", "Write a new project holding a starter palette of created samples "
+          "(sample_source 'synthesized') with loudness-matched volumes.",
+          {"output": S, "title": S, "style": {"enum": ["default"]}, "match_library": LIBRARY, "no_match": B},
+          ["output"],
+          lambda a: ["synth", "palette", *_flags(a, {"output": "--output", "title": "--title", "style": "--style",
+                                                    "match_library": "--match-library", "no_match": "--no-match"})]),
     # Live session with the open ChipLoom window (or a headless `chiploom live serve`).
     _tool("live_sessions", "List running live sessions (open ChipLoom windows or headless servers).", {}, (),
           lambda a: ["live", "sessions"], True),

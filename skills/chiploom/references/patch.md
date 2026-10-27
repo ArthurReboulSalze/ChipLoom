@@ -43,7 +43,8 @@ A block is `row` (default 0), `rows`, `channel` (default 0), `channels`.
 | `title` | `title` | ASCII, length-limited |
 | `timing` | `bpm`, `speed` | Writes `Fxx` on the first played row; needs two free effect columns or existing `Fxx`, else `TIMING` |
 | `sample` | `slot`, `volume`, `finetune`, `name` | Settings and name only; PCM is never changed |
-| `library_sample` | `library`, `id`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM) |
+| `library_sample` | `library`, `id`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM); refused in a project declared `synthesized` |
+| `recipe_sample` | `name`, `recipe`, `slot`, `volume`, `finetune`, `replace`, `role`, `match`, `library` | Created sample for the owner-requested created-samples mode; occupied slots need `replace`; volume matched to the role's level unless `volume` is given; refused in a project declared `library` |
 
 Examples:
 
@@ -60,7 +61,7 @@ Examples:
 - One patch, one musical intent, one `--label`. Write each revision to a new file.
 - Check `duration_seconds` after any order, `timing` or `Fxx` change.
 - Do not use patches to change the stored PCM of a library sample; insert another library
-  entry instead. New sample synthesis is deferred in the current composition policy.
+  entry instead. Create samples (`recipe_sample`) only when the owner asks for a song made with created samples.
 - Common failures: `NOTE_UNKNOWN` (use `C-1`..`B-3`, `G#3` not `G#-3`), `PATCH_CELL`
   (bad cell text), `PATCH_BOUNDS` (past row 63 or channel 3), `ORDERS` (a pattern is
   still used, or the last pattern is not in the order list), `TIMING`.

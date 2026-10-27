@@ -40,7 +40,7 @@ Two original compositions made with ChipLoom, using newly synthesized samples. T
 
 ## Built for the agent, shared with the musician
 
-ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: build a local sample bank from selected modules, choose sounds, write notes and effects, validate a score, revise it with batch edits, render it, measure it, and refine it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker. Deterministic synthesis remains supported for existing projects; our current composition workflow uses library samples.
+ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: build a local sample bank from selected modules, choose sounds, write notes and effects, validate a score, revise it with batch edits, render it, measure it, and refine it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker. Compositions use library samples by default; when the owner asks, a song can be made only with created samples (tuned recipes, a starter palette, loudness matched to the library).
 
 ```text
 Musical brief → Agent → JSON score + local samples → Validate → MOD

@@ -39,7 +39,8 @@ These are proposals, in priority order. Each still needs the owner's agreement.
 5. **Linux desktop listening.** CI now runs the window offscreen on Linux; a session on a real Linux
    desktop with audio output remains to be done.
 6. **XM**, with its own validation profile, after the MOD workflow is stable.
-7. **Sample creation**, when the owner resumes it: drawing and synthesis are deferred by the current
-   composition policy, which uses only the owner's local library.
+7. **Sample creation**: songs made only with created samples exist as an owner-requested mode
+   (`synth` commands, tuned waves, a starter palette and loudness matching to the owner's library). Interactive
+   waveform drawing in the window remains deferred, and library samples stay the default.
 8. **Local phrase model** (see the October study in the history folder), only if the agent with
    references proves insufficient.

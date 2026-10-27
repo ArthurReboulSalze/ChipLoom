@@ -87,7 +87,8 @@ class AnalyzeTinyModuleTests(unittest.TestCase):
         self.assertEqual(usage["never_played_slots"], [2])
         self.assertEqual(usage["slots"][0]["note_ons"], 3)
         self.assertEqual(usage["slots"][0]["channels"], [1, 2])
-        codes = {(item["code"], item.get("channel", item.get("slot"))) for item in self.report["warnings"]}
+        codes = {(item["code"], item.get("channel", item.get("slot"))) for item in self.report["warnings"]
+                 if item["code"] != "sample_level_off_reference"}  # level warnings are tested in test_synth_mode
         self.assertEqual(codes, {("channel_never_plays", 3), ("channel_never_plays", 4), ("sample_never_played", 2)})
 
     def test_json_serializable_and_deterministic(self):

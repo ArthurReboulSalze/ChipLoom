@@ -6,7 +6,7 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | --- | --- | --- |
 | `demo` | Built-in song and seed | Reproduces an original example, MOD and project; optional renders |
 | `inspect` | Strict MOD or JSON | Structured summary; optional pattern as rows or `--grid` tracker text |
-| `validate` | Strict MOD or JSON | Playback plan, duration warnings; `--report` collects independent JSON errors with codes |
+| `validate` | Strict MOD or JSON | Playback plan, duration warnings; `--report` collects independent JSON errors with codes; `--sample-source` and a declared `metadata.sample_source` check where samples come from |
 | `estimate` | Order count, speed, BPM, rows | Constant-timing duration estimate without a source file |
 | `import` | Strict MOD | Schema v2 JSON with PCM; no inferred synthesis recipes |
 | `migrate` | Project v1/v2 or MOD | Compact schema v2 project; the MOD it encodes is unchanged |
@@ -21,6 +21,7 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | `live` | Running window or headless session | Compose together: read, patch, propose, announce takes, drive playback |
 | `mcp` | MCP client on stdin/stdout | Model Context Protocol adapter over these commands |
 | `samples` | Local sample bank, reference MOD/ZIP or project | Extract, search, inspect, audition, edit labels, insert and audit |
+| `synth` | Recipe JSON, project, optional sample bank | Songs made only with created samples: list recipe types, audition, add, starter palette, reference levels |
 | `gui` | Optional MOD or JSON | Native human window, optional dependency required |
 
 ## Common commands
@@ -289,7 +290,8 @@ Every operation is an object with an `"op"` and the fields below. Unknown fields
 | `title` | `title` | Set the module title (ASCII, validated) |
 | `timing` | `bpm` (33–255), `speed` (1–31) | Write `Fxx` speed and BPM on the first played row. Needs two free effect columns there or existing `Fxx` effects, otherwise `TIMING`; other effects are never overwritten |
 | `sample` | `slot` (1–31), optional `volume` (0–64), `finetune` (−8 to 7), `name` | Change a sample's playback settings or name. PCM is never touched |
-| `library_sample` | `library`, `id`, optional `slot`, `replace`, `adapt` | Insert a library entry exactly like `samples add`: exact PCM, occupied slots need `slot` + `replace`, `adapt` only for the documented one-shot adaptation |
+| `library_sample` | `library`, `id`, optional `slot`, `replace`, `adapt` | Insert a library entry exactly like `samples add`: exact PCM, occupied slots need `slot` + `replace`, `adapt` only for the documented one-shot adaptation. Refused (`SAMPLE_SOURCE`) in a project declared `synthesized` |
+| `recipe_sample` | `name`, `recipe`, optional `slot` (1–31; default: the first free slot), `volume` (0–64), `finetune` (−8 to 7), `replace`, `role`, `match`, `library` | Insert a created sample (see [Created samples](#created-samples-synth)). An occupied slot is refused (`SAMPLE_SLOT`) unless `replace` is true. Without `volume`, the volume is set from the reference level of the sample's `role` (`kick`, `snare`, `hat`, `bass`, `lead`, `chord`, `texture`; inferred from the recipe when omitted): `match` is `"defaults"` (default), `"library"` (with `library`: a bank folder) or `"none"` (volume 40). The result lists the slot, the measured facts and the `loudness` record. Refused (`SAMPLE_SOURCE`) in a project declared `library` |
 
 `timing`, `Fxx` effects and any order operation change the playback plan, so read `duration_seconds` and `warnings` in the result.
 
@@ -300,6 +302,74 @@ Errors in a patch use these codes: `PATCH_FORMAT` (not JSON, empty list, more th
  "message": "ops[0] (fly): unknown operation; use one of ['add_pattern', 'clear', 'copy', …]."}
 ```
 
+## Created samples (synth)
+
+Songs made **only with created samples** are a mode for when the owner asks for them; library samples stay the default (see [the agent guide](AGENT_GUIDE.md#songs-made-only-with-created-samples)). A created sample is a **recipe**: JSON data that rebuilds the same 8-bit PCM every time, stored in the project as `recipe` instead of bytes. Recipes never contain code.
+
+| Command | Result |
+| --- | --- |
+| `synth types` | `{"ok", "count", "types": [...]}`: every recipe type with `purpose`, `looped` and `parameters` (`kind`, `min`, `max`, `default`, `description`, `applies_to`, `choices`, `required`) |
+| `synth levels [--library PATH]` | Reference loudness per group (`percussion`, `bass`, `lead`, `texture`): `source` (`library` or `defaults`), `groups` with `count`, `p25_db`, `p50_db`, `p75_db`, `median_db` (= p50), `spread_db` (interquartile range), `min_db`, `max_db`, and `role_targets_db` / `role_points` (the level each role aims at and which quartile). Aggregate only: no names, IDs or file names |
+| `synth preview --recipe JSON --output OUT.wav [--name N] [--note C-2] [--seconds 1.0] [--volume 64] [--finetune 0] [--role R]` | Writes a 44.1 kHz mono WAV (no FFmpeg needed; loop and fine tune honoured; 0.05–5 s). Returns `sample` (bytes, loop, cycles, `heard_hz_at_c2`, `tuning_cents`), `loudness` and `audio` (`peak`, `peak_dbfs`, `rms_dbfs`) for an agent that cannot listen |
+| `synth add PROJECT --recipe JSON --name N --output OUT.json [--slot S] [--replace] [--volume V] [--finetune F] [--role R] [--match-library [PATH] \| --no-match]` | Runs the `recipe_sample` operation and writes a **new** project (the output must differ from the input). Returns `slot`, `name`, `role`, `sample`, `loudness`, `reference`, `duration_seconds` |
+| `synth palette --output NEW.json [--title T] [--style default] [--match-library [PATH] \| --no-match]` | Writes a **new** project (an existing output is refused with `OUTPUT_PATH`) with `"sample_source": "synthesized"`, one empty pattern and the starter palette below. Returns `slots` (slot, name, role, use, recipe, volume, `hand_set_volume`, `hand_set_db`, `target_db`, `measured_db`, `deviation_db`, `limited_by_peak`, `tuning_cents`) and `free_slots` |
+
+`--recipe` takes JSON text or `@file.json` (handy where shell quoting is awkward). Every recipe error has the code `RECIPE_INVALID`.
+
+### Recipe reference
+
+`frequency` is the pitch in Hz **heard when the sample plays at tracker note C-2** (period 428, finetune 0). A looped wave holds a whole number of cycles in an even number of bytes; without `cycles`, ChipLoom picks the fewest cycles that land within 2 cents of the pitch, and `synth preview` reports the result as `tuning_cents`.
+
+| Type | Parameters (range, default) | Purpose |
+| --- | --- | --- |
+| `wave` | `shape` (`pulse`, `triangle`, `saw`, `sine`, `noise`; required); `frequency` (30–2000, 261.625565); `cycles` (1–64, automatic); `duty` (0.05–0.95, 0.5; pulse only); `length` (64–65534, even, 2048), `smooth` (0–0.95, 0), `binary` (false) and `seed` (0–2³²−1, 0), noise only; `peak` (0.01–1, 0.88) | Clean looped chip wave, the whole sample looping; or a looped noise buffer. Parameters that do not apply to the shape are rejected |
+| `kick`, `snare`, `hat`, `kick_hat`, `snare_hat` | `duration` (0.01–1.5 s; 0.24, 0.19, 0.048, 0.24, 0.19), `peak`, `seed`, `drive` (0–1, 0) | One-shot drums; the `_hat` forms add a hat tick on top. `drive` is a soft saturation that raises the RMS level of a short hit (0.3 suits matching a sample bank); omitted, the sound is unchanged |
+| `pluck` | `duration` (0.36), `frequency`, `duty` (0.1–0.9, 0.32), `peak`, `seed`, `drive` | One-shot plucked tone with a baked decay |
+| `draw` | `points` (4–256 values in −1…1, required), `cycles` (16), `frequency`, `peak` | Your own looped wave |
+
+Recipes are deterministic: the same recipe always builds the same bytes, and the recipe types that existed before `wave` build byte-identical samples.
+
+### Starter palette
+
+`synth palette` writes 13 samples. The drum recipes and the hand-set volumes come from the Pixel Rush palette; the waves are the same timbres, now tuned. Slots 14–31 are free.
+
+| Slot | Name | Role | Use |
+| --- | --- | --- | --- |
+| 1 | Kick | kick | Drums, trigger at C-2 |
+| 2 | Snare | snare | Drums |
+| 3 | Hat | hat | Drums, off-beat ticks |
+| 4 | Kick+hat | kick | Kick with a hat on top: two hits from one drum channel |
+| 5 | Snare+hat | snare | Snare with a hat on top |
+| 6 | Triangle bass | bass | Soft low line, octaves 1–2 (130.81 Hz at C-2) |
+| 7 | Pulse bass | bass | 25 % pulse for accents |
+| 8 | Pulse 12 lead | lead | 12.5 % pulse, thin and reedy |
+| 9 | Pulse 25 lead | lead | The all-round 25 % pulse |
+| 10 | Pulse 50 lead | lead | Hollow square, the fullest |
+| 11 | Triangle chord | chord | Chords and arpeggios (`037`, `047`) |
+| 12 | Noise texture | texture | Looped 1-bit noise bed; stop it with `C00` |
+| 13 | Pluck lead | lead | One-shot pluck, re-trigger each note |
+
+### Loudness matching
+
+The **loudness** of a sample is the RMS of its audible PCM times its MOD volume / 64, in dB relative to full scale (a half-scale square is 6 dB below a full-scale one). The audible PCM is the loop for a looped sample, or a one-shot up to its last 64-byte window within 20 dB of its loudest. It is a measurement at the sample's default volume: `Cxx`, arpeggios, other channels and the ear's frequency weighting are not included.
+
+References come from the **distribution of loudness per group** of a sample bank: `percussion` (kick, snare, hat), `bass`, `lead` (also chords) and `texture` (also effects). Groups come from the bank's heuristic categories and tags. Inside `percussion` each role aims at its own point of the bank's distribution: **kick and kick+hat at the upper quartile (p75), snare and snare+hat at the median, hat at the lower quartile (p25)**, so a hat sits below a snare and a snare below a kick, as the bank's own percussion does. Every other role (bass, lead, chord, texture) aims at the median of its group. `synth palette` and `synth add` set each created sample's volume so its loudness lands on its role's target, raising the recipe `peak` when volume 64 is not enough:
+
+- `--match-library [PATH]` uses the bank at `PATH` (default `exports/sample_library`). This is the default when that bank exists.
+- Without a bank, fixed reference levels are used, measured once from an aggregate of a local bank (p25 / median / p75, dB): `percussion` −11.9 / −6.2 / −3.8, `bass` −8.5 / −7.3 / −5.0, `lead` −12.5 / −9.9 / −5.9, `texture` −6.2 / −2.8 / −1.7.
+- `--no-match` keeps the stated or default volumes; an explicit `--volume` also disables matching.
+- A target that volume 64 and `peak` 1 cannot reach is reported with `limited_by_peak: true` and the remaining `deviation_db`.
+- The `loudness` record holds `role`, `group`, `reference`, `target_db`, `unmatched_db`, `volume`, `measured_db`, `deviation_db` and, if raised, `peak_raised_from`.
+
+### Where samples come from: `metadata.sample_source`
+
+A project may declare `"sample_source"` in `metadata`: `"library"` (only PCM from a sample bank; no recipe samples), `"synthesized"` (every non-empty sample has a recipe) or `"mixed"` (anything). Undeclared projects are not constrained.
+
+- `validate SRC --sample-source synthesized|library` fails with `SAMPLE_SOURCE` and lists the offending slots in `violations` (`slot`, `name`, `reason`). The flag overrides the declaration; a conflicting `library`/`synthesized` declaration is itself a violation.
+- Without the flag, `validate` **also checks a declared source** and reports violations as errors, so a declared project cannot pass `validate` while breaking its own rule. `validate --report` returns the same violations as `PROJECT_INVALID` entries with the code `SAMPLE_SOURCE` and the path `samples[N]` (collected once the structural checks pass). A successful `validate` prints `sample_source` (`declared`, `required`, `checked`, `recipe`, `embedded_pcm`).
+- `samples add`, patch `library_sample` and the window's library insertion are refused with `SAMPLE_SOURCE` in a `synthesized` project; `recipe_sample` and `synth add` are refused in a `library` project. Set `"sample_source": "mixed"` in the JSON, only when the owner asks for both.
+- `export` does not check the declaration; validate first.
+
 ## Measuring and comparing versions
 
 ### report
@@ -308,7 +378,7 @@ Errors in a patch use these codes: `PATCH_FORMAT` (not JSON, empty list, more th
 python -m tracker4agents report exports/song/project.json
 ```
 
-`report` takes a project or MOD and prints `chiploom.report.v1` JSON. Everything in it is a **measurement of the symbolic score along its playback timeline** (first replay cycle, with repeated orders, jumps and tempo changes counted as played). It does not render audio and is not a quality verdict. The `scope` field says so in the output itself.
+`report` takes a project or MOD (`--library PATH` compares loudness with a sample bank's medians instead of the fixed reference levels) and prints `chiploom.report.v1` JSON. Everything in it is a **measurement of the symbolic score along its playback timeline** (first replay cycle, with repeated orders, jumps and tempo changes counted as played). It does not render audio and is not a quality verdict. The `scope` field says so in the output itself.
 
 | Section | Contents |
 | --- | --- |
@@ -316,8 +386,8 @@ python -m tracker4agents report exports/song/project.json
 | `channels` | Per channel: note starts, notes per second, density, lowest and highest note, range, samples used, effects used, portamento targets, longest gap without a note |
 | `global` | Note starts, rows with and without a note start, pitch-class counts, and a `key_estimate` |
 | `repetition` | Identical patterns, distinct pattern contents, patterns never played, repeated-block fractions for 4-, 8- and 16-row blocks |
-| `samples` | Per slot: size, loop, volume, note starts, channels; empty and never-played slots |
-| `warnings` | Duration and other warnings |
+| `samples` | Per slot: size, loop, volume, note starts, channels, `source` (`recipe` or `embedded_pcm`), `loudness_db`, `peak_db`, `group`, `reference_db`, `deviation_db`; empty and never-played slots; `sources` counts (`recipe`, `embedded_pcm`, `declared`) |
+| `warnings` | Duration and other warnings, including `sample_level_off_reference` for a played sample more than 6 dB from its group's reference |
 
 The key is the only estimate: a correlation with standard major and minor profiles, labelled `is_estimate: true` with a margin and a confidence level whose thresholds are heuristics chosen for this tool. Tracker note names are period labels and sample tuning is unknown, so the sounding pitch can differ from the written note. A "row without a note start" is not audible silence, because sustained or looped samples keep sounding.
 
@@ -430,9 +500,10 @@ Each tool call runs the equivalent `chiploom` command in a **child process**, so
 | `patch` | `patch` with `source`, `output`, `ops` (a JSON array) and `label` |
 | `report`, `compare`, `feedback` | the commands of the same name; `compare` offers `mp3`, `language`, `seed` and `seconds` but not `labels` |
 | `samples_list`, `samples_inspect`, `samples_preview`, `samples_add` | `samples list`, `inspect`, `preview`, `add` (no `extract`, `edit` or `audit`) |
+| `synth_types`, `synth_levels`, `synth_preview`, `synth_add`, `synth_palette` | `synth types`, `levels`, `preview`, `add`, `palette`; `recipe` is a JSON object, `match_library` a bank folder, `no_match` a boolean |
 | `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops`, `base_revision`, `label`, `propose`, `author` |
 
-There are 29 tools. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
+There are 34 tools. `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
 
 Configuration for a client that launches stdio servers (field names vary by client; this is the common shape):
 
@@ -467,6 +538,7 @@ Failures emit one JSON object on **stderr** and exit with status 2:
 | `message` | English explanation |
 | `message_fr` | The original French core diagnostic, present when `message` is a translation |
 | `conflicts`, `revision` | Only for `LIVE_CONFLICT`: the contested units and the current revision |
+| `violations` | Only for `SAMPLE_SOURCE`: the offending slots with `slot`, `name` and `reason` |
 | `errors`, `error_count` | Only for `validate --report` (`PROJECT_INVALID`): one entry per independent problem |
 
 Some core diagnostics keep their French wording in `message` in this version, notably when a position prefix such as `ops[1] (set): ` or `Pattern 0, row 00: ` is added. The `code` is the reliable signal. Argument-parser errors, `--help` and `--version` are plain text.
@@ -477,7 +549,7 @@ Some core diagnostics keep their French wording in `message` in this version, no
 | --- | --- |
 | Files and formats | `JSON_SYNTAX`, `IO_ERROR`, `SCHEMA`, `UNKNOWN_FIELD`, `MOD_FORMAT`, `ARCHIVE_INVALID`, `FILE_TOO_LARGE`, `INTEGER_RANGE`, `INVALID_VALUE`, `TEXT_ASCII`, `TEXT_LENGTH`, `TEXT_TYPE` |
 | Score content | `NOTE_UNKNOWN`, `NOTE_RANGE`, `EFFECT_FORMAT`, `EFFECT_PARAM`, `EFFECT_UNSUPPORTED`, `CELL_DUPLICATE`, `FLOW` (invalid `Bxx`/`Dxx` target), `TIMING` (`F00`/`F20`, or no room for `timing`), `PATTERNS`, `ORDERS` |
-| Samples | `SAMPLE_SLOT`, `SAMPLE_REF` (a cell uses a slot that does not exist), `SAMPLE_LOOP`, `SAMPLE_LENGTH`, `SAMPLE_PCM`, `SAMPLE_PCM_HASH`, `RECIPE_INVALID`, `SAMPLE_LIBRARY` |
+| Samples | `SAMPLE_SLOT`, `SAMPLE_REF` (a cell uses a slot that does not exist), `SAMPLE_LOOP`, `SAMPLE_LENGTH`, `SAMPLE_PCM`, `SAMPLE_PCM_HASH`, `RECIPE_INVALID` (a recipe parameter, role or recipe JSON), `SAMPLE_LIBRARY`, `SAMPLE_SOURCE` (the project's sample source is not respected; `violations` lists the slots) |
 | Project validation | `PROJECT_INVALID` (the wrapper of `validate --report`; each entry has its own code) |
 | Patch | `PATCH_FORMAT`, `PATCH_OP`, `PATCH_FIELD`, `PATCH_CELL`, `PATCH_BOUNDS` |
 | Output and migration | `OUTPUT_PATH` (source equals output, wrong extension, existing directory, bank path), `MIGRATION_MISMATCH` |

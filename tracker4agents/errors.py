@@ -175,7 +175,7 @@ def error_payload(exc: BaseException) -> dict:
     if message != original:
         payload["message_fr"] = original
     # Live conflicts tell the agent exactly which of the owner's edits it would overwrite.
-    for key in ("conflicts", "revision"):
+    for key in ("conflicts", "revision", "violations"):
         if getattr(exc, key, None) is not None:
             payload[key] = getattr(exc, key)
     return payload

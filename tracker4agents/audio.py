@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from array import array
 import hashlib
+import io
 import json
 import math
 import os
@@ -15,7 +16,8 @@ import tempfile
 import wave
 
 from . import mod
-from .model import PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
+from .model import NOTE_TO_PERIOD, PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
+from .project import atomic_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_RENDER_SECONDS = 120
@@ -220,3 +222,35 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dic
         raise RenderError("L'export MP3 a dépassé sa limite de temps.") from exc
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def audition_sample(sample: Sample, output: Path, note: str = "C-2", seconds: float = 1.0) -> dict:
+    """Raw sample audition at a tracker note: its own volume, fine tune and loop, no pattern effects.
+
+    Writes a 16-bit mono 44.1 kHz WAV and needs no external decoder.
+    """
+    if note not in NOTE_TO_PERIOD or not math.isfinite(seconds) or not .05 <= seconds <= 5:
+        raise ValidationError("Audition requires a tracker note C-1..B-3 and 0.05–5 seconds.", "INVALID_VALUE")
+    values, start, length = sample.pcm, sample.loop_start, sample.loop_length
+    if length and (length < 4 or start + length > len(values)):
+        raise ValidationError("Cannot audition an invalid loop.", "SAMPLE_LOOP")
+    rate = PAL_CLOCK / NOTE_TO_PERIOD[note] * 2 ** (sample.finetune / 96)
+    frame_count = round(seconds * 44100)
+    pcm = array("h")
+    for frame in range(frame_count):
+        position = frame * rate / 44100
+        if length and position >= start + length:
+            position = start + (position - start) % length
+        index = int(position)
+        value = values[index] if index < len(values) else 0
+        pcm.append(round(value * 256 * sample.volume / 64))
+    if sys.byteorder != "little":
+        pcm.byteswap()
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as writer:
+        writer.setparams((1, 2, 44100, frame_count, "NONE", "not compressed"))
+        writer.writeframes(pcm.tobytes())
+    atomic_bytes(Path(output), buffer.getvalue())
+    return {"output": str(Path(output)), "note": note, "seconds": seconds, "sample_rate": 44100,
+            "playback_rate": rate,
+            "description": "Raw sample with original volume, fine tune and loop; no pattern effects."}

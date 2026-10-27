@@ -49,8 +49,8 @@ music made with that PCM local unless the user explicitly requests publication.
 ## Compose or revise
 
 1. Establish mood, approximate duration, tempo and arrangement. Use library samples
-   by default; follow the checkout's composition policy and the user's instructions
-   about synthesis. Preserve existing songs and reference inputs.
+   by default; if the owner asks for a song made only with created samples, follow
+   "Created samples only" below instead. Preserve existing songs and reference inputs.
 2. Search and audition a coherent palette. Inspect loops, volume, fine tune and MOD
    compatibility. IDs are local to a bank: discover them, never assume `SMP-0001`
    is a particular instrument. A tracker note does not establish a sample's pitch.
@@ -101,6 +101,26 @@ python -m tracker4agents feedback exports/song/v2.project.json --text "..." --ra
 estimated key), never a quality verdict. `compare` builds a casual blind A/B page: do
 not read its `comparison.json` answer key before the owner listens, and say that loudness
 is not equalized. Record what the owner says with `feedback`.
+
+## Created samples only (on the owner's request)
+
+Library mode is the default. Only when the owner asks for a song made with created
+samples, every sample must come from a recipe and the project says
+`"sample_source": "synthesized"`. Do not mix modes unless the owner asks.
+
+1. `synth palette --output exports/<song>/v1.project.json` writes 13 tuned, loudness-matched
+   samples (slots: 1 kick, 2 snare, 3 hat, 4 kick+hat, 5 snare+hat, 6 triangle bass,
+   7 pulse bass, 8-10 pulse leads 12/25/50 %, 11 triangle chord, 12 noise texture, 13 pluck).
+2. `synth types` lists recipe parameters. Audition with `synth preview --recipe JSON
+   --output x.wav --note C-2`; read `tuning_cents` and `loudness` (measurements, not taste).
+3. Add timbres in free slots with `synth add` (or the `recipe_sample` patch operation);
+   volume is matched to the role's level from the owner's bank (kick high, hat low in the percussion's range), or to fixed defaults.
+4. Compose with `patch`. Keep to a few related timbres. Bass at 130.81 Hz and leads at
+   261.63 Hz keep the palette's register spacing.
+5. `validate --sample-source synthesized`, export, render, `report` (it flags samples more
+   than 6 dB from their group's reference). Library samples are refused in the project.
+
+Full reference: `docs/CLI.md#created-samples-synth` and the agent guide.
 
 ## Compose together with the owner (live)
 

@@ -115,6 +115,11 @@ FR = {
     "Live collaboration unavailable: {detail}": "Collaboration en direct indisponible : {detail}",
     "{author}: {label} · {summary}": "{author} : {label} · {summary}",
     "Playback": "Lecture", "Real-time playback": "Lecture en temps réel",
+    "Audio buffer": "Tampon audio", "Low · 80 ms": "Faible · 80 ms", "Normal · 150 ms": "Normal · 150 ms",
+    "High · 300 ms": "Élevé · 300 ms", "Very high · 600 ms": "Très élevé · 600 ms",
+    "Audio latency about {ms} ms. A larger buffer rides out window moves and heavy redraws without crackling, but sound reacts a little later to edits.":
+        "Latence audio d'environ {ms} ms. Un tampon plus grand supporte les déplacements de fenêtre et les gros réaffichages sans craquements, mais le son réagit un peu plus tard aux modifications.",
+    "Real-time playback (libxmp) · audio buffer {ms} ms": "Lecture en temps réel (libxmp) · tampon audio {ms} ms",
     "Real-time playback needs libxmp (not found): playing rendered audio instead. Run `python tools/setup_reference.py`, install libxmp or set CHIPLOOM_LIBXMP.":
         "La lecture en temps réel demande libxmp (introuvable) : lecture de l'audio rendu à la place. Lance `python tools/setup_reference.py`, installe libxmp ou définis CHIPLOOM_LIBXMP.",
     "Real-time playback needs an audio output device: playing rendered audio instead.":

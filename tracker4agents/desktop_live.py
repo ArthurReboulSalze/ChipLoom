@@ -275,6 +275,7 @@ class AgentPanel(QWidget):
         self._proposals: list[dict] = []
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(14)   # room between the proposals, details and takes columns
 
         left = QVBoxLayout()
         left.addWidget(window._label("PROPOSALS", "section"))

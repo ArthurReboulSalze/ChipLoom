@@ -57,6 +57,22 @@ class McpProtocolTests(unittest.TestCase):
                 server.notify("notifications/initialized")
                 names = {tool["name"] for tool in server.request("tools/list")["result"]["tools"]}
                 self.assertTrue({"estimate", "validate", "patch", "live_patch", "report"} <= names)
+                self.assertTrue({"synth_types", "synth_levels", "synth_preview", "synth_add", "synth_palette"} <= names)
+
+                types = server.request("tools/call", {"name": "synth_types", "arguments": {}})
+                self.assertFalse(types["result"]["isError"])
+                self.assertIn("wave", [item["type"] for item in types["result"]["structuredContent"]["types"]])
+                palette = server.request("tools/call", {"name": "synth_palette", "arguments": {
+                    "output": "palette.json", "no_match": True}})
+                self.assertFalse(palette["result"]["isError"], palette)
+                added = server.request("tools/call", {"name": "synth_add", "arguments": {
+                    "project": "palette.json", "output": "palette2.json", "name": "Saw",
+                    "recipe": {"type": "wave", "shape": "saw", "frequency": 130.8}, "no_match": True}})
+                self.assertFalse(added["result"]["isError"], added)
+                self.assertEqual(added["result"]["structuredContent"]["slot"], 14)
+                refused = server.request("tools/call", {"name": "validate", "arguments": {
+                    "source": "song.json", "sample_source": "library"}})
+                self.assertEqual(refused["result"]["structuredContent"]["code"], "SAMPLE_SOURCE")
 
                 estimate = server.request("tools/call", {"name": "estimate", "arguments": {"orders": 8, "bpm": 160}})
                 self.assertFalse(estimate["result"]["isError"])
