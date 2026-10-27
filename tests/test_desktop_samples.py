@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import atexit
 import os
 from pathlib import Path
 import shutil
@@ -11,6 +12,13 @@ import unittest
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# These tests drive QMediaPlayer; the real-time (libxmp) path is covered by test_desktop_realtime.
+os.environ.setdefault("CHIPLOOM_PLAYBACK", "rendered")
+os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*.debug=false;qt.multimedia.*.info=false")
+# Windows opened by tests must not leave live-session discovery files in the user's own ChipLoom folder.
+_LIVE_HOME = tempfile.mkdtemp(prefix="chiploom-home-")
+os.environ.setdefault("CHIPLOOM_HOME", _LIVE_HOME)
+atexit.register(shutil.rmtree, _LIVE_HOME, True)
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFontDatabase

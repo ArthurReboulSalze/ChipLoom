@@ -47,8 +47,6 @@ FR = {
     "Click to mute track {number}": "Clique pour couper la voie {number}",
     "Click to unmute track {number}": "Clique pour réactiver la voie {number}",
     "Solo": "Solo", "Solo track {number}": "Écouter seulement la voie {number}",
-    "Double-click: edit a cell · Click a row number: seek · Samples and effects are hexadecimal":
-        "Double-clic : éditer · Clic sur un numéro de ligne : déplacer l'écoute · Samples et effets en hexadécimal",
     "Select a sample": "Sélectionne un sample", "Play sample": "Écouter",
     "Fine tune": "Accord fin", "Apply": "Appliquer", "Title": "Titre", "Tempo": "Tempo",
     "Ticks / row": "Ticks / ligne", "Apply at start": "Appliquer au départ",
@@ -84,8 +82,85 @@ FR = {
     "Violet": "Violet", "Light": "Clair", "LEVEL": "NIVEAU",
     "Stereo audio level: average level and peak, after the volume control.":
         "Niveau audio stéréo : niveau moyen et crête, après le réglage du volume.",
-    "Four-channel MOD tracker.\nDouble-click a cell to edit it.\nClick a track header to mute or unmute it.\nSpace in patterns: play/pause.\nCtrl+Z: undo · F5: reload file.\nProTracker M.K. profile; XM and IT are planned.":
-        "Tracker MOD à quatre voies.\nDouble-clique une cellule pour l'éditer.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver.\nEspace dans les patterns : lecture/pause.\nCtrl+Z : annuler · F5 : recharger le fichier.\nProfil ProTracker M.K. ; XM et IT sont prévus.",
+    "PROPOSALS": "PROPOSITIONS", "DETAILS": "DÉTAILS", "TAKES": "VERSIONS", "Agent": "Agent",
+    "Proposals from the agent appear here. Select one to preview it on the pattern.":
+        "Les propositions de l'agent apparaissent ici. Sélectionnes-en une pour la voir sur le pattern.",
+    "Accept": "Accepter", "Reject": "Refuser", "Listen to proposal": "Écouter la proposition",
+    "Clear preview": "Effacer l'aperçu", "Open take": "Ouvrir la version",
+    "{id} · {label} · {author} · {cells} cells": "{id} · {label} · {author} · {cells} cellules",
+    "outdated": "périmée",
+    "{id} · {label} · {author} · {seconds:.1f} s": "{id} · {label} · {author} · {seconds:.1f} s",
+    "This proposal can no longer be applied: {detail}": "Cette proposition ne peut plus être appliquée : {detail}",
+    "The score changed in these cells since the proposal: accepting may ask to overwrite.":
+        "La partition a changé dans ces cellules depuis la proposition : l'accepter peut demander d'écraser.",
+    "Conflicting edits": "Modifications en conflit",
+    "These parts changed since the agent proposed this:": "Ces éléments ont changé depuis la proposition de l'agent :",
+    "Accept anyway and overwrite them?": "Accepter quand même et les écraser ?",
+    "Proposal cannot be applied: {detail}": "Proposition inapplicable : {detail}",
+    "Accepted: {label} · Ctrl+Z to undo": "Acceptée : {label} · Ctrl+Z pour annuler",
+    "Rejected: {label}": "Refusée : {label}",
+    "Rendering the proposal…": "Préparation de la proposition…",
+    "Listening to proposal {id}": "Écoute de la proposition {id}",
+    "Live collaboration": "Collaboration en direct",
+    "Accept proposal\tCtrl+Enter": "Accepter la proposition\tCtrl+Entrée",
+    "Reject proposal": "Refuser la proposition", "Show the Agent tab": "Afficher l'onglet Agent",
+    "Live: off": "Direct : désactivé", "Live: listening": "Direct : à l'écoute",
+    "Live: agent connected": "Direct : agent connecté",
+    "Live collaboration is off (Agent menu).": "La collaboration en direct est désactivée (menu Agent).",
+    "Waiting for an agent: it finds this window with `chiploom live`.":
+        "En attente d'un agent : il trouve cette fenêtre avec `chiploom live`.",
+    "An agent worked on this window in the last two minutes.": "Un agent a travaillé sur cette fenêtre ces deux dernières minutes.",
+    "Agent proposal: {label} ({author}) · see the Agent tab": "Proposition de l'agent : {label} ({author}) · voir l'onglet Agent",
+    "New take: {label}": "Nouvelle version : {label}",
+    "Live collaboration unavailable: {detail}": "Collaboration en direct indisponible : {detail}",
+    "{author}: {label} · {summary}": "{author} : {label} · {summary}",
+    "Playback": "Lecture", "Real-time playback": "Lecture en temps réel",
+    "Audio buffer": "Tampon audio", "Low · 80 ms": "Faible · 80 ms", "Normal · 150 ms": "Normal · 150 ms",
+    "High · 300 ms": "Élevé · 300 ms", "Very high · 600 ms": "Très élevé · 600 ms",
+    "Audio latency about {ms} ms. A larger buffer rides out window moves and heavy redraws without crackling, but sound reacts a little later to edits.":
+        "Latence audio d'environ {ms} ms. Un tampon plus grand supporte les déplacements de fenêtre et les gros réaffichages sans craquements, mais le son réagit un peu plus tard aux modifications.",
+    "Real-time playback (libxmp) · audio buffer {ms} ms": "Lecture en temps réel (libxmp) · tampon audio {ms} ms",
+    "Real-time playback needs libxmp (not found): playing rendered audio instead. Run `python tools/setup_reference.py`, install libxmp or set CHIPLOOM_LIBXMP.":
+        "La lecture en temps réel demande libxmp (introuvable) : lecture de l'audio rendu à la place. Lance `python tools/setup_reference.py`, installe libxmp ou définis CHIPLOOM_LIBXMP.",
+    "Real-time playback needs an audio output device: playing rendered audio instead.":
+        "La lecture en temps réel demande une sortie audio : lecture de l'audio rendu à la place.",
+    "Real-time playback failed: {detail}": "Lecture en temps réel impossible : {detail}",
+    "Real-time playback failed ({detail}): playing rendered audio instead.":
+        "Lecture en temps réel impossible ({detail}) : lecture de l'audio rendu à la place.",
+    "Edit mode": "Mode saisie", "Step": "Pas", "Octave": "Octave", "Keyboard": "Clavier", "Auto": "Auto",
+    "Cut cells\tCtrl+X": "Couper les cellules\tCtrl+X", "Copy cells\tCtrl+C": "Copier les cellules\tCtrl+C",
+    "Paste cells\tCtrl+V": "Coller les cellules\tCtrl+V", "Clear cells\tDel": "Effacer les cellules\tSuppr",
+    "Type notes with the piano keys (Ctrl+E)": "Saisir des notes avec les touches de piano (Ctrl+E)",
+    "Rows to advance after each entry": "Lignes à avancer après chaque saisie",
+    "Base octave of the lower key row (F1-F3, numpad + and -)":
+        "Octave de base de la rangée basse (F1-F3, pavé numérique + et -)",
+    "Edit mode on: piano keys enter notes": "Mode saisie activé : les touches de piano écrivent des notes",
+    "Edit mode off": "Mode saisie désactivé",
+    "Copied {rows} × {channels} cells": "{rows} × {channels} cellules copiées",
+    "Nothing to paste.": "Rien à coller.",
+    "The block is already at the edge of the pattern.": "Le bloc est déjà au bord du pattern.",
+    "That key is outside the C-1..B-3 range at this octave.": "Cette touche sort de C-1..B-3 à cette octave.",
+    "Insert": "Insérer", "New": "Nouveau", "Duplicate": "Dupliquer", "Remove": "Retirer", "Rename…": "Renommer…",
+    "Insert the current pattern after this order": "Insérer le pattern courant après cet ordre",
+    "Insert a new empty pattern after this order": "Insérer un nouveau pattern vide après cet ordre",
+    "Insert a copy of the current pattern after this order": "Insérer une copie du pattern courant après cet ordre",
+    "Remove this order (the pattern stays in the song)": "Retirer cet ordre (le pattern reste dans le morceau)",
+    "Move this order up": "Monter cet ordre", "Move this order down": "Descendre cet ordre",
+    "Rename the current pattern": "Renommer le pattern courant",
+    "Rename pattern": "Renommer le pattern", "Name of pattern {number}": "Nom du pattern {number}",
+    "A song keeps at least one order.": "Un morceau garde au moins un ordre.",
+    "Order removed; pattern {number} was no longer used and was removed too · Ctrl+Z to undo":
+        "Ordre retiré ; le pattern {number} n'était plus utilisé et a été retiré aussi · Ctrl+Z pour annuler",
+    "Cannot reload the changed file: {detail}": "Rechargement impossible du fichier modifié : {detail}",
+    "Agent changes merged with yours · {count} conflicts, agent version kept: {where}":
+        "Changements de l'agent fusionnés avec les tiens · {count} conflits, version de l'agent conservée : {where}",
+    "Agent changes merged with your edits · Ctrl+Z to undo":
+        "Changements de l'agent fusionnés avec tes modifications · Ctrl+Z pour annuler",
+    "Reloaded the agent's changes · Ctrl+Z to undo": "Changements de l'agent rechargés · Ctrl+Z pour annuler",
+    "Edit mode (Ctrl+E): piano keys enter notes, hex digits fill Smp and Effect · Ctrl+C/X/V: blocks · Alt+arrows: move block · Ctrl+↑/↓: transpose · Double-click: edit a cell · Click a row number: seek":
+        "Mode saisie (Ctrl+E) : les touches de piano écrivent les notes, les chiffres hexadécimaux remplissent Smp et Effet · Ctrl+C/X/V : blocs · Alt+flèches : déplacer le bloc · Ctrl+↑/↓ : transposer · Double-clic : éditer une cellule · Clic sur un numéro de ligne : déplacer l'écoute",
+    "Four-channel MOD tracker.\nDouble-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\nPiano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. In Smp and Effect columns type hexadecimal digits.\nCtrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · Ctrl+Up/Down: transpose (Shift: octave).\nThe file reloads by itself when the agent saves it; F5 forces a reload.\nClick a track header to mute or unmute it.\nSpace in patterns: play/pause · Ctrl+Z: undo.\nReal-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\nProTracker M.K. profile; XM and IT are planned.":
+        "Tracker MOD à quatre voies.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver.\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nProfil ProTracker M.K. ; XM et IT sont prévus.",
 }
 
 

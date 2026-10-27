@@ -3,211 +3,60 @@
 from __future__ import annotations
 
 import bisect
+import copy
+import os
 from pathlib import Path
 
-from PySide6.QtCore import (QAbstractTableModel, QLibraryInfo, QModelIndex, QObject, QRunnable, QStandardPaths,
-                            Qt, QThreadPool, QTimer, QTranslator, QUrl, Signal)
-from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PySide6.QtCore import QLibraryInfo, QModelIndex, QStandardPaths, Qt, QThreadPool, QTimer, QTranslator, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
                                QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
-                               QSpinBox, QSplitter, QTableView, QTabWidget, QTreeWidget, QTreeWidgetItem,
+                               QSpinBox, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
 from . import __version__, audio, project
-from .desktop_services import AppState, AudioCache
+from .desktop_live import AgentPanel, LiveBridge, status_label
+from .desktop_input import LAYOUTS, resolve_layout, valid_layout
+from .desktop_orders import OrderEditor
+from .desktop_playback import (BUFFER_CHOICES, LIBXMP_HINT, RealtimeTransport, unavailable_reason, valid_buffer)
+from .desktop_pattern import PatternModel, PatternView, input_locale_name
 from .desktop_samples import SampleBrowser
+from .desktop_services import AppState, AudioCache
+from .desktop_sync import DiskSync, changed_cells, mark_clean
+from .desktop_widgets import (ASSETS, Task, TaskSignals, Waveform, brand_icon, button, clock, label,
+                              sample_name)
 from .document import Document
 from .i18n import error_text, translate
 from .level_meter import LevelMeter
-from .model import Cell, Sample, cell, playback_plan
+from .model import playback_plan
+from .realtime import RealtimeError
 from .themes import THEMES, stylesheet
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = Path(__file__).resolve().parent / "assets"
 STYLE = stylesheet('midnight')
+ABOUT_TEXT = (
+    "Four-channel MOD tracker.\n"
+    "Double-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\n"
+    "Piano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. "
+    "In Smp and Effect columns type hexadecimal digits.\n"
+    "Ctrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · "
+    "Ctrl+Up/Down: transpose (Shift: octave).\n"
+    "The file reloads by itself when the agent saves it; F5 forces a reload.\n"
+    "Click a track header to mute or unmute it.\n"
+    "Space in patterns: play/pause · Ctrl+Z: undo.\n"
+    "Real-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\n"
+    "ProTracker M.K. profile; XM and IT are planned.")
+PATTERN_HINT = ("Edit mode (Ctrl+E): piano keys enter notes, hex digits fill Smp and Effect · Ctrl+C/X/V: blocks · "
+                "Alt+arrows: move block · Ctrl+↑/↓: transpose · Double-click: edit a cell · Click a row number: seek")
+CENTER_GAP = 10  # px between the library panel's divider and the pattern/tabs column
+BUFFER_LABELS = {"low": "Low · 80 ms", "normal": "Normal · 150 ms", "high": "High · 300 ms",
+                 "very_high": "Very high · 600 ms"}
+__all__ = ["ASSETS", "PatternModel", "PatternView", "STYLE", "Task", "TaskSignals", "TrackerWindow", "Waveform",
+           "application", "brand_icon", "button", "clock", "label", "main", "sample_name"]
 
 
-def brand_icon() -> QIcon:
-    """Use the four-channel emblem from the approved logo, with square padding.
-
-    This is a display crop of the bundled artwork, not a second visual identity.
-    Keeping the source inside the package also supports non-editable installs.
-    """
-    logo = QPixmap(str(ASSETS / "chiploom-logo.png"))
-    if logo.isNull():
-        return QIcon()
-    emblem = logo.copy(100, 160, 520, 410)
-    icon = QIcon()
-    for size in (16, 24, 32, 48, 64, 128, 256):
-        canvas = QPixmap(size, size)
-        canvas.fill(Qt.GlobalColor.transparent)
-        scaled = emblem.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
-                               Qt.TransformationMode.SmoothTransformation)
-        painter = QPainter(canvas)
-        painter.drawPixmap((size - scaled.width()) // 2, (size - scaled.height()) // 2, scaled)
-        painter.end()
-        icon.addPixmap(canvas)
-    return icon
-
-
-def label(text: str, name: str = "") -> QLabel:
-    result = QLabel(text)
-    result.setTextFormat(Qt.TextFormat.PlainText)
-    if name:
-        result.setObjectName(name)
-    return result
-
-
-def button(text: str, callback, name: str = "") -> QPushButton:
-    result = QPushButton(text)
-    if name:
-        result.setObjectName(name)
-    result.clicked.connect(callback)
-    return result
-
-
-def clock(milliseconds: int) -> str:
-    seconds = max(0, milliseconds) // 1000
-    return f"{seconds // 60:02d}:{seconds % 60:02d}"
-
-
-def sample_name(sample: Sample, slot: int) -> str:
-    prefix = f"{slot:02X} "
-    return sample.name[len(prefix):] if sample.name.startswith(prefix) else sample.name or "Sample"
-
-
-class TaskSignals(QObject):
-    finished = Signal(int, object)
-    failed = Signal(int, str)
-
-
-class Task(QRunnable):
-    def __init__(self, token: int, operation):
-        super().__init__()
-        self.token, self.operation = token, operation
-        self.signals = TaskSignals()
-
-    def run(self):
-        try:
-            self.signals.finished.emit(self.token, self.operation())
-        except Exception as exc:
-            self.signals.failed.emit(self.token, str(exc))
-
-
-class PatternModel(QAbstractTableModel):
-    def __init__(self, window):
-        super().__init__(window)
-        self.window, self.pattern, self.playing_row = window, 0, -1
-
-    def rowCount(self, parent=QModelIndex()):
-        return 0 if parent.isValid() or not self.window.document else 64
-
-    def columnCount(self, parent=QModelIndex()):
-        return 0 if parent.isValid() else 12
-
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-        if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Vertical:
-                return f"{section:02X}"
-            return self.window.t(("Note", "Smp", "Effect")[section % 3])
-        return None
-
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid() or not self.window.document:
-            return None
-        value = self.window.document.module.patterns[self.pattern].get(index.row(), index.column() // 3)
-        part = index.column() % 3
-        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
-            return (value.note or "---", f"{value.sample:02X}" if value.sample else "--", value.effect)[part]
-        if role == Qt.ItemDataRole.ForegroundRole:
-            channel = index.column() // 3
-            colors = self.window.palette_colors
-            return QColor(colors["channels"][channel] if self.window.audible()[channel] else colors["disabled"])
-        if role == Qt.ItemDataRole.BackgroundRole:
-            if index.row() == self.playing_row:
-                return QColor(self.window.palette_colors["playing"])
-            if index.row() % 4 == 0:
-                return QColor(self.window.palette_colors["beat"])
-        if role == Qt.ItemDataRole.TextAlignmentRole:
-            return int(Qt.AlignmentFlag.AlignCenter)
-        if role == Qt.ItemDataRole.ToolTipRole:
-            return self.window.t("Double-click to edit. Notes C-1..B-3; sample and effect in hexadecimal.")
-        return None
-
-    def flags(self, index):
-        return super().flags(index) | Qt.ItemFlag.ItemIsEditable
-
-    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        if role != Qt.ItemDataRole.EditRole or not self.window.document:
-            return False
-        old = self.window.document.module.patterns[self.pattern].get(index.row(), index.column() // 3)
-        text = str(value).strip().upper()
-        try:
-            part = index.column() % 3
-            new = cell(None if text in ("", "---") else text, old.sample, old.effect) if part == 0 else (
-                Cell(old.period, int(text, 16) if text not in ("", "--") else 0, old.command, old.param)
-                if part == 1 else cell(old.note, old.sample, text or "000")
-            )
-            changed = self.window.document.replace_cell(self.pattern, index.row(), index.column() // 3, new)
-            if changed:
-                self.window.edited()
-            return True
-        except (ValueError, TypeError) as exc:
-            self.window.message(str(exc), error=True)
-            return False
-
-    def refresh(self, pattern: int | None = None):
-        self.beginResetModel()
-        if pattern is not None:
-            self.pattern = pattern
-        self.endResetModel()
-
-    def highlight(self, row: int):
-        previous, self.playing_row = self.playing_row, row
-        for changed in {previous, row}:
-            if 0 <= changed < 64:
-                self.dataChanged.emit(self.index(changed, 0), self.index(changed, 11), [Qt.ItemDataRole.BackgroundRole])
-
-
-class Waveform(QWidget):
-    def __init__(self, window):
-        super().__init__()
-        self.window = window
-        self.sample: Sample | None = None
-        self.setMinimumHeight(130)
-
-    def set_sample(self, sample: Sample | None):
-        self.sample = sample
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rectangle = self.rect().adjusted(10, 12, -10, -12)
-        colors = self.window.palette_colors
-        painter.fillRect(self.rect(), QColor(colors["panel"]))
-        painter.setPen(QPen(QColor(colors["border"]), 1))
-        painter.drawLine(rectangle.left(), rectangle.center().y(), rectangle.right(), rectangle.center().y())
-        if not self.sample or not self.sample.pcm:
-            painter.setPen(QColor(colors["muted"]))
-            painter.drawText(rectangle, Qt.AlignmentFlag.AlignCenter, self.window.t("Select a sample"))
-            return
-        data = self.sample.pcm
-        if self.sample.loop_length:
-            start = rectangle.left() + rectangle.width() * self.sample.loop_start / len(data)
-            end = rectangle.left() + rectangle.width() * (self.sample.loop_start + self.sample.loop_length) / len(data)
-            painter.fillRect(int(start), rectangle.top(), max(1, int(end - start)), rectangle.height(), QColor(colors["loop"]))
-        painter.setPen(QPen(QColor(colors["accent"]), 1.3))
-        count = min(len(data), max(2, rectangle.width() * 2))
-        path = QPainterPath()
-        for index in range(count):
-            value = data[min(len(data) - 1, index * len(data) // count)]
-            x = rectangle.left() + index * rectangle.width() / max(1, count - 1)
-            y = rectangle.center().y() - value * rectangle.height() * 0.46 / 128
-            path.moveTo(x, y) if index == 0 else path.lineTo(x, y)
-        painter.drawPath(path)
 
 
 class TrackerWindow(QMainWindow):
@@ -232,6 +81,7 @@ class TrackerWindow(QMainWindow):
         self._jobs, self._task_counter, self._audio_token = {}, 0, 0
         self._loading_audio = self._audio_ready = self._await_media = self._want_play = False
         self._resume_ms = 0
+        self._last_position = -1
         self._loop_epoch = 0
         self._refreshing = False
         self.current_order = 0
@@ -241,7 +91,15 @@ class TrackerWindow(QMainWindow):
         self.output, self.sample_output = QAudioOutput(self), QAudioOutput(self)
         self.player.setAudioOutput(self.output)
         self.sample_player.setAudioOutput(self.sample_output)
+        self.live = LiveBridge(self)
+        self.rt: RealtimeTransport | None = None
+        self.audio_buffer = valid_buffer(self.state.values.get("audio_buffer"))
+        self._rt_notice = None
         self._build_ui()
+        self._setup_realtime()
+        self.sync = DiskSync(self)
+        self._restore_edit_settings()
+        self._connect_live()
         self.apply_theme()
         self.retranslate()
         self.probes = []
@@ -269,7 +127,8 @@ class TrackerWindow(QMainWindow):
         self.debounce = QTimer(self)
         self.debounce.setSingleShot(True)
         self.debounce.setInterval(350)
-        self.debounce.timeout.connect(lambda: self.prepare_audio(False, self._resume_ms))
+        self._debounce_play = False
+        self.debounce.timeout.connect(self._debounced_audio)
         self._fill_library()
         self.volume.setValue(max(0, min(100, int(self.state.values.get("volume", 65)))))
         self._volume(self.volume.value())
@@ -326,7 +185,10 @@ class TrackerWindow(QMainWindow):
 
     def _save_preferences(self):
         self.state.values.update(language=self.language, theme=self.theme, volume=self.volume.value(),
-                                 loop=self.loop.isChecked(), follow=self.follow.isChecked())
+                                 loop=self.loop.isChecked(), follow=self.follow.isChecked(),
+                                 keyboard=self.keyboard_combo.currentData(), edit_octave=self.edit_octave.value(),
+                                 edit_step=self.edit_step.value(), live=self.live.enabled,
+                                 audio_buffer=self.audio_buffer)
         try:
             self.state.save()
         except OSError as exc:
@@ -365,10 +227,14 @@ class TrackerWindow(QMainWindow):
             getattr(target, method)(self.t(source))
         for index, theme in enumerate(THEMES.values()):
             self.theme_combo.setItemText(index, self.t(theme["name"]))
+        self.keyboard_combo.setItemText(0, self.t("Auto"))
         self._fill_library()
         self.sample_tabs.setTabText(0, self.t("Song samples"))
         self.sample_tabs.setTabText(1, self.t("Sample library"))
         self.sample_browser.retranslate()
+        self.agent_panel.retranslate()
+        self._update_buffer_ui()
+        self.live.update_status()
         if self.document:
             self._song_labels()
             self._sample_labels()
@@ -399,6 +265,8 @@ class TrackerWindow(QMainWindow):
     def _build_ui(self):
         file_menu = self._bind(self.menuBar().addMenu(""), "File", "setTitle")
         edit_menu = self._bind(self.menuBar().addMenu(""), "Edit", "setTitle")
+        playback_menu = self._bind(self.menuBar().addMenu(""), "Playback", "setTitle")
+        agent_menu = self._bind(self.menuBar().addMenu(""), "Agent", "setTitle")
         help_menu = self._bind(self.menuBar().addMenu(""), "Help", "setTitle")
         self.open_action = self._action('Open a MOD or project…')
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
@@ -431,8 +299,44 @@ class TrackerWindow(QMainWindow):
         self.redo_action.setShortcuts([QKeySequence("Ctrl+Shift+Z"), QKeySequence("Ctrl+Y")])
         self.redo_action.triggered.connect(self.redo)
         edit_menu.addActions([self.undo_action, self.redo_action])
+        edit_menu.addSeparator()
+        self.edit_action = self._action("Edit mode")
+        self.edit_action.setCheckable(True)
+        self.edit_action.setShortcut("Ctrl+E")
+        self.edit_action.toggled.connect(self.set_edit_mode)
+        edit_menu.addAction(self.edit_action)
+        edit_menu.addSeparator()
+        # Block shortcuts live in the pattern view (so text fields keep their own copy/paste);
+        # the menu shows them as hints and triggers the same methods.
+        self.cut_action = self._menu_action(edit_menu, "Cut cells\tCtrl+X", lambda: self.table.cut_block())
+        self.copy_action = self._menu_action(edit_menu, "Copy cells\tCtrl+C", lambda: self.table.copy_block())
+        self.paste_action = self._menu_action(edit_menu, "Paste cells\tCtrl+V", lambda: self.table.paste_block())
+        self.clear_action = self._menu_action(edit_menu, "Clear cells\tDel", lambda: self.table.clear_block())
+        self.realtime_action = self._action("Real-time playback")
+        self.realtime_action.setCheckable(True)
+        self.realtime_action.toggled.connect(self.set_realtime)
+        playback_menu.addAction(self.realtime_action)
+        buffer_menu = self._bind(playback_menu.addMenu(""), "Audio buffer", "setTitle")
+        buffer_menu.setToolTipsVisible(True)
+        self.buffer_actions, group = {}, QActionGroup(self)
+        for key, milliseconds in BUFFER_CHOICES:
+            action = self._action(BUFFER_LABELS[key])
+            action.setCheckable(True)
+            action.setActionGroup(group)
+            action.triggered.connect(lambda checked=False, key=key: self.set_audio_buffer(key))
+            buffer_menu.addAction(action)
+            self.buffer_actions[key] = action
+        self.live_action = self._action("Live collaboration")
+        self.live_action.setCheckable(True)
+        self.live_action.setChecked(self.live.enabled)
+        self.live_action.toggled.connect(self.set_live)
+        agent_menu.addAction(self.live_action)
+        agent_menu.addSeparator()
+        self._menu_action(agent_menu, "Accept proposal\tCtrl+Enter", lambda: self.agent_panel.accept_selected())
+        self._menu_action(agent_menu, "Reject proposal", lambda: self.agent_panel.reject_selected())
+        self._menu_action(agent_menu, "Show the Agent tab", lambda: self.sample_tabs.setCurrentIndex(2))
         self._menu_action(help_menu, "About", lambda: QMessageBox.information(
-            self, "ChipLoom", f"ChipLoom {__version__}\n" + self.t("Four-channel MOD tracker.\nDouble-click a cell to edit it.\nClick a track header to mute or unmute it.\nSpace in patterns: play/pause.\nCtrl+Z: undo · F5: reload file.\nProTracker M.K. profile; XM and IT are planned.")))
+            self, "ChipLoom", f"ChipLoom {__version__}\n" + self.t(ABOUT_TEXT)))
 
         central = QWidget()
         outer = QVBoxLayout(central)
@@ -543,7 +447,13 @@ class TrackerWindow(QMainWindow):
         horizontal.addWidget(library)
 
         center = QSplitter(Qt.Orientation.Vertical)
-        horizontal.addWidget(center)
+        # A comfortable gap between the library panel and the whole center column (pattern area and
+        # bottom tabs alike): the splitter handle would otherwise touch their left edge.
+        center_column = QWidget()
+        center_layout = QVBoxLayout(center_column)
+        center_layout.setContentsMargins(CENTER_GAP, 0, 0, 0)
+        center_layout.addWidget(center)
+        horizontal.addWidget(center_column)
         patterns_widget = QWidget()
         patterns_layout = QVBoxLayout(patterns_widget)
         patterns_layout.setContentsMargins(0, 0, 0, 0)
@@ -552,14 +462,47 @@ class TrackerWindow(QMainWindow):
         self.orders = QComboBox()
         self.orders.setObjectName("orders")
         self.orders.currentIndexChanged.connect(self.select_order)
-        self.orders.setMinimumWidth(205)
+        self.orders.setMinimumWidth(170)
         navigation.addWidget(self.orders)
+        self.order_editor = OrderEditor(self)
+        self.order_editor.build(navigation)
+        navigation.addStretch()
         self.follow = self._bind(QCheckBox(), "Follow playback")
         navigation.addWidget(self.follow)
-        navigation.addStretch()
-        navigation.addWidget(self._button('− 1 semitone', lambda: self.transpose(-1)))
-        navigation.addWidget(self._button('+ 1 semitone', lambda: self.transpose(1)))
         patterns_layout.addLayout(navigation)
+        editing = QHBoxLayout()
+        self.edit_button = self._button("Edit mode", lambda: None, "editMode")
+        self.edit_button.setCheckable(True)
+        self.edit_button.toggled.connect(self.set_edit_mode)
+        self._bind(self.edit_button, "Type notes with the piano keys (Ctrl+E)", "setToolTip")
+        editing.addWidget(self.edit_button)
+        editing.addWidget(self._label("Step"))
+        self.edit_step = QSpinBox()
+        self.edit_step.setObjectName("editStep")
+        self.edit_step.setRange(0, 16)
+        self.edit_step.setValue(1)
+        self._bind(self.edit_step, "Rows to advance after each entry", "setToolTip")
+        editing.addWidget(self.edit_step)
+        editing.addWidget(self._label("Octave"))
+        self.edit_octave = QSpinBox()
+        self.edit_octave.setObjectName("editOctave")
+        self.edit_octave.setRange(1, 3)
+        self.edit_octave.setValue(2)
+        self._bind(self.edit_octave, "Base octave of the lower key row (F1-F3, numpad + and -)", "setToolTip")
+        editing.addWidget(self.edit_octave)
+        editing.addWidget(self._label("Keyboard"))
+        self.keyboard_combo = QComboBox()
+        self.keyboard_combo.setObjectName("keyboardLayout")
+        for layout_name in LAYOUTS:
+            self.keyboard_combo.addItem(layout_name.upper() if layout_name != "auto" else self.t("Auto"), layout_name)
+        editing.addWidget(self.keyboard_combo)
+        for control in (self.edit_step, self.edit_octave):
+            control.valueChanged.connect(lambda *_: self._save_preferences())
+        self.keyboard_combo.currentIndexChanged.connect(lambda *_: self._save_preferences())
+        editing.addStretch()
+        editing.addWidget(self._button('− 1 semitone', lambda: self.transpose(-1)))
+        editing.addWidget(self._button('+ 1 semitone', lambda: self.transpose(1)))
+        patterns_layout.addLayout(editing)
         channel_row = QHBoxLayout()
         self.mutes, self.solos = [], []
         for channel in range(4):
@@ -576,7 +519,7 @@ class TrackerWindow(QMainWindow):
             self.solos.append(solo)
             channel_row.addLayout(group, 1)
         patterns_layout.addLayout(channel_row)
-        self.table = QTableView()
+        self.table = PatternView(self)
         self.table.setObjectName("patterns")
         self.pattern_model = PatternModel(self)
         self.table.setModel(self.pattern_model)
@@ -584,12 +527,11 @@ class TrackerWindow(QMainWindow):
         self.table.verticalHeader().setDefaultSectionSize(25)
         self.table.horizontalHeader().setMinimumSectionSize(54)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
         self.table.selectionModel().currentChanged.connect(self.cell_selected)
         self.table.verticalHeader().sectionClicked.connect(lambda row: self.seek_row(row))
         patterns_layout.addWidget(self.table)
-        pattern_hint = self._label("Double-click: edit a cell · Click a row number: seek · Samples and effects are hexadecimal", "muted")
+        pattern_hint = self._label(PATTERN_HINT, "muted")
         pattern_hint.setWordWrap(True)
         patterns_layout.addWidget(pattern_hint)
         center.addWidget(patterns_widget)
@@ -636,6 +578,10 @@ class TrackerWindow(QMainWindow):
         self.sample_tabs.addTab(sample_widget, self.t("Song samples"))
         self.sample_browser = SampleBrowser(self, Waveform)
         self.sample_tabs.addTab(self.sample_browser, self.t("Sample library"))
+        self.agent_panel = AgentPanel(self)
+        self.sample_tabs.addTab(self.agent_panel, self.t("Agent"))
+        self.live_status = status_label()
+        self.statusBar().addPermanentWidget(self.live_status)
         self.sample_tabs.currentChanged.connect(lambda *_: self.sample_browser.cancel_preview())
         center.addWidget(self.sample_tabs)
         center.setSizes([520, 235])
@@ -714,8 +660,8 @@ class TrackerWindow(QMainWindow):
         if self.document and self.document.path:
             self.open_document(self.document.path)
 
-    def open_document(self, path: Path) -> bool:
-        if not self._discard_or_save():
+    def open_document(self, path: Path, ask: bool = True) -> bool:
+        if ask and not self._discard_or_save():
             return False
         try:
             document = Document.open(path)
@@ -727,6 +673,8 @@ class TrackerWindow(QMainWindow):
         self.debounce.stop()
         self._audio_token += 1
         self.document, self.plan = document, plan
+        self.pattern_model.clear_flashes()
+        self.pattern_model.set_overlay(None)
         self.current_order = 0
         self._refreshing = True
         for control in self.mutes + self.solos:
@@ -739,6 +687,8 @@ class TrackerWindow(QMainWindow):
             self.message("Session could not be saved: {detail}", True, detail=exc)
         self._fill_library()
         self.refresh_document()
+        self.sync.watch(document.path, document.module)
+        self.live.attach(document)
         self.prepare_audio(False, 0)
         return True
 
@@ -749,6 +699,8 @@ class TrackerWindow(QMainWindow):
         module = self.document.module
         self.plan = playback_plan(module)
         self.times = [entry["seconds"] for entry in self.plan["timeline"]]
+        if self.rt is not None:
+            self.seek.setMaximum(round(self.plan["duration_seconds"] * 1000))
         self.current_order = min(self.current_order, len(module.orders) - 1)
         self.title_edit.setText(module.title)
         initial = self.plan["timeline"][0]
@@ -759,11 +711,8 @@ class TrackerWindow(QMainWindow):
         for order, pattern in enumerate(module.orders):
             self.orders.addItem(f"{order:02X}  ·  {module.patterns[pattern].name or f'Pattern {pattern:02X}'}", pattern)
         self.orders.setCurrentIndex(self.current_order)
-        selection = self.table.currentIndex()
-        selected_cell = (selection.row(), selection.column()) if selection.isValid() else None
+        # The model redraws in place, so the cursor, the block selection and the scroll position survive.
         self.pattern_model.refresh(module.orders[self.current_order])
-        if selected_cell:
-            self.table.setCurrentIndex(self.pattern_model.index(*selected_cell))
         selected = self.samples.currentItem()
         selected_slot = selected.data(Qt.ItemDataRole.UserRole) if selected else 0
         self.samples.clear()
@@ -782,6 +731,7 @@ class TrackerWindow(QMainWindow):
         self.sample_browser.update_slots()
         self.undo_action.setEnabled(self.document.can_undo)
         self.redo_action.setEnabled(self.document.can_redo)
+        self.order_editor.refresh()
         self._monitor_style()
         self._update_title()
 
@@ -827,8 +777,23 @@ class TrackerWindow(QMainWindow):
             return
         self.debounce.stop()
         self._audio_token += 1
+        if self.rt is not None:
+            try:
+                self.rt.prepare(play, position)
+            except RealtimeError as exc:
+                self._realtime_failed(exc)
+            else:
+                self._loading_audio = self._await_media = self._want_play = False
+                self._audio_ready = True
+                self._resume_ms = position
+                self.play_button.setEnabled(True)
+                self.seek.setMaximum(round(self.plan["duration_seconds"] * 1000))
+                self._transport_labels()
+                self.message('Ready to play')
+                return
         token = self._audio_token
         self._loading_audio, self._audio_ready, self._await_media = True, False, False
+        self._last_position = -1  # the playhead jumps while a new render loads; that is not a seek
         self._want_play, self._resume_ms = play, position
         self.meter.reset()
         self.player.stop()
@@ -869,7 +834,8 @@ class TrackerWindow(QMainWindow):
             self.player.setPosition(min(self._resume_ms, max(0, self.player.duration() - 1)))
             self.play_button.setEnabled(True)
             self._transport_labels()
-            self.message('Ready to play')
+            self.message(self._rt_notice or 'Ready to play')
+            self._rt_notice = None  # the real-time notice is shown once
             if self._want_play:
                 self.player.play()
 
@@ -890,18 +856,22 @@ class TrackerWindow(QMainWindow):
 
     def _transport_labels(self):
         self.play_button.setText(self.t("Preparing…" if self._loading_audio else
-            "Pause" if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState else "Play"))
+            "Pause" if self.is_playing() else "Play"))
 
     def _volume(self, volume):
         self.output.setVolume(volume / 100)
         self.sample_output.setVolume(volume / 100)
+        if self.rt is not None:
+            self.rt.set_volume(volume / 100)
 
     def toggle_play(self):
         if not self.document or self._loading_audio:
             return
         self.sample_browser.cancel_preview()
         self.sample_player.stop()
-        if not self._audio_ready:
+        if self.rt is not None:
+            self.rt.pause() if self.rt.playing else self.rt.play()
+        elif not self._audio_ready:
             self.prepare_audio(True, self._resume_ms)
         elif self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
@@ -914,6 +884,8 @@ class TrackerWindow(QMainWindow):
         self._want_play = False
         self._resume_ms = 0
         self.player.stop()
+        if self.rt is not None:
+            self.rt.stop()
         self.sample_player.stop()
         self.meter.reset()
 
@@ -921,7 +893,9 @@ class TrackerWindow(QMainWindow):
         self._loop_epoch += 1
         self.meter.reset()
         self._resume_ms = milliseconds
-        if self._audio_ready:
+        if self.rt is not None:
+            self.rt.seek_ms(milliseconds)
+        elif self._audio_ready:
             self.player.setPosition(milliseconds)
 
     def seek_row(self, row):
@@ -934,6 +908,8 @@ class TrackerWindow(QMainWindow):
             return
         self.current_order = order
         self.pattern_model.refresh(self.document.module.orders[order])
+        self.order_editor.refresh()
+        self.live.context_changed()
         target = next((entry for entry in self.plan["timeline"] if entry["order"] == order), None)
         if target:
             self.seek_to(round(target["seconds"] * 1000))
@@ -941,31 +917,49 @@ class TrackerWindow(QMainWindow):
             self.message("This order is not reached in the module's playback cycle.")
 
     def _sync_position(self):
-        active = any(player.playbackState() == QMediaPlayer.PlaybackState.PlayingState for player in (self.player, self.sample_player))
+        playing = self.is_playing()
+        active = playing or self.sample_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        marker = None
+        if self.rt is not None:
+            levels = self.rt.heard_levels() if playing else None
+            if levels:
+                self.meter.feed_levels(*levels)
         self.meter.tick(active, self.volume.value() / 100)
         if not self.document or self._loading_audio:
             return
-        milliseconds = self.player.position()
+        if self.rt is not None:
+            milliseconds, marker = self.rt.heard()
+            duration = round(self.plan["duration_seconds"] * 1000)
+        else:
+            milliseconds, duration = self.player.position(), self.player.duration()
         if not self.seek.isSliderDown():
             self.seek.setValue(milliseconds)
-        self.position_label.setText(f"{clock(milliseconds)} / {clock(self.player.duration())}")
+        self.position_label.setText(f"{clock(milliseconds)} / {clock(duration)}")
         if not self.times:
             return
-        entry = self.plan["timeline"][max(0, bisect.bisect_right(self.times, milliseconds / 1000) - 1)]
-        if self.follow.isChecked() and entry["order"] != self.current_order:
+        # In real-time mode the row comes from the marker of the audio being heard, not from the clock.
+        entry = marker or self.plan["timeline"][max(0, bisect.bisect_right(self.times, milliseconds / 1000) - 1)]
+        # Follow the playhead while it moves (playing or seeking), but let a paused view be browsed
+        # and edited: order edits and agent selections must not be pulled back to the playhead.
+        moving = (self._last_position >= 0 and milliseconds != self._last_position) or playing
+        self._last_position = milliseconds
+        if self.follow.isChecked() and moving and entry["order"] != self.current_order:
             self._refreshing = True
             self.current_order = entry["order"]
             self.orders.setCurrentIndex(self.current_order)
             self.pattern_model.refresh(entry["pattern"])
+            self.order_editor.refresh()
             self._refreshing = False
         if entry["pattern"] == self.pattern_model.pattern:
             self.pattern_model.highlight(entry["row"])
-            if self.follow.isChecked() and self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            if self.follow.isChecked() and playing:
                 self.table.scrollTo(self.pattern_model.index(entry["row"], 0), QAbstractItemView.ScrollHint.EnsureVisible)
 
     def cell_selected(self, index, previous=QModelIndex()):
         if not self.document or not index.isValid():
             return
+        if self.edit_mode:
+            return  # while typing, the instrument is the one chosen in the sample list
         value = self.document.module.patterns[self.pattern_model.pattern].get(index.row(), index.column() // 3)
         if value.sample:
             for row in range(self.samples.count()):
@@ -999,22 +993,33 @@ class TrackerWindow(QMainWindow):
             index = self.samples.currentItem().data(Qt.ItemDataRole.UserRole)
             path = self.cache.sample(self.document.module, index)
             self.meter.reset()
-            self.player.pause()
+            self.pause_playback()
             self.sample_player.setSource(QUrl.fromLocalFile(str(path)))
             self.sample_player.play()
         except (OSError, ValueError, RuntimeError) as exc:
             self.message(str(exc), True)
 
-    def edit(self, operation):
+    def edit(self, operation, label: str = "Edit"):
         if not self.document:
             return
         try:
             if operation():
-                self.edited()
+                self.edited(label)
         except (OSError, ValueError, RuntimeError) as exc:
             self.message(str(exc), True)
 
-    def edited(self):
+    def edited(self, label: str = "Edit"):
+        """The owner changed the document: redraw, re-render later and journal it as a human edit."""
+        self._debounce_play = False
+        if self.rt is not None:
+            # Real-time: the engine takes the edit at once; playback (if any) simply continues.
+            self.sample_player.stop()
+            self.sample_player.setSource(QUrl())
+            self.refresh_document()
+            self.rt.reload()
+            self.message('Change applied · Ctrl+Z to undo')
+            self.live.human_edit(label)
+            return
         self._resume_ms = self.player.position()
         self._audio_token += 1
         self._loading_audio = self._await_media = False
@@ -1025,6 +1030,270 @@ class TrackerWindow(QMainWindow):
         self.refresh_document()
         self.debounce.start()
         self.message('Change applied · Ctrl+Z to undo')
+        self.live.human_edit(label)
+
+    # --- tracker editing ---------------------------------------------------------------
+    @property
+    def edit_mode(self) -> bool:
+        return self.edit_button.isChecked()
+
+    def set_edit_mode(self, on: bool):
+        on = bool(on)
+        for control in (self.edit_button, self.edit_action):
+            control.blockSignals(True)
+            control.setChecked(on)
+            control.blockSignals(False)
+        self.table.set_edit_mode(on)
+        self.message("Edit mode on: piano keys enter notes" if on else "Edit mode off")
+        if on:
+            self.table.setFocus()
+
+    def _restore_edit_settings(self):
+        values = self.state.values
+        octave, step = values.get("edit_octave"), values.get("edit_step")
+        controls = (self.edit_octave, self.edit_step, self.keyboard_combo)
+        for control in controls:
+            control.blockSignals(True)  # restoring must not write the half-restored session back
+        self.edit_octave.setValue(octave if type(octave) is int and 1 <= octave <= 3 else 2)
+        self.edit_step.setValue(step if type(step) is int and 0 <= step <= 16 else 1)
+        self.keyboard_combo.setCurrentIndex(self.keyboard_combo.findData(valid_layout(values.get("keyboard"))))
+        for control in controls:
+            control.blockSignals(False)
+
+    def keyboard_layout(self) -> str:
+        """The concrete piano map in use: "qwerty" or "azerty" (Auto follows the input locale)."""
+        return resolve_layout(self.keyboard_combo.currentData(), input_locale_name())
+
+    def instrument_slot(self) -> int:
+        """Song sample slot (1-31) used for typed notes, or 0 when the song has no samples."""
+        item = self.samples.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) + 1 if item else 0
+
+    def apply_patch(self, ops, label: str, order: int | None = None) -> bool:
+        """Run patch ops as one undoable transaction. Returns False when they were rejected.
+        `order` selects that order afterwards (for edits that restructure the order list)."""
+        if not self.document:
+            return False
+        try:
+            result = self.document.patch(ops, label)
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.message(str(exc), True)
+            return False
+        if result["changed"]:
+            if order is not None:
+                self.current_order = order
+            self.edited(label)
+        return True
+
+    def apply_external(self, module, kind: str, conflicts: list[dict]):
+        """Show a change made outside the window (the agent saved the file).
+
+        `kind` "reload": the window had no local edits, the file replaces the module.
+        `kind` "merge": `module` is the three-way merge of local edits into the file.
+        Either way it is one undoable transaction; changed cells flash with the agent color."""
+        document = self.document
+        before = document.module
+        playing = self._want_play if self._loading_audio else self.is_playing()
+        position = self._resume_ms if self._loading_audio else self.playback_ms()
+        replacement = copy.deepcopy(module)
+        document.apply("Merge agent changes" if kind == "merge" else "Agent changes",
+                       lambda target: target.__dict__.update(replacement.__dict__))
+        if kind == "reload":
+            mark_clean(document)
+        cells = changed_cells(before, document.module)
+        self.live.external_edit("Merge agent changes" if kind == "merge" else "Agent changes")
+        self.sample_player.stop()
+        self.refresh_document()
+        self.pattern_model.flash(cells)
+        if self.rt is not None:
+            self.rt.reload()
+        else:
+            self.prepare_audio(playing, position)
+        if conflicts:
+            where = ", ".join(f"P{item['pattern']:02X} r{item['row']:02X} ch{item['channel'] + 1}" if item["unit"] == "cell"
+                              else item["unit"] for item in conflicts[:4])
+            self.message("Agent changes merged with yours · {count} conflicts, agent version kept: {where}",
+                         True, count=len(conflicts), where=where)
+        elif kind == "merge":
+            self.message("Agent changes merged with your edits · Ctrl+Z to undo")
+        else:
+            self.message("Reloaded the agent's changes · Ctrl+Z to undo")
+
+    # --- real-time playback -------------------------------------------------------------
+    def _setup_realtime(self):
+        """Use the libxmp transport when it can run, otherwise the rendered WAV path (and say why, once)."""
+        wanted = self.state.values.get("realtime") is not False
+        reason = unavailable_reason(wanted)
+        self.rt = None
+        if reason is None:
+            try:
+                self.rt = RealtimeTransport(self, latency_ms=dict(BUFFER_CHOICES)[self.audio_buffer])
+            except RealtimeError:
+                reason = "libxmp"
+        if self.rt is not None:
+            self.rt.state_changed.connect(self._transport_labels)
+            self.rt.state_changed.connect(self.live.context_changed)
+            self.rt.finished.connect(self.meter.reset)
+            self.rt.failed.connect(self._rt_failed)
+            self.rt.set_volume(self.volume.value() / 100)
+        self._rt_notice = {"libxmp": LIBXMP_HINT,
+                           "output": "Real-time playback needs an audio output device: playing rendered audio instead."
+                           }.get(reason)
+        forced = os.environ.get("CHIPLOOM_PLAYBACK", "").lower() == "rendered"
+        self.realtime_action.blockSignals(True)
+        self.realtime_action.setChecked(self.rt is not None)
+        self.realtime_action.setEnabled(not forced)
+        self.realtime_action.blockSignals(False)
+        self._rt_unavailable = reason
+        self._update_buffer_ui()
+
+    def set_realtime(self, on: bool):
+        """Switch between real-time (libxmp) and rendered (WAV + media player) playback."""
+        self.state.values["realtime"] = bool(on)
+        if self.document:
+            self.stop()
+        if self.rt is not None:
+            self.rt.shutdown()
+            self.rt.deleteLater()
+        self._setup_realtime()
+        self._save_preferences()
+        if self.document:
+            self.prepare_audio(False, 0)
+
+    def _realtime_failed(self, exc):
+        """libxmp refused the module: finish this session on the rendered path."""
+        if self.rt is not None:
+            self.rt.shutdown()
+            self.rt.deleteLater()
+            self.rt = None
+        self.realtime_action.blockSignals(True)
+        self.realtime_action.setChecked(False)
+        self.realtime_action.blockSignals(False)
+        self._rt_notice = "Real-time playback failed ({detail}): playing rendered audio instead."
+        self._rt_notice = self.t(self._rt_notice, detail=exc)
+        self._update_buffer_ui()
+        self.play_button.setToolTip(self._rt_notice)
+
+    def _rt_failed(self, message: str, fatal: bool):
+        """The audio thread reported a problem: a module libxmp cannot load ends real-time playback."""
+        if fatal and self.rt is not None:
+            self._realtime_failed(message)
+            self.prepare_audio(False, self._resume_ms)
+        elif not fatal:
+            self.message("Real-time playback failed: {detail}", True, detail=message)
+
+    def set_audio_buffer(self, key: str):
+        """Resize the audio queue and the sink now; a playing song continues on the row being heard."""
+        self.audio_buffer = valid_buffer(key)
+        if self.rt is not None:
+            self.rt.set_latency(dict(BUFFER_CHOICES)[self.audio_buffer])
+        self._update_buffer_ui()
+        self._save_preferences()
+
+    def _update_buffer_ui(self):
+        """Check the current choice and show the latency in the tooltips."""
+        for key, milliseconds in BUFFER_CHOICES:
+            action = self.buffer_actions[key]
+            action.blockSignals(True)
+            action.setChecked(key == self.audio_buffer)
+            action.blockSignals(False)
+            action.setToolTip(self.t("Audio latency about {ms} ms. A larger buffer rides out window moves and heavy "
+                                     "redraws without crackling, but sound reacts a little later to edits.", ms=milliseconds))
+        milliseconds = dict(BUFFER_CHOICES)[self.audio_buffer]
+        if self.rt is not None:
+            self.play_button.setToolTip(self.t("Real-time playback (libxmp) · audio buffer {ms} ms", ms=milliseconds))
+        else:
+            self.play_button.setToolTip(self.t(self._rt_notice) if self._rt_notice else "")
+
+    def is_playing(self) -> bool:
+        if self.rt is not None:
+            return self.rt.playing
+        return self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    def playback_ms(self) -> int:
+        return self.rt.position_ms() if self.rt is not None else self.player.position()
+
+    def pause_playback(self):
+        """Pause the song (used before a sample audition or a proposal listening)."""
+        if self.rt is not None:
+            self.rt.pause()
+        else:
+            self.player.pause()
+
+    # --- live collaboration -------------------------------------------------------------
+    def _connect_live(self):
+        """Report cursor, selection, order, playback and dirty state to the live session (debounced)."""
+        self.table.selectionModel().selectionChanged.connect(self.live.context_changed)
+        self.table.selectionModel().currentChanged.connect(self.live.context_changed)
+        self.player.playbackStateChanged.connect(self.live.context_changed)
+        self.loop.toggled.connect(lambda on: self.rt.set_loop(on) if self.rt is not None else None)
+        self.live.enabled = type(self.state.values.get("live")) is not bool or self.state.values["live"]
+        self.live_action.blockSignals(True)
+        self.live_action.setChecked(self.live.enabled)
+        self.live_action.blockSignals(False)
+        self.live.update_status()
+
+    def set_live(self, enabled: bool):
+        self.live.set_enabled(enabled)
+        self._save_preferences()
+
+    def show_order(self, order: int):
+        """Display an order without seeking the audio (used by agent requests and proposal previews)."""
+        self._refreshing = True
+        self.orders.setCurrentIndex(order)
+        self._refreshing = False
+        self.current_order = order
+        self.pattern_model.refresh(self.document.module.orders[order])
+        self.order_editor.refresh()
+        self.live.context_changed()
+
+    def show_pattern(self, pattern: int):
+        orders = self.document.module.orders
+        if self.pattern_model.pattern == pattern:
+            return
+        if pattern in orders:
+            self.show_order(orders.index(pattern))
+        else:
+            self.pattern_model.refresh(pattern)
+
+    def start_playback(self):
+        if not self.document:
+            return
+        if self._loading_audio:
+            self._want_play = True
+        elif not self.is_playing():
+            self.toggle_play()
+
+    def agent_changed(self, entry: dict):
+        """Someone else (an agent, an accepted proposal) changed the document through the session."""
+        if self.rt is not None:
+            self.sample_player.stop()
+            self.refresh_document()
+            self.pattern_model.flash(entry["diff"].get("cells", []), "agent_change")
+            self.rt.reload()
+            self.message("{author}: {label} · {summary}", author=entry["author"], label=entry["label"],
+                         summary="; ".join(entry["summary"][:2]) or "—")
+            self.live.context_changed()
+            return
+        playing = self._want_play if self._loading_audio else self.is_playing()
+        if not self._loading_audio:
+            self._resume_ms = self.player.position()
+        self._debounce_play = self._debounce_play or playing
+        self._audio_token += 1
+        self._loading_audio = self._await_media = self._audio_ready = False
+        self.sample_player.stop()
+        self.refresh_document()
+        self.pattern_model.flash(entry["diff"].get("cells", []), "agent_change")
+        self.debounce.start()
+        self.message("{author}: {label} · {summary}", author=entry["author"], label=entry["label"],
+                     summary="; ".join(entry["summary"][:2]) or "—")
+        self.live.context_changed()
+
+    def _debounced_audio(self):
+        play, self._debounce_play = self._debounce_play, False
+        position = self.player.position() if play and self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState \
+            else self._resume_ms
+        self.prepare_audio(play, position)
 
     def apply_song(self):
         if not self.document:
@@ -1041,35 +1310,38 @@ class TrackerWindow(QMainWindow):
             replacement = source.module
             return self.document.apply("Régler le morceau", lambda module: module.__dict__.update(replacement.__dict__))
 
-        self.edit(apply)
+        self.edit(apply, "Set song")
 
     def apply_sample(self):
         if self.document and self.samples.currentItem():
             index = self.samples.currentItem().data(Qt.ItemDataRole.UserRole)
-            self.edit(lambda: self.document.set_sample(index, self.sample_volume.value(), self.finetune.value()))
+            self.edit(lambda: self.document.set_sample(index, self.sample_volume.value(), self.finetune.value()), "Set sample")
 
     def transpose(self, semitones):
         index = self.table.currentIndex()
         if self.document and index.isValid():
-            self.edit(lambda: self.document.transpose(self.pattern_model.pattern, index.column() // 3, semitones))
+            self.edit(lambda: self.document.transpose(self.pattern_model.pattern, index.column() // 3, semitones), "Transpose track")
         else:
             self.message('Select a cell in the track you want to transpose.')
 
     def undo(self):
         if self.document and self.document.undo():
-            self.edited()
+            self.edited("Undo")
 
     def redo(self):
         if self.document and self.document.redo():
-            self.edited()
+            self.edited("Redo")
 
     def monitor_changed(self):
         if self._refreshing or not self.document:
             return
         self._monitor_style()
+        if self.rt is not None:
+            self.rt.set_audible(self.audible())  # mutes and solos apply within one audio block, no render
+            return
         # Further clicks during preparation retain the original playback intent.
-        play = self._want_play if self._loading_audio else self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
-        position = self._resume_ms if self._loading_audio else self.player.position()
+        play = self._want_play if self._loading_audio else self.is_playing()
+        position = self._resume_ms if self._loading_audio else self.playback_ms()
         self.prepare_audio(play, position)
 
     def _save_path(self, suffix, caption):
@@ -1089,6 +1361,8 @@ class TrackerWindow(QMainWindow):
         if destination:
             try:
                 self.document.save_project(destination)
+                self.sync.saved()
+                self.live.context_changed()
                 self.state.remember(destination)
                 self.state.save()
                 self._fill_library()
@@ -1142,15 +1416,21 @@ class TrackerWindow(QMainWindow):
             event.ignore()
             return
         self.debounce.stop()
+        self.sync.stop()
+        self.live.shutdown()
         self.sample_browser.shutdown()
         self._audio_token += 1
         self.timer.stop()
         self.player.stop()
         self.player.setSource(QUrl())
+        if self.rt is not None:
+            self.rt.shutdown()
         self.sample_player.stop()
         self.sample_player.setSource(QUrl())
         self.state.values.update(volume=self.volume.value(), loop=self.loop.isChecked(), follow=self.follow.isChecked(),
-                                 theme=self.theme, language=self.language)
+                                 theme=self.theme, language=self.language, keyboard=self.keyboard_combo.currentData(),
+                                 edit_octave=self.edit_octave.value(), edit_step=self.edit_step.value(),
+                                 live=self.live.enabled, audio_buffer=self.audio_buffer)
         try:
             self.state.save()
         except OSError:
@@ -1165,6 +1445,8 @@ def application() -> QApplication:
     if sys.platform == "win32":
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChipLoom.Desktop")
+    # Qt Multimedia's FFmpeg backend prints version banners at debug/info level.
+    os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*.debug=false;qt.multimedia.*.info=false")
     app = QApplication.instance() or QApplication(["tracker4agents"])
     app.setOrganizationName("tracker4agents")
     app.setApplicationName("tracker4agents")

@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.7.0 — 2026-10-27
+
+This release groups what was first planned as four releases (0.7 to 1.0). See the [roadmap](docs/ROADMAP.md).
+
+**For agents**
+
+- Add project schema `tracker4agents.project.v2`: PCM stored as base64 with a verified SHA-256, and patterns written as readable grid `rows` (`"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"`). Files are written compactly, one line per sample and row. Version 1 files and the sparse `events` layout still load. Voltage Odyssey V2 goes from 690 KB to 117 KB and Pixel Rush from 192 KB to 34 KB. `chiploom migrate` rewrites a project or MOD as v2 and refuses to write if the exported MOD would change.
+- Add `patch`: batch edit operations (`set`, `write`, `clear`, `copy`, `move`, `transpose`, pattern and order operations, `timing`, `sample`, `library_sample`) applied as one validated, all-or-nothing transaction, with a readable `changes` summary. Add `inspect --pattern N --grid [--row R --rows K]`.
+- Add a structured error contract: failures on stderr carry a stable `code`, an English `message` and, for translated core diagnostics, the original French `message_fr`. `validate --report` entries gain `code` and grid-aware paths. The codes are listed in the CLI reference.
+- Add live sessions (`chiploom live ...`, `live serve` for a headless session): a localhost-only server with a token, an author-aware change journal, `--base` conflict refusal (`LIVE_CONFLICT` with the contested cells; the owner's edits win), proposals the owner accepts or rejects, announced versions (takes), and requests to play, stop, select and open. The agent cannot act as `human`.
+- Add the musical quality loop: `report` (measurements of the played score, with an estimated key labelled as an estimate), `compare` (a blind A/B page; a casual test with the answer key in `comparison.json` and without loudness matching) and `feedback` (listening notes stored in the project).
+- Add `chiploom mcp`, a Model Context Protocol adapter over standard input and output with 34 tools that run the matching CLI commands. It is covered by automated tests; it has not been tested with specific MCP clients, and agents with a terminal can keep using the CLI.
+- Add songs made only with created samples, on the owner's request (library samples stay the default). `wave` recipes (pulse, triangle, saw, sine, noise) are clean looped waves tuned so note C-2 plays the stated frequency; existing recipes build byte-identical samples, and `drive` gives drum and pluck recipes a denser level. `chiploom synth types|levels|preview|add|palette` list recipes, report reference levels, audition a recipe to a WAV with measurements, insert a sample and write a coherent 13-sample starter palette. The `recipe_sample` patch operation inserts a created sample like `library_sample` does.
+- Add `metadata.sample_source` (`library`, `synthesized`, `mixed`): `validate --sample-source` and a declared source fail with `SAMPLE_SOURCE` and the offending slots, and library insertion into a synthesized project (or a recipe into a library project) is refused. `report` counts recipe and embedded samples.
+- Match created samples to the owner's library by loudness: `synth palette` and `synth add` set volumes from the sample bank's loudness distribution per role (median per group; kick at the upper quartile and hat at the lower quartile of the percussion; fixed measured defaults without a bank), and `report` lists each sample's loudness and flags samples more than 6 dB from their group's reference.
+- Add five `synth_*` MCP tools (34 in total).
+- Update the agent guide, CLI reference, architecture note and ChipLoom skill (with new patch and live references) for all of the above.
+
+**In the window**
+
+- Add keyboard note entry: Edit mode (Ctrl+E), Step, Octave (F1–F3 or numpad +/−) and an Auto/QWERTY/AZERTY keyboard setting (Auto picks AZERTY for French input). Hexadecimal entry fills the sample and effect columns; Delete clears a cell and Backspace clears it and moves up.
+- Add block selection and editing: Ctrl+C/X/V with the clipboard in the same grid text the agent prints, Alt+arrows to move a block, Ctrl+↑/↓ to transpose by a semitone and Ctrl+Shift+↑/↓ by an octave.
+- Add an order editor: Insert, New, Duplicate, Remove, ↑/↓ and Rename….
+- Reload automatically when the file changes on disk: a clean window applies one undoable "Agent changes" step; unsaved local edits are merged three ways, with conflicts listed in the status bar and the file's version kept. Changed cells flash. F5 still reloads by hand.
+- Add live collaboration (Agent menu, on by default, with a status-bar indicator). Agent edits appear at once, highlighted and undoable with Ctrl+Z. A bottom Agent tab shows proposals (preview overlay, Accept with Ctrl+Enter, Reject, Listen to proposal, Clear preview, and a conflict dialog that asks whether to accept anyway) and takes (Open take).
+- Play in real time through libxmp when it is available, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg/libopenmpt, so small differences are possible. Without libxmp the window falls back to rendered playback.
+- Run real-time audio in a dedicated thread, so moving the window or opening dialogs no longer starves the sound card (0 underruns measured with the GUI blocked for 600 ms). Add Playback → Audio buffer (80, 150, 300 or 600 ms; default 150), applied without stopping playback and remembered.
+- Give the tracker column a 10 px gap from the library panel and roomier Agent tab columns.
+
+**Distribution and project**
+
+- Add `python tools/build_windows.py [--zip]` for a standalone Windows folder with `ChipLoom.exe` (window) and `chiploom-cli.exe` (command line). FFmpeg is not bundled; libxmp is, when it has been built. The Windows build workflow builds libxmp and attaches the zip to tagged GitHub releases. Prepare the package for PyPI; it is not yet published.
+- Run Ruff and a package build check in CI, and run the desktop tests on Windows and Linux (the Linux job does not block while it proves stable).
+- Remove the French launcher scripts `Lancer tracker4agents.cmd`, `Installer interface Windows.cmd` and `lancer-tracker4agents.sh`; `Install ChipLoom.cmd`, `Launch ChipLoom.cmd` and `launch-chiploom.sh` remain.
+- Add a roadmap and move the earlier French planning notes to `docs/history/`.
+- Preview bundles and compare pages stay listen-only; browser editing is on the roadmap.
+- Add regression tests for patch, the error contract, schema v2, report, compare, live sessions, the MCP adapter, keyboard entry and live integration in the window.
+
 ## 0.6.0 — 2026-10-18
 
 - Add local sample banks: exact PCM extraction from supported MOD/ZIP inputs, deduplication with playback variants, neutral names, editable categories/tags, search, audition, compatibility checks and validated insertion through CLI/Python.

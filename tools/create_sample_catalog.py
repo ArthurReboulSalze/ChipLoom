@@ -43,7 +43,7 @@ def main() -> int:
                     value = max(block, key=abs)
                     points.append(f"{index * 300 / max(1, width - 1):.2f},{40 - value * .28:.2f}")
                 filename = f"samples/{entry['id']}.wav"
-                preview = bank.audition(entry["id"], folder / filename, note="C-2", seconds=.8)
+                bank.audition(entry["id"], folder / filename, note="C-2", seconds=.8)
                 status = "Ready for MOD" if entry["compatible"] else "MOD adaptation required"
                 tags = " · ".join(entry["tags"])
                 cards.append(f'<article id="{entry["id"]}"><small>{entry["id"]} · {escape(entry["category"])}</small>'

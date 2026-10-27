@@ -5,7 +5,6 @@ private/provenance.json. Imported PCM is never normalized during extraction.
 """
 from __future__ import annotations
 
-from array import array
 from collections import Counter
 from contextlib import contextmanager
 import copy
@@ -14,12 +13,10 @@ import io
 import math
 from pathlib import Path
 import re
-import sys
-import wave
 import zipfile
 
-from . import project
-from .model import (NOTE_TO_PERIOD, PAL_CLOCK, Module, Sample, ValidationError,
+from . import project, sample_source
+from .model import (NOTE_TO_PERIOD, Module, Sample, ValidationError,
                     ascii_field, require_int, validate, validate_sample)
 from .reference_layout import MAX_ARCHIVE, MAX_FILE, parse_layout
 
@@ -367,6 +364,7 @@ class SampleLibrary:
     def insert(self, module: Module, sample_id: str, slot: int | None = None,
                replace: bool = False, adapt: bool = False) -> tuple[Module, dict]:
         validate(module)
+        sample_source.guard_insert(module, "library")
         sample, changes = self.sample(sample_id, adapt)
         result = copy.deepcopy(module)
         used = {value.sample for pattern in result.patterns for value in pattern.cells.values() if value.sample}
@@ -392,6 +390,7 @@ class SampleLibrary:
 
     def audition(self, sample_id: str, output: Path, note: str = "C-2", seconds: float = 1.0) -> dict:
         """Raw sample audition: no tracker effects; not a claimed original pitch."""
+        from .audio import audition_sample
         if note not in NOTE_TO_PERIOD or not math.isfinite(seconds) or not .05 <= seconds <= 5:
             raise ValidationError("Audition requires a tracker note C-1..B-3 and 0.05–5 seconds.")
         output = Path(output).resolve()
@@ -399,31 +398,9 @@ class SampleLibrary:
             raise ValidationError("Audition output must be a WAV outside the sample bank.")
         entry = self.get(sample_id)
         require_int(entry["volume"], "volume", 0, 64)
-        values = _signed(self._pcm(entry))
-        start, length = entry["loop_start"], entry["loop_length"]
-        if length and (length < 4 or start + length > len(values)):
-            raise ValidationError("Cannot audition an invalid loop.")
-        rate = PAL_CLOCK / NOTE_TO_PERIOD[note] * 2 ** (entry["finetune"] / 96)
-        frame_count = round(seconds * 44100)
-        pcm = array("h")
-        for frame in range(frame_count):
-            position = frame * rate / 44100
-            if length and position >= start + length:
-                position = start + (position - start) % length
-            index = int(position)
-            value = values[index] if index < len(values) else 0
-            pcm.append(round(value * 256 * entry["volume"] / 64))
-        if sys.byteorder != "little":
-            pcm.byteswap()
-        buffer = io.BytesIO()
-        with wave.open(buffer, "wb") as writer:
-            writer.setparams((1, 2, 44100, frame_count, "NONE", "not compressed"))
-            writer.writeframes(pcm.tobytes())
-        project.atomic_bytes(output, buffer.getvalue())
-        return {"ok": True, "id": sample_id, "output": str(output), "note": note,
-                "seconds": seconds, "sample_rate": 44100,
-                "playback_rate": rate,
-                "description": "Raw sample with original volume, fine tune and loop; no pattern effects."}
+        sample = _sample(entry, self._pcm(entry))
+        result = audition_sample(sample, output, note, seconds)
+        return {"ok": True, "id": sample_id, **result}
 
     def audit(self) -> dict:
         entries = self._manifest()["samples"]

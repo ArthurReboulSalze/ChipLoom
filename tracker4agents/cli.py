@@ -8,9 +8,13 @@ import json
 from pathlib import Path
 import sys
 
-from . import __version__, audio, demo, mod, pixel_rush, project
+from . import __version__, audio, demo, mod, pixel_rush, project, sample_source
+from .document import Document
+from .errors import diagnostic_payload, error_payload
+from .patch import pattern_grid, summarize
 from .model import PROFILE, Module, ValidationError, playback_plan, require_int, validate
 from .review import write_preview
+from .synth_cli import add_parser as add_synth_parser, run as run_synth
 
 
 def emit(value: object, stream=None) -> None:
@@ -21,7 +25,8 @@ def load(path: Path) -> Module:
     return project.load(path) if path.suffix.lower() == ".json" else mod.read(path)
 
 
-def describe(module: Module, pattern_index: int | None = None) -> dict:
+def describe(module: Module, pattern_index: int | None = None, grid: bool = False,
+             row: int = 0, rows: int | None = None) -> dict:
     plan = playback_plan(module)
     result = {
         "title": module.title, "profile": PROFILE, "channels": 4,
@@ -36,14 +41,87 @@ def describe(module: Module, pattern_index: int | None = None) -> dict:
             "sha256": hashlib.sha256(bytes(value & 255 for value in sample.pcm)).hexdigest(),
         } for index, sample in enumerate(module.samples, 1) if sample.pcm or sample.name],
     }
+    if pattern_index is None and (grid or row or rows is not None):
+        raise ValidationError("--grid, --row and --rows need --pattern N.", "PATCH_FIELD")
     if pattern_index is not None:
         require_int(pattern_index, "pattern", 0, len(module.patterns) - 1)
-        result["pattern"] = {
-            "index": pattern_index, "name": module.patterns[pattern_index].name,
-            "rows": [{"row": row, "cells": [module.patterns[pattern_index].get(row, channel).text()
-                                              for channel in range(4)]} for row in range(64)],
-        }
+        count = 64 - row if rows is None else rows
+        if grid:
+            result["pattern"] = {"index": pattern_index, "name": module.patterns[pattern_index].name,
+                                 "columns": "row | track 1 | track 2 | track 3 | track 4 (note sample effect)",
+                                 "grid": pattern_grid(module, pattern_index, row, count)}
+        else:
+            require_int(row, "row", 0, 63)
+            require_int(count, "rows", 1, 64 - row)
+            result["pattern"] = {
+                "index": pattern_index, "name": module.patterns[pattern_index].name,
+                "rows": [{"row": index, "cells": [module.patterns[pattern_index].get(index, channel).text()
+                                                  for channel in range(4)]} for index in range(row, row + count)],
+            }
     return result
+
+
+def read_ops(args: argparse.Namespace) -> object:
+    """Patch operations from --ops FILE ('-' reads standard input) or repeated --op JSON."""
+    if (args.ops is None) == (not args.op):
+        raise ValidationError("Provide either --ops FILE or one or more --op JSON.", "PATCH_FORMAT")
+    try:
+        if args.op:
+            ops = []
+            for text in args.op:
+                value = json.loads(text)
+                ops.extend(value if isinstance(value, list) else [value])
+            return ops
+        return json.loads(sys.stdin.read() if str(args.ops) == "-" else args.ops.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise ValidationError(f"Patch operations are not valid JSON: {exc}", "PATCH_FORMAT") from exc
+
+
+def patch_project(args: argparse.Namespace) -> dict:
+    output = args.output.resolve()
+    if output == args.source.resolve() and not args.in_place:
+        raise ValidationError("Writing over the source needs --in-place.", "OUTPUT_PATH")
+    if output.suffix.lower() != ".json":
+        raise ValidationError("A patched project is written as an editable .json project.", "OUTPUT_PATH")
+    document = Document(load(args.source))
+    applied = document.patch(read_ops(args), args.label)
+    document.save_project(output)
+    plan = playback_plan(document.module)
+    return {"ok": True, "output": str(output), "changed": applied["changed"], "results": applied["results"],
+            "changes": summarize(applied["diff"], 40), "cells_changed": len(applied["diff"]["cells"]),
+            "duration_seconds": plan["duration_seconds"], "warnings": audio.duration_warnings(plan["duration_seconds"])}
+
+
+def record_feedback(args: argparse.Namespace) -> dict:
+    from .report import add_feedback
+    output = args.output.resolve()
+    if output == args.project.resolve() or output.suffix.lower() != ".json":
+        raise ValidationError("Feedback is written to a new .json project, distinct from the input.", "OUTPUT_PATH")
+    module = add_feedback(load(args.project), args.text, args.rating, args.source, args.version)
+    project.write_json(output, project.to_dict(module))
+    return {"ok": True, "output": str(output), "feedback": module.metadata["feedback"][-1],
+            "feedback_count": len(module.metadata["feedback"])}
+
+
+def migrate(source: Path, output: Path) -> dict:
+    """Write `source` (v1/v2 project or MOD) as a schema v2 project; the MOD it encodes is unchanged."""
+    if source.resolve() == output.resolve():
+        raise ValidationError("La sortie doit être distincte du fichier source.", "OUTPUT_PATH")
+    if output.suffix.lower() != ".json":
+        raise ValidationError("Migration outputs an editable JSON project (.json extension).", "OUTPUT_PATH")
+    if source.suffix.lower() == ".json":
+        data = project.read_json(source)
+        module = project.from_dict(data)
+        source_schema = data.get("schema")
+    else:
+        module, source_schema = mod.read(source), "mod"
+    score = project.to_dict(module)
+    if mod.encode(project.from_dict(score)) != mod.encode(module):
+        raise ValidationError("Migration would change the exported MOD; nothing was written.", "MIGRATION_MISMATCH")
+    project.write_json(output, score)
+    return {"ok": True, "source_schema": source_schema, "schema": score["schema"],
+            "output": str(output.resolve()), "source_bytes": source.stat().st_size,
+            "output_bytes": output.stat().st_size, "mod_sha256": hashlib.sha256(mod.encode(module)).hexdigest()}
 
 
 def create_demo(args: argparse.Namespace) -> dict:
@@ -178,13 +256,55 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--name")
             command.add_argument("--category", choices=CATEGORIES)
             command.add_argument("--tag", action="append", default=None, help="Replaces tags; repeat for multiple tags.")
+    add_synth_parser(commands)
+    migrate_parser = commands.add_parser("migrate", help="Rewrite a project (v1 or v2) or MOD as a schema v2 project.")
+    migrate_parser.add_argument("source", type=Path)
+    migrate_parser.add_argument("--output", type=Path, required=True, help="New .json project; must differ from the source.")
+    patch = commands.add_parser("patch", help="Apply batch edit operations to a project as one validated transaction.")
+    patch.add_argument("source", type=Path, help="Project JSON (or MOD) to edit; read only unless --in-place.")
+    patch.add_argument("--output", type=Path, required=True, help="Edited .json project.")
+    patch.add_argument("--ops", type=Path, help="JSON file with a list of operations ('-' for standard input).")
+    patch.add_argument("--op", action="append", help="One operation (or a list) as JSON; repeat for several.")
+    patch.add_argument("--label", default="Patch", help="Label for the change history.")
+    patch.add_argument("--in-place", action="store_true", help="Allow --output to be the source project.")
+    report = commands.add_parser("report", help="Measure a composition: density, ranges, gaps, repetition, estimated key.")
+    report.add_argument("source", type=Path)
+    report.add_argument("--library", type=Path, help="Sample bank whose median levels are the loudness reference "
+                                                     "(default: fixed reference levels).")
+    compare = commands.add_parser("compare", help="Build a blind A/B listening page for two versions in a new directory.")
+    compare.add_argument("first", type=Path)
+    compare.add_argument("second", type=Path)
+    compare.add_argument("--output", type=Path, required=True)
+    compare.add_argument("--mp3", action="store_true")
+    compare.add_argument("--ffmpeg")
+    compare.add_argument("--language", choices=("en", "fr"), default="en")
+    compare.add_argument("--seed", type=int)
+    compare.add_argument("--seconds", type=float, help="Render the same excerpt length from the start of both versions.")
+    compare.add_argument("--labels", nargs=2, metavar=("FIRST", "SECOND"))
+    feedback = commands.add_parser("feedback", help="Record listening feedback in a project's metadata.")
+    feedback.add_argument("project", type=Path)
+    feedback.add_argument("--text", required=True)
+    feedback.add_argument("--rating", type=int, help="1 to 5.")
+    feedback.add_argument("--source", default="owner", help="Who gave the feedback (default owner).")
+    feedback.add_argument("--version", help="Version label the feedback refers to.")
+    feedback.add_argument("--output", type=Path, required=True)
+    mcp = commands.add_parser("mcp", help="Run the Model Context Protocol adapter on stdio (for MCP clients).")
+    mcp.add_argument("--root", type=Path, help="Working directory for relative paths in tool calls.")
+    from .live_cli import add_parser as add_live_parser
+    add_live_parser(commands)
     for name in ("inspect", "validate", "export", "import", "render"):
         command = commands.add_parser(name)
         command.add_argument("source", type=Path)
         if name == "inspect":
             command.add_argument("--pattern", type=int)
+            command.add_argument("--grid", action="store_true", help="Show the pattern as tracker grid text lines.")
+            command.add_argument("--row", type=int, default=0, help="First row shown with --pattern.")
+            command.add_argument("--rows", type=int, help="Number of rows shown with --pattern.")
         if name == "validate":
             command.add_argument("--report", action="store_true", help="Collect independent JSON project errors in one read-only report.")
+            command.add_argument("--sample-source", choices=("synthesized", "library"),
+                                 help="Require every sample to be a created recipe (synthesized) or a library sample "
+                                      "(no recipe). Without it, a declared metadata.sample_source is checked.")
         if name in ("export", "import", "render"):
             command.add_argument("--output", type=Path, required=True)
         if name == "render":
@@ -255,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
                 module, info = bank.insert(project.load(args.project), args.id, args.slot, args.replace, args.adapt)
                 project.write_json(output, project.to_dict(module))
                 result = {"ok": True, "output": str(output), **info}
+        elif args.command == "synth":
+            result = run_synth(args)
         elif args.command == "analyze":
             from .references import analyze_source
             if args.source.resolve() == args.output.resolve():
@@ -267,14 +389,29 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["ok"] else 2
         elif args.command in ("inspect", "validate"):
             if args.command == "validate" and args.report and args.source.suffix.lower() == ".json":
-                errors = project.diagnose(project.read_json(args.source))
-                if errors:
-                    emit({"ok": False, "error": "ValidationError", "message": "Project validation failed.",
-                          "errors": errors, "error_count": len(errors)}, stream=sys.stderr)
+                data = project.read_json(args.source)
+                entries = [diagnostic_payload(entry) for entry in project.diagnose(data)]
+                if not entries:
+                    try:
+                        _, problems = sample_source.violations(project.from_dict(data), args.sample_source)
+                    except sample_source.SampleSourceError as exc:
+                        problems = exc.violations
+                    entries = [{"path": f"samples[{item['slot'] - 1}]" if item.get("slot") else "metadata.sample_source",
+                                "code": "SAMPLE_SOURCE",
+                                "message": item["reason"] + (f" ({item['name']!r})" if item.get("name") else "")}
+                               for item in problems]
+                if entries:
+                    emit({"ok": False, "error": "ValidationError", "code": "PROJECT_INVALID",
+                          "message": "Project validation failed.",
+                          "errors": entries, "error_count": len(entries)}, stream=sys.stderr)
                     return 2
             module = load(args.source)
             validate(module)
-            result = {"ok": True, **describe(module, getattr(args, "pattern", None))}
+            source_check = sample_source.enforce(module, getattr(args, "sample_source", None))                 if args.command == "validate" else None
+            result = {"ok": True, **describe(module, getattr(args, "pattern", None), getattr(args, "grid", False),
+                                             getattr(args, "row", 0), getattr(args, "rows", None))}
+            if source_check is not None:
+                result["sample_source"] = source_check
             if getattr(args, "report", False):
                 result.update(errors=[], error_count=0)
         elif args.command in ("export", "import"):
@@ -288,7 +425,32 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 module = mod.read(args.source)
                 project.write_json(args.output, project.to_dict(module, recipes=False))
-                result = {"ok": True, "output": str(args.output.resolve()), **describe(module)}
+                result = {"ok": True, "output": str(args.output.resolve()), "schema": project.SCHEMA_V2,
+                          **describe(module)}
+        elif args.command == "patch":
+            result = patch_project(args)
+        elif args.command == "report":
+            from .report import analyze
+            reference = None
+            if args.library is not None:
+                from .synth_tools import resolve_reference
+                reference = resolve_reference("library", args.library)
+            result = {"ok": True, **analyze(load(args.source), reference)}
+        elif args.command == "compare":
+            from .compare import create_comparison
+            result = create_comparison(args.first, args.second, args.output, mp3=args.mp3, ffmpeg=args.ffmpeg,
+                                       language=args.language, seed=args.seed, seconds=args.seconds,
+                                       labels=tuple(args.labels) if args.labels else None)
+        elif args.command == "feedback":
+            result = record_feedback(args)
+        elif args.command == "mcp":
+            from .mcp_server import main as mcp_main
+            return mcp_main(args.root.resolve() if args.root else None)
+        elif args.command == "live":
+            from .live_cli import run as run_live
+            result = run_live(args)
+        elif args.command == "migrate":
+            result = migrate(args.source, args.output)
         elif args.command == "render":
             result = {"ok": True, **audio.render(
                 args.source, args.output, args.engine, args.seconds, args.sample_rate,
@@ -299,5 +461,5 @@ def main(argv: list[str] | None = None) -> int:
         emit(result)
         return 0
     except (OSError, ValueError, RuntimeError) as exc:
-        emit({"ok": False, "error": type(exc).__name__, "message": str(exc)}, stream=sys.stderr)
+        emit(error_payload(exc), stream=sys.stderr)
         return 2

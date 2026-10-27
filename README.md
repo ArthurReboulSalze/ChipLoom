@@ -40,23 +40,25 @@ Two original compositions made with ChipLoom, using newly synthesized samples. T
 
 ## Built for the agent, shared with the musician
 
-ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: build a local sample bank from selected modules, choose sounds, write notes and effects, validate a score, render it, and revise it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker. Deterministic synthesis remains supported for existing projects; our current composition workflow uses library samples.
+ChipLoom gives agents such as **OpenAI Codex** and **Nous Research Hermes Agent** concrete musical operations: build a local sample bank from selected modules, choose sounds, write notes and effects, validate a score, revise it with batch edits, render it, measure it, and refine it from feedback. The exported MOD embeds its samples and plays independently in a compatible tracker. Compositions use library samples by default; when the owner asks, a song can be made only with created samples (tuned recipes, a starter palette, loudness matched to the library).
 
 ```text
 Musical brief → Agent → JSON score + local samples → Validate → MOD
-                                                                ├─ WAV / MP3
-                                                                ├─ HTML listening page
-                                                                └─ Desktop tracker
+                  ↑  patch · report · compare           ├─ WAV / MP3
+                  │                                     ├─ HTML listening page
+                  └── live session ⇄ Desktop tracker ───┘
 ```
 
 | For the agent | For the human |
 | :--- | :--- |
-| Structured JSON responses and editable scores | Optional Qt desktop window |
-| Python API and CLI; no display required | Pattern editing, undo/redo and sample previews |
-| Deterministic sample recipes, including drawn waves | Channel mute/solo and stereo level meter |
+| Structured JSON responses with stable error codes | Optional Qt desktop window |
+| Compact project files: patterns as readable grid rows | Keyboard note entry, blocks, order editor, undo/redo |
+| Batch `patch` edits: one validated, all-or-nothing transaction | Agent edits appear in the window, highlighted and undoable |
+| Live sessions with the open window; proposals and announced versions | Accept or reject the agent's proposals; listen to takes |
+| `report` measurements and blind A/B `compare` pages | Real-time playback when libxmp is available |
+| Python API, CLI and an optional MCP adapter; no display required | Channel mute/solo and stereo level meter |
 | Local sample banks: neutral names, search, audition and insertion | Bottom sample browser: filters, listening and undoable insertion |
-| Duration estimates, grouped diagnostics and section renders | Four themes; English and French UI |
-| Standard-library core, independent of the agent provider | Portable HTML listening bundles |
+| Standard-library core, independent of the agent provider | Four themes; English and French UI; portable HTML bundles |
 
 <p align="center">
   <img src="docs/assets/chiploom-desktop-library.png" alt="ChipLoom on Windows: four full-width tracker channels above the bottom sample library, with search, type and role filters, MOD compatibility, a waveform, note-based audition and Add to song controls. English UI in the Violet theme." width="1100">
@@ -64,7 +66,7 @@ Musical brief → Agent → JSON score + local samples → Validate → MOD
 
 <p align="center"><em>The Windows companion with the new bottom sample browser. Search, filter, listen and add sounds while keeping the tracker wide. The screenshot uses a local bank; its samples and the displayed test song are not distributed.</em></p>
 
-**No embedded model, model-weight training or MCP server.** Your agent provides the composition decisions; ChipLoom provides the musical tools. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
+**No embedded model and no model-weight training.** Your agent provides the composition decisions; ChipLoom provides the musical tools. An optional, tested **MCP adapter** (`chiploom mcp`) wraps the command line for clients that prefer that protocol; it has not been tried with specific MCP clients, and agents with a terminal can simply use the CLI. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
 
 ## Get started
 
@@ -99,6 +101,8 @@ python -m venv .venv
 
 For the human window, run **Install ChipLoom.cmd**, then **Launch ChipLoom.cmd**. Or install `.[desktop]` and run `python -m tracker4agents gui examples/pixel_rush.project.json` from the configured environment.
 
+To build a standalone Windows folder instead, install `.[desktop]` and PyInstaller, then run `python tools/build_windows.py [--zip]`. It writes `build/windows/ChipLoom/ChipLoom.exe` (the window) and `chiploom-cli.exe` (the command line; named differently because Windows file names ignore case). FFmpeg is not bundled. The package is prepared for PyPI but not yet published, so install from a checkout.
+
 </details>
 
 For audio, install **FFmpeg with libopenmpt** on PATH; MP3 also needs **libmp3lame**. Check `ffmpeg -demuxers` and `ffmpeg -encoders`. [Official FFmpeg downloads](https://ffmpeg.org/download.html). `--no-audio` produces the MOD and editable project without an external decoder.
@@ -115,10 +119,15 @@ Open the checkout in Codex, or give Hermes terminal and file access to it. Ask t
 # Plan first: eight full orders at speed 6 / 160 BPM = 48 seconds
 python -m tracker4agents estimate --orders 8 --speed 6 --bpm 160
 
-# Inspect and validate before exporting
-python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0
+# Read a pattern as tracker text, then validate before exporting
+python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --grid --rows 8
 python -m tracker4agents validate exports/my-song/project.json --report
 python -m tracker4agents export exports/my-song/project.json --output exports/my-song/song.mod
+
+# Revise with one all-or-nothing batch of edits, then measure the result
+python -m tracker4agents patch exports/my-song/project.json --output exports/my-song/v2.project.json \
+  --op '{"op": "transpose", "pattern": 1, "channel": 1, "semitones": 2}'
+python -m tracker4agents report exports/my-song/v2.project.json
 
 # Audition ten seconds from order 6 (indices start at zero)
 python -m tracker4agents render exports/my-song/song.mod --from-order 6 --seconds 10 --output exports/my-song/section.wav
@@ -130,6 +139,8 @@ python -m tracker4agents samples preview SMP-0001 --note A-1 --output exports/my
 # Create a complete, shareable listening bundle in a NEW directory
 python -m tracker4agents preview exports/my-song/project.json --output exports/my-song-review --mp3
 ```
+
+Version 0.7 writes projects as schema v2: samples as base64 with a checksum and patterns as readable grid rows such as `"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"`. The included examples shrink from 690 KB to 117 KB (Voltage Odyssey V2) and 192 KB to 34 KB (Pixel Rush) when migrated with `chiploom migrate`; version 1 files still load. Failures arrive on stderr as JSON with a stable `code`. [Patch operations, error codes and project format →](docs/CLI.md)
 
 **Tested outside this development workspace:** a user-reported Hermes session with `glm-5.3-flash` completed two original MOD compositions on **Debian 13 / Python 3.13.5 / FFmpeg 7.1.5**. That feedback drove the diagnostics and excerpt workflow in v0.5.0. [Environment, findings and scope →](docs/HERMES_FEEDBACK.md)
 
@@ -163,11 +174,49 @@ The bank, original labels, private provenance, source lists, auditions and music
 with those samples remain local. This repository publishes the tools and skill,
 alongside only the two approved original demos above. [Sample commands →](docs/CLI.md#local-sample-library)
 
+## Songs made only with created samples
+
+Library samples are the default. On request, an agent can make a song from samples it creates itself: `chiploom synth palette` writes a starter project with 13 balanced instruments (drums, basses, pulse leads, chords, noise), `synth preview` auditions a recipe, and `synth add` or the `recipe_sample` patch operation inserts one. Created samples are loudness-matched to your sample bank per role (kick, snare, hat, bass, lead, texture), and a project marked `"sample_source": "synthesized"` refuses library samples, so the two modes never mix by accident.
+
+```sh
+python -m tracker4agents synth palette --output exports/synth-song/project.json --title "Synth Song"
+python -m tracker4agents validate exports/synth-song/project.json --sample-source synthesized
+```
+
+[Synth commands →](docs/CLI.md) · [Agent guide →](docs/AGENT_GUIDE.md)
+
+## Compose together with your agent
+
+When the window is open, your agent can edit the song you are looking at. In the **Agent** menu, **Live collaboration** is on by default; the status bar shows *Live: off*, *listening* or *agent connected*. The agent finds the window with `chiploom live`.
+
+- Its edits appear immediately, highlighted, and **Ctrl+Z** undoes them like your own.
+- It sees your edits too. If it would overwrite one, the edit is refused (`LIVE_CONFLICT`) and it must re-read and adapt. Your edits win.
+- For bigger rewrites ("redo the bass") it can send a **proposal**. The bottom **Agent** tab previews it as a violet overlay; **Listen to proposal**, then **Accept** (Ctrl+Enter) or **Reject**. If the song changed meanwhile, a conflict dialog lists the cells and asks whether to accept anyway and overwrite them.
+- New versions it announces with `take` appear in the same tab; **Open take** loads one.
+- It can ask the window to play, stop, seek, select a passage or open a file (opening asks you first if you have unsaved changes).
+
+Without the window, `chiploom live serve SONG.json` hosts the same session headless. The server listens on localhost only and needs a token the CLI reads for you. [Live commands →](docs/CLI.md#live-sessions) · [Collaboration guide for agents →](docs/AGENT_GUIDE.md#composing-with-the-owner-in-the-window-live)
+
+## Measure, compare, give feedback
+
+`report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. The A/B page is a casual test: its answer key sits in a file next to it, and loudness is not equalized.
+
+```sh
+python -m tracker4agents compare exports/my-song/v1.project.json exports/my-song/v2.project.json --output exports/my-song-compare --seconds 30 --mp3
+python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead is better; drums too loud" --rating 4 --version v2 --output exports/my-song/v2-feedback.project.json
+```
+
 ## Two ways to listen and edit
 
-**Desktop:** open a MOD or JSON project, edit cells, browse your sample bank, mute/solo tracks and reload agent changes with F5. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser stays below it. English is the default; French and four themes are available. Playback prepares a WAV in the background, so edits are not yet mixed in real time. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
+**Desktop:** open a MOD or JSON project, browse your sample bank, mute/solo tracks and watch agent changes arrive. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser and Agent tab stay below it. English is the default; French and four themes are available. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
 
-**HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
+- **Type notes:** turn on **Edit mode** (Ctrl+E) and play the piano keys. The lower row starts at the base octave and the upper row one octave higher; **F1–F3** or numpad **+/−** change the octave, and **Step** sets how many rows the cursor advances after each entry. The keyboard setting (Auto, QWERTY, AZERTY) picks the key map; Auto chooses AZERTY for French input. Hex digits fill the sample and effect columns; **Delete** clears a cell and **Backspace** clears it and moves up.
+- **Work with blocks:** **Ctrl+C / X / V** copy, cut and paste. The clipboard holds the same grid text the agent prints, so you can paste what the agent wrote. **Alt+arrows** move the block, **Ctrl+↑/↓** transpose by a semitone and **Ctrl+Shift+↑/↓** by an octave.
+- **Edit the arrangement:** the order editor offers Insert, New, Duplicate, Remove, ↑/↓ and Rename….
+- **Follow outside changes:** when the file changes on disk, the window reloads it. Without local edits that is one undoable "Agent changes" step; with unsaved edits it does a three-way merge, lists conflicts in the status bar and keeps the file's version. Changed cells flash. **F5** still reloads by hand.
+- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows build bundles libxmp when it was built.
+
+**HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in the browser is on the [roadmap](docs/ROADMAP.md). Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 
 ## Learn from tracker construction
 
@@ -184,13 +233,18 @@ The included [reference study](references/SELECTION_FR.md) covers 15 historical 
 | Available now | Still ahead |
 | :--- | :--- |
 | Strict four-channel `M.K.` MOD import/export | XM and IT |
-| 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Arrangement/block editor and interactive sample drawing |
-| Signed 8-bit mono samples with deterministic synthesis | Real-time tracker mixer |
+| 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Interactive sample drawing (deferred by the current library-only policy) |
+| Signed 8-bit mono samples; synthesized-only songs on request, loudness-matched to your bank | Wider MOD import (`E6x`, `EEx`, other signatures) |
 | Local sample banks, agent skill and bottom desktop browser | Richer instrument and phrase editing |
-| Render up to 120 seconds per request, including excerpts | MCP protocol adapter |
-| Windows desktop; Windows/Linux core CI and reported Debian agent use | Linux desktop validation |
+| Compact v2 projects, `patch`, `migrate`, stable error codes | Browser editing session |
+| `report`, blind `compare`, `feedback` | Publishing to PyPI and a GitHub release |
+| Live sessions with the window; proposals and takes | Linux desktop validation on real hardware |
+| Keyboard entry, blocks, order editor, real-time playback with libxmp in the window | |
+| MCP stdio adapter (tested; no specific client tried) | |
+| Render up to 120 seconds per request, including excerpts | |
+| Windows desktop and standalone build; Windows/Linux CI; reported Debian agent use | |
 
-Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx`, other signatures and restart-byte variants are outside the editing profile. [Format details](docs/USAGE_FR.md#profil-mod-pris-en-charge) · [Roadmap](PLAN_PROJET.md)
+Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx`, other signatures and restart-byte variants are outside the editing profile. [Format details](docs/USAGE_FR.md#profil-mod-pris-en-charge) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 
 ## Development
 
@@ -198,7 +252,7 @@ Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx
 python -m unittest discover -s tests -v
 ```
 
-Tests cover binary round trips, malformed inputs, synthesis, editing, diagnostics, partial renders, HTML bundles, archives, sample banks and optional Qt integration. Bank checks include exact PCM, variants, neutral labels, reimports, compatibility and slot limits. Desktop checks include search, audition, insertion, undo and session restoration. Unavailable optional dependencies produce skips. For a second replay engine, `python tools/setup_reference.py` builds pinned libxmp locally; no replay-engine binaries are committed. [CLI contracts](docs/CLI.md) · [Agent workflow](docs/AGENT_GUIDE.md)
+Tests cover binary round trips, malformed inputs, synthesis, editing, patch operations, the error contract, project schema v2, reports and comparison pages, live sessions, the MCP adapter, diagnostics, partial renders, HTML bundles, archives, sample banks and optional Qt integration. Bank checks include exact PCM, variants, neutral labels, reimports, compatibility and slot limits. Desktop checks include search, audition, insertion, keyboard entry, blocks, live edits, undo and session restoration. Unavailable optional dependencies produce skips. CI runs Ruff, the core tests and the package build on every push, and the desktop tests on Windows and Linux (the Linux desktop job reports without blocking while it proves stable). For a second replay engine, `python tools/setup_reference.py` builds pinned libxmp locally; no replay-engine binaries are committed. [CLI contracts](docs/CLI.md) · [Agent workflow](docs/AGENT_GUIDE.md)
 
 ## License
 

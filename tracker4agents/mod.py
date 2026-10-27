@@ -41,27 +41,27 @@ def encode(module: Module) -> bytes:
 
 def decode(payload: bytes) -> Module:
     if not HEADER_SIZE <= len(payload) <= MAX_MOD_BYTES:
-        raise ValidationError("Taille MOD invalide pour le profil v1.")
+        raise ValidationError("Taille MOD invalide pour le profil v1.", "MOD_FORMAT")
     if payload[1080:1084] != b"M.K.":
-        raise ValidationError("Seuls les MOD M.K. à 4 voies sont acceptés dans ce prototype.")
+        raise ValidationError("Seuls les MOD M.K. à 4 voies sont acceptés dans ce prototype.", "MOD_FORMAT")
     length = payload[950]
     if not 1 <= length <= 128:
-        raise ValidationError("Longueur de liste d'ordres MOD invalide.")
+        raise ValidationError("Longueur de liste d'ordres MOD invalide.", "MOD_FORMAT")
     if payload[951] != 0x7F:
-        raise ValidationError("Ce MOD utilise un octet restart/tempo hors du profil ProTracker v1.")
+        raise ValidationError("Ce MOD utilise un octet restart/tempo hors du profil ProTracker v1.", "MOD_FORMAT")
     order_table = payload[952:1080]
     if any(order_table[length:]):
-        raise ValidationError("Ordres inactifs non nuls : variante MOD non prise en charge sans perte.")
+        raise ValidationError("Ordres inactifs non nuls : variante MOD non prise en charge sans perte.", "MOD_FORMAT")
     orders = list(order_table[:length])
     pattern_count = max(orders) + 1
     if pattern_count > 64:
-        raise ValidationError("Ce fichier dépasse les 64 patterns du profil M.K. v1.")
+        raise ValidationError("Ce fichier dépasse les 64 patterns du profil M.K. v1.", "MOD_FORMAT")
 
     def text_at(start: int, size: int) -> str:
         raw = payload[start:start + size]
         raw_text = raw.rstrip(b"\x00")
         if b"\x00" in raw_text or any(value < 32 or value > 126 for value in raw_text):
-            raise ValidationError("Texte MOD hors ASCII imprimable du profil v1.")
+            raise ValidationError("Texte MOD hors ASCII imprimable du profil v1.", "MOD_FORMAT")
         return raw_text.decode("ascii")
 
     headers = []
@@ -71,12 +71,12 @@ def decode(payload: bytes) -> Module:
             ">HBBHH", payload, start + 22,
         )
         if tune > 15 or loop_length == 0:
-            raise ValidationError(f"En-tête du sample {index + 1} hors du profil v1.")
+            raise ValidationError(f"En-tête du sample {index + 1} hors du profil v1.", "MOD_FORMAT")
         headers.append((text_at(start, 22), size * 2, tune if tune < 8 else tune - 16,
                         volume, loop_start * 2, loop_length * 2))
     expected = HEADER_SIZE + pattern_count * PATTERN_SIZE + sum(item[1] for item in headers)
     if len(payload) != expected:
-        raise ValidationError(f"MOD tronqué ou données supplémentaires : {expected} octets attendus, {len(payload)} reçus.")
+        raise ValidationError(f"MOD tronqué ou données supplémentaires : {expected} octets attendus, {len(payload)} reçus.", "MOD_FORMAT")
 
     cursor = HEADER_SIZE
     patterns = []
@@ -103,5 +103,5 @@ def decode(payload: bytes) -> Module:
 
 def read(path: Path) -> Module:
     if path.stat().st_size > MAX_MOD_BYTES:
-        raise ValidationError("Fichier trop grand pour le profil MOD v1.")
+        raise ValidationError("Fichier trop grand pour le profil MOD v1.", "FILE_TOO_LARGE")
     return decode(path.read_bytes())
