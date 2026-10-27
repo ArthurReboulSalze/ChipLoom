@@ -372,7 +372,7 @@ class SampleBrowser(QWidget):
             if token != self._preview_token:
                 return
             self.window.meter.reset()
-            self.window.player.pause()
+            self.window.pause_playback()
             self.window.sample_player.stop()
             self.window.sample_player.setSource(QUrl.fromLocalFile(str(path)))
             self.window.sample_player.play()

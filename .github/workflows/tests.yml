@@ -5,7 +5,25 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Ruff
+        run: python -m pip install ruff==0.17.3
+      - name: Lint
+        run: ruff check tracker4agents tests tools
+
   core:
     name: Core / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -34,3 +52,79 @@ jobs:
         run: python -m tracker4agents demo --song pixel-rush --no-audio --output exports/ci-demo
       - name: Validate exported MOD
         run: python -m tracker4agents validate exports/ci-demo/pixel_rush.mod
+
+  desktop:
+    name: Desktop / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    # The Linux desktop run is new: it reports problems without blocking merges until it has proven stable.
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            experimental: false
+          - os: ubuntu-latest
+            experimental: true
+    env:
+      QT_QPA_PLATFORM: offscreen
+      # Qt's own FFmpeg backend prints per-file banners in debug mode; keep the test log readable.
+      QT_LOGGING_RULES: qt.multimedia.*.debug=false;qt.multimedia.*.info=false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Linux FFmpeg and Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libegl1 libxkbcommon0 libgl1 libdbus-1-3 libfontconfig1 libglib2.0-0 libpulse0 libasound2t64 libxmp4
+      - name: Install Windows FFmpeg (full build, includes libopenmpt)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg-full -y --no-progress
+      - name: Check FFmpeg and libopenmpt
+        shell: bash
+        run: |
+          ffmpeg -hide_banner -version | head -n 1
+          ffmpeg -hide_banner -demuxers | grep -i openmpt
+      - name: Build pinned libxmp for real-time playback (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/setup_reference.py
+      - name: Install with desktop extra
+        run: python -m pip install -e ".[desktop]"
+      - name: Run real-time engine and desktop tests
+        run: python -m unittest tests.test_realtime tests.test_desktop tests.test_desktop_samples tests.test_desktop_editing tests.test_desktop_live -v
+
+  build:
+    name: Package build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build twine
+          python -m build --outdir dist
+      - name: Check metadata
+        run: python -m twine check --strict dist/*
+      - name: Check wheel contents
+        run: |
+          python -m zipfile -l dist/*.whl > wheel-contents.txt
+          grep -q 'tracker4agents/assets/chiploom-logo.png' wheel-contents.txt
+          if grep -E '^(tests|tools|exports|docs|references)/' wheel-contents.txt; then echo 'Unexpected files in wheel'; exit 1; fi
+      - name: Smoke-test the wheel
+        run: |
+          python -m venv /tmp/wheel-check
+          /tmp/wheel-check/bin/python -m pip install dist/*.whl
+          /tmp/wheel-check/bin/chiploom --version
+          /tmp/wheel-check/bin/chiploom estimate --orders 8 --bpm 160
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+          if-no-files-found: error

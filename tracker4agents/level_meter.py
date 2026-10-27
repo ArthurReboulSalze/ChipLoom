@@ -49,6 +49,12 @@ class LevelMeter(QWidget):
             self.received_at = time.monotonic()
             self.buffer_count += 1
 
+    def feed_levels(self, rms, peaks):
+        """Levels computed by the real-time engine for the audio being heard (no Qt buffer involved)."""
+        self.raw_rms, self.raw_peaks = rms, peaks
+        self.received_at = time.monotonic()
+        self.buffer_count += 1
+
     def tick(self, active: bool, volume: float):
         live = active and time.monotonic() - self.received_at < .3
         rms = self.raw_rms if live else (0.0, 0.0)

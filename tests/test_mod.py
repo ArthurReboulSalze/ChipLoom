@@ -126,7 +126,7 @@ class MusicProjectTests(unittest.TestCase):
         self.assertLess(abs(SAMPLE_RATE * 16 / len(sample.pcm) - recipe["frequency"]), 0.2)
 
     def test_duplicate_cells_unknown_fields_and_wrong_note_types_fail(self):
-        base = project.to_dict(demo.create())
+        base = project.to_dict(demo.create(), layout="events")
         variants = []
         bad = copy.deepcopy(base)
         bad["patterns"][0]["events"].append(bad["patterns"][0]["events"][0].copy())

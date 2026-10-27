@@ -22,7 +22,7 @@ class CliTests(unittest.TestCase):
     def test_agent_can_edit_score_then_export_import_and_reexport(self):
         with tempfile.TemporaryDirectory(prefix="tracker agent ") as directory:
             directory = Path(directory)
-            score = project.to_dict(demo.create())
+            score = project.to_dict(demo.create(), layout="events")
             score["patterns"][0]["events"][3]["note"] = "G-2"
             source, output = directory / "score.json", directory / "score.mod"
             project.write_json(source, score)

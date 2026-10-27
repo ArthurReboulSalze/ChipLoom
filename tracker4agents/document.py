@@ -10,6 +10,7 @@ from typing import Callable
 
 from . import mod, project
 from .model import Cell, Module, NOTES, NOTE_TO_PERIOD, ValidationError, cell, playback_plan, require_int, validate
+from .patch import apply_ops, diff_modules, set_initial_timing
 
 
 def fingerprint(module: Module) -> str:
@@ -88,23 +89,7 @@ class Document:
         require_int(bpm, "tempo", 33, 255)
         require_int(speed, "vitesse", 1, 31)
 
-        def change(module: Module):
-            pattern = module.patterns[module.orders[0]]
-            available = [ch for ch in range(4) if pattern.get(0, ch).command == 15]
-            available += [ch for ch in range(4) if ch not in available and pattern.get(0, ch).effect == "000"]
-            if len(available) < 2:
-                raise ValidationError("Il faut deux colonnes d'effet libres ou Fxx sur la première ligne pour fixer tempo et vitesse sans effacer d'autres effets.")
-            for channel in range(4):
-                old = pattern.get(0, channel)
-                if old.command == 15:
-                    pattern.put(0, channel, Cell(old.period, old.sample))
-            for channel, parameter in zip(available[:2], (speed, bpm)):
-                old = pattern.get(0, channel)
-                pattern.put(0, channel, Cell(old.period, old.sample, 15, parameter))
-            if isinstance(module.metadata.get("timing"), dict):
-                module.metadata["timing"].update(bpm=bpm, speed=speed)
-
-        return self.apply("Modifier le tempo de départ", change)
+        return self.apply("Modifier le tempo de départ", lambda module: set_initial_timing(module, bpm, speed))
 
     def set_sample(self, index: int, volume: int, finetune: int) -> bool:
         require_int(index, "sample", 0, len(self.module.samples) - 1)
@@ -116,6 +101,18 @@ class Document:
             module.samples[index].finetune = finetune
 
         return self.apply("Régler le sample", change)
+
+    def patch(self, ops: object, label: str = "Patch") -> dict:
+        """Apply a list of patch operations as one validated, undoable transaction."""
+        before = self.module
+        results: list[dict] = []
+
+        def change(module: Module):
+            results.extend(apply_ops(module, ops))
+
+        changed = self.apply(label, change)
+        return {"changed": changed, "results": results, "revision": self.revision,
+                "diff": diff_modules(before, self.module) if changed else {"cells": []}}
 
     def insert_library_sample(self, library, sample_id: str, slot: int | None = None,
                               replace: bool = False, adapt: bool = False) -> dict:
@@ -151,6 +148,10 @@ class Document:
         if not old.period:
             raise ValidationError("Sélectionne une cellule contenant une note.")
         return self.replace_cell(pattern, row, channel, cell(old.note, old.sample, f"EC{ticks:X}"))
+
+    def mark_saved(self) -> None:
+        """Treat the current module as matching the file on disk (after an external reload)."""
+        self._saved = fingerprint(self.module)
 
     def save_project(self, path: Path) -> None:
         if path.suffix.lower() != ".json":

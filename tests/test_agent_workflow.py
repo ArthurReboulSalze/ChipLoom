@@ -21,7 +21,7 @@ class AgentDiagnosticsTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_collision_identifies_both_writers_even_for_empty_first_cell(self):
-        score = project.to_dict(demo.create())
+        score = project.to_dict(demo.create(), layout="events")
         score['patterns'][0]['events'] = [
             {'row': 56, 'channel': 0},
             {'row': 56, 'channel': 0, 'note': 'A-2', 'sample': 2, 'effect': 'C20'},
@@ -49,7 +49,7 @@ class AgentDiagnosticsTests(unittest.TestCase):
         self.assertEqual(self.invoke('estimate', '--orders', '1', '--bpm', '32')[0], 2)
 
     def test_report_collects_independent_errors_without_mutating_source(self):
-        score = project.to_dict(demo.create())
+        score = project.to_dict(demo.create(), layout="events")
         score['title'] = 'This title is much too long'
         score['samples'][0]['volume'] = 100
         score['patterns'][0]['events'] = [

@@ -1,6 +1,7 @@
 """Optional Qt integration tests, using real FFmpeg WAVs and Qt's media player."""
 from __future__ import annotations
 
+import atexit
 import os
 from pathlib import Path
 import shutil
@@ -10,6 +11,13 @@ import unittest
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# These tests drive QMediaPlayer; the real-time (libxmp) path is covered by test_desktop_realtime.
+os.environ.setdefault("CHIPLOOM_PLAYBACK", "rendered")
+os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*.debug=false;qt.multimedia.*.info=false")
+# Windows open for tests must not leave live-session discovery files in the user's own ChipLoom folder.
+_LIVE_HOME = tempfile.mkdtemp(prefix="chiploom-home-")
+os.environ.setdefault("CHIPLOOM_HOME", _LIVE_HOME)
+atexit.register(shutil.rmtree, _LIVE_HOME, True)
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFontDatabase
@@ -20,7 +28,7 @@ try:
 except ModuleNotFoundError:
     TrackerWindow = None
 
-from tracker4agents import audio, mod, project
+from tracker4agents import audio, mod
 from tracker4agents.document import Document, fingerprint
 from tracker4agents.model import Module, Pattern, Sample, cell, playback_plan
 from tracker4agents.themes import THEMES
