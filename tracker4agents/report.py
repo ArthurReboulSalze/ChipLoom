@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import math
+from pathlib import Path
 
 from . import loudness, sample_source
 from .model import EFFECT_DIGITS, NOTES, PITCHES, XM_KEY_OFF, XM_NOTES, Module, ValidationError, playback_plan, xm_profile
@@ -44,7 +45,7 @@ SCOPE = (
     "repeated orders, jumps and tempo changes). A note start is a cell with a note that is not a "
     "tone-portamento target (3xx/5xx). Sustained or looped samples can still sound where no note "
     "starts, so 'rows without a note start' is not audible silence. These numbers describe the "
-    "score; they are not judgments of musical quality."
+    "score; they are not judgments of musical quality. Channels are numbered from 0, as in patch operations."
 )
 
 
@@ -120,12 +121,59 @@ def _block_stats(signatures: list, size: int, empty_row: object) -> dict:
             "repeated_fraction": _round(1 - len(distinct) / non_empty) if non_empty else None}
 
 
+def library_mode(module: Module) -> str | None:
+    """Why `module` counts as a library-mode project, or None: a declared source or recorded library IDs."""
+    metadata = module.metadata if isinstance(module.metadata, dict) else {}
+    if metadata.get("sample_source") == "library":
+        return "metadata.sample_source is 'library'"
+    sources = metadata.get("sample_sources")
+    if isinstance(sources, dict) and any(isinstance(item, dict) and item.get("library_id")
+                                         for item in sources.values()):
+        return "metadata.sample_sources records library IDs"
+    return None
+
+
+def loudness_reference(module: Module, library: Path | None = None, default: Path | None = None) -> dict:
+    """The loudness reference for `analyze`, with `path` and `reason` saying which one and why.
+
+    An explicit `library` always wins. A library-mode project (see `library_mode`) uses the default bank
+    (`sample_library.DEFAULT_LIBRARY`, relative to the working directory) when it exists. Otherwise the
+    fixed defaults in `loudness.DEFAULT_REFERENCE_DB` are used.
+    """
+    from .sample_library import DEFAULT_LIBRARY
+    from .synth_tools import library_exists, resolve_reference
+    if library is not None:
+        reference = resolve_reference("library", library)
+        return {**reference, "path": str(Path(library).resolve()), "selection": "explicit",
+                "reason": "--library was given."}
+    default = Path(DEFAULT_LIBRARY if default is None else default)
+    why = library_mode(module)
+    if why is None:
+        return {**resolve_reference("defaults"), "path": None, "selection": "automatic",
+                "reason": "Not a library-mode project (no metadata.sample_source 'library' and no library IDs); "
+                          "fixed reference levels."}
+    if not library_exists(default):
+        return {**resolve_reference("defaults"), "path": None, "selection": "automatic",
+                "reason": f"Library-mode project ({why}) but no sample bank at {default.resolve()}; "
+                          "fixed reference levels. Pass --library to use another bank."}
+    return {**resolve_reference("library", default), "path": str(default.resolve()), "selection": "automatic",
+            "reason": f"Library-mode project ({why}); the default sample bank was found."}
+
+
 def analyze(module: Module, reference: dict | None = None) -> dict:
     """Deterministic, JSON-serializable measurements of the played score.
 
     `reference` (see `synth_tools.resolve_reference`) gives the loudness each group is compared with;
-    without it the fixed reference levels in `loudness.DEFAULT_REFERENCE_DB` are used.
+    without it the fixed reference levels in `loudness.DEFAULT_REFERENCE_DB` are used. Build it with
+    `loudness_reference` to have the report say which reference was chosen and why.
     """
+    if reference is None:
+        reference_info = {"source": "defaults", "path": None, "selection": "default",
+                          "reason": "No reference was given; fixed reference levels."}
+    else:
+        reference_info = {"source": reference.get("source", "library"), "path": reference.get("path"),
+                          "selection": reference.get("selection", "explicit"),
+                          "reason": reference.get("reason", "Reference passed by the caller.")}
     plan = playback_plan(module)  # Validates the module as well.
     timeline = plan["timeline"]
     rows = len(timeline)
@@ -185,7 +233,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         notes = channel_notes[channel]
         gap = _longest_run(note_flags[channel], row_seconds)
         entry = {
-            "channel": channel + 1, "note_ons": len(notes),
+            "channel": channel, "note_ons": len(notes),
             "notes_per_second": _round(len(notes) / duration) if duration else 0.0,
             "density": _round(len(notes) / rows) if rows else 0.0,
             "lowest_note": note_names[min(notes)] if notes else None,
@@ -255,7 +303,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     combined = [tuple(signatures[channel][index] for channel in range(count)) for index in range(rows)]
     for size in BLOCK_SIZES:
         blocks[str(size)] = {
-            "channels": [{"channel": channel + 1, **_block_stats(signatures[channel], size, empty_signature)}
+            "channels": [{"channel": channel, **_block_stats(signatures[channel], size, empty_signature)}
                          for channel in range(count)],
             "all_channels": _block_stats(combined, size, (empty_signature,) * count),
         }
@@ -288,7 +336,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         wanted = loudness.target_db(key, reference)
         samples.append({"slot": slot, "name": sample.name, "bytes": len(sample.pcm), "looped": bool(sample.loop_length),
                         "volume": sample.volume, "note_ons": count_played,
-                        "channels": sorted(channel + 1 for channel in sample_channels.get(slot, ())),
+                        "channels": sorted(sample_channels.get(slot, ())),
                         "source": "recipe" if sample.recipe is not None else "embedded_pcm",
                         "loudness_db": level, "peak_db": loudness.measure(sample)["peak_db"], "group": group,
                         "reference_db": wanted, "deviation_db": round(level - wanted, 2)})
@@ -301,7 +349,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                 "declared": module.metadata.get("sample_source")},
                     "loudness_note": "loudness_db: RMS of the audible PCM x volume / 64, dB re full scale, at the "
                                      "sample's default volume (Cxx and arpeggios are not applied). reference_db: "
-                                     f"the median level of its group ({'sample bank' if reference else 'fixed defaults'}).",
+                                     "the level of its group in the loudness_reference (median; kick p75, hat p25).",
+                    "loudness_reference": reference_info,
                     "slots": samples}
 
     # Factual flags only.

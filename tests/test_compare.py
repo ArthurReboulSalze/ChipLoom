@@ -123,7 +123,7 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
         self.assertEqual({secret["x"]["version"], secret["y"]["version"]}, {"first", "second"})
         self.assertEqual(secret["x"]["version"], key["x"])
         self.assertEqual({secret["x"]["label"], secret["y"]["label"]}, set(self.labels))
-        self.assertTrue(any(row["key"] == "ch1_notes" for row in secret["metrics"]))
+        self.assertTrue(any(row["key"] == "ch0_notes" and row["channel"] == 0 for row in secret["metrics"]))
 
     def test_page_features_and_languages(self):
         self.build("english", seed=2)

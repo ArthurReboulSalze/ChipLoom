@@ -216,7 +216,7 @@ class NChannelLayersTests(unittest.TestCase):
 
     def test_report_has_one_entry_per_channel(self):
         report = analyze(self.module)
-        self.assertEqual([entry["channel"] for entry in report["channels"]], [1, 2, 3, 4, 5, 6])
+        self.assertEqual([entry["channel"] for entry in report["channels"]], [0, 1, 2, 3, 4, 5])
         self.assertEqual(report["channels"][5]["note_ons"], 2)
         self.assertEqual(len(report["repetition"]["blocks"]["8"]["channels"]), 6)
 
@@ -250,7 +250,7 @@ class NChannelLayersTests(unittest.TestCase):
             result = json.loads(out.getvalue())
             self.assertEqual((result["channels"], result["profile"]), (6, "protracker-nch-pal-v1"))
             self.assertEqual(result["pattern"]["grid"][0].count("|"), 6)
-            self.assertIn("track 6", result["pattern"]["columns"])
+            self.assertIn("ch5", result["pattern"]["columns"])
             out = io.StringIO()
             with redirect_stdout(out):
                 self.assertEqual(cli.main(["validate", str(source)]), 0)

@@ -27,7 +27,10 @@ N = {"type": "number"}
 B = {"type": "boolean"}
 OPS = {"type": "array", "items": {"type": "object"},
        "description": "Patch operations, e.g. {\"op\": \"write\", \"pattern\": 0, \"channel\": 1, \"row\": 0, "
-                      "\"cells\": [\"C-2 01 ...\", \"\", \"E-2 01 C20\"]}. See docs/CLI.md#patch-operations."}
+                      "\"cells\": [\"C-2 01 ...\", \"\", \"E-2 01 C20\"]}. Channels, rows, patterns and orders "
+                      "count from 0, sample slots from 1. Give ops or ops_file. See docs/CLI.md#patch-operations."}
+OPS_FILE = {"type": "string", "description": "Path to a JSON file holding the operations list (instead of ops), "
+                                            "for large generated patches; relative to the server's root."}
 RECIPE = {"type": "object", "description": "Sample recipe, e.g. {\"type\": \"wave\", \"shape\": \"pulse\", "
           "\"duty\": 0.25, \"frequency\": 130.81}. See synth_types."}
 
@@ -67,7 +70,7 @@ def _flags(arguments: dict, mapping: dict) -> list[str]:
 
 
 def _ops_json(arguments: dict) -> list[str]:
-    # Operations travel through a temporary file: command lines are short on Windows.
+    # Operations travel through a file (a temporary one for inline ops): command lines are short on Windows.
     return ["--ops", arguments["ops_file"]]
 
 
@@ -82,7 +85,7 @@ TOOLS = [
           {"source": S, "pattern": I, "grid": B, "row": I, "rows": I}, ["source"],
           lambda a: ["inspect", a["source"], *_flags(a, {"pattern": "--pattern", "grid": "--grid", "row": "--row", "rows": "--rows"})], True),
     _tool("patch", "Apply patch operations to a project as one validated transaction and write the result.",
-          {"source": S, "output": S, "ops": OPS, "label": S}, ["source", "output", "ops"],
+          {"source": S, "output": S, "ops": OPS, "ops_file": OPS_FILE, "label": S}, ["source", "output"],
           lambda a: ["patch", a["source"], "--output", a["output"], *_ops_json(a), *_flags(a, {"label": "--label"})]),
     _tool("export", "Export a validated project to a real MOD file.", {"source": S, "output": S}, ["source", "output"],
           lambda a: ["export", a["source"], "--output", a["output"]]),
@@ -95,7 +98,8 @@ TOOLS = [
           {"source": S, "output": S, "mp3": B, "language": _enum("en", "fr")}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),
     _tool("report", "Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, "
-          "sample sources and loudness against the reference levels.",
+          "sample sources and loudness against the reference levels (a library-mode project uses "
+          "exports/sample_library when it exists, unless library is given). Channels count from 0.",
           {"source": S, "library": LIBRARY}, ["source"],
           lambda a: ["report", a["source"], *_flags(a, {"library": "--library"})], True),
     _tool("compare", "Build a blind A/B listening page comparing two versions in a new directory.",
@@ -115,10 +119,12 @@ TOOLS = [
           lambda a: ["samples", "list", *_flags(a, {"library": "--library", "query": "--query", "tag": "--tag",
                                                     "category": "--category", "compatible": "--compatible",
                                                     "offset": "--offset", "limit": "--limit"})], True),
-    _tool("samples_inspect", "Show one library sample's measurements, labels and compatibility.",
+    _tool("samples_inspect", "Show one library sample's measurements, labels, compatibility and estimated pitch at C-2 "
+          "(for a looped cycle it follows the loop length).",
           {"library": LIBRARY, "id": S}, ["id"],
           lambda a: ["samples", "inspect", a["id"], *_flags(a, {"library": "--library"})], True),
-    _tool("samples_preview", "Render a library sample at a note to a WAV file for audition.",
+    _tool("samples_preview", "Render a library sample at a note to a WAV file for audition, with measured peak, RMS, "
+          "loudness and estimated pitch.",
           {"library": LIBRARY, "id": S, "output": S, "note": S, "seconds": N}, ["id", "output"],
           lambda a: ["samples", "preview", a["id"], "--output", a["output"], *_flags(a, {
               "library": "--library", "note": "--note", "seconds": "--seconds"})]),
@@ -165,7 +171,8 @@ TOOLS = [
     _tool("live_patch", "Apply patch operations to the live song (visible immediately and undoable in the window). "
           "Pass base_revision from live_changes/live_status so edits that overlap the owner's newer changes are "
           "refused instead of overwriting them. With propose=true the owner accepts or rejects it in the window.",
-          {"session": S, "ops": OPS, "label": S, "base_revision": I, "propose": B, "author": S}, ["ops"],
+          {"session": S, "ops": OPS, "ops_file": OPS_FILE, "label": S, "base_revision": I, "propose": B, "author": S},
+          (),
           lambda a: ["live", *_flags(a, {"session": "--session"}), "patch", *_ops_json(a), *_flags(a, {
               "label": "--label", "base_revision": "--base", "propose": "--propose", "author": "--author"})]),
     _tool("live_changes", "Changes since a revision, by author (owner or agent), as readable cell summaries.",
@@ -270,6 +277,15 @@ TOOLS = [
           "`format` defaults to the output extension.",
           {"source": S, "output": S, "format": _enum("mod", "xm")}, ["source", "output"],
           lambda a: ["export", a["source"], "--output", a["output"], *_flags(a, {"format": "--format"})]),
+    _tool("new_project", "Write a blank project to start a song: empty patterns in order, one empty sample slot, "
+          "initial speed/BPM and the channel count (4 by default; 2-32, other counts than 4 use the "
+          "protracker-nch-pal-v1 profile). sample_source defaults to library (fill slots with samples_add or "
+          "library_sample); use synth_palette instead for a synthesized-only song.",
+          {"output": S, "title": S, "channels": I, "patterns": I, "speed": I, "bpm": I,
+           "sample_source": _enum("library", "synthesized", "mixed", "none")}, ["output"],
+          lambda a: ["new", "--output", a["output"], *_flags(a, {
+              "title": "--title", "channels": "--channels", "patterns": "--patterns", "speed": "--speed",
+              "bpm": "--bpm", "sample_source": "--sample-source"})]),
 ]
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -343,8 +359,10 @@ class Server:
             return self._result(identifier, {
                 "protocolVersion": self.protocol, "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "chiploom", "title": "ChipLoom", "version": __version__},
-                "instructions": "ChipLoom composes four-channel MOD music. Plan with estimate, write a JSON project, "
-                                "edit it with patch operations, validate, export the real MOD, render to listen. "
+                "instructions": "ChipLoom composes tracker music: MOD with 4 channels by default or up to 32, and XM. "
+                                "Plan with estimate, start with new_project (channels, speed, BPM; library samples by "
+                                "default) or synth_palette (synthesized-only), edit with patch operations (channels "
+                                "count from 0, sample slots from 1), validate, export the real MOD, render to listen. "
                                 "When the owner has the ChipLoom window open, use the live_* tools to compose together; "
                                 "read live_changes before editing and pass base_revision to respect their edits."})
         if method == "ping":
@@ -364,6 +382,10 @@ class Server:
                 message_text = f"{tool['name']}: {exc}"
                 return self._result(identifier, self._tool_result(False, {
                     "ok": False, "error": "InvalidArguments", "code": "INVALID_ARGUMENTS", "message": message_text}))
+            if "ops" in tool["inputSchema"]["properties"] and ("ops" in arguments) == ("ops_file" in arguments):
+                return self._result(identifier, self._tool_result(False, {
+                    "ok": False, "error": "InvalidArguments", "code": "INVALID_ARGUMENTS",
+                    "message": f"{tool['name']}: give either ops or ops_file."}))
             ops_file = None
             try:
                 if "ops" in arguments:

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
-from tracker4agents import project
+from tracker4agents import mod, project
 from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell, playback_plan
-from tracker4agents.report import KK_MAJOR, KK_MINOR, add_feedback, analyze, estimate_key
+from tracker4agents.report import KK_MAJOR, KK_MINOR, add_feedback, analyze, estimate_key, loudness_reference
+from tracker4agents.sample_library import SampleLibrary
 
 ROOT = Path(__file__).resolve().parents[1]
 TONE = (0, 0, 50, -50, 50, -50)
@@ -45,8 +50,8 @@ class AnalyzeTinyModuleTests(unittest.TestCase):
         self.assertEqual((timing["bpm_min"], timing["bpm_max"], timing["speed_min"], timing["speed_max"]), (125, 125, 6, 6))
         self.assertEqual(timing["tempo_changes"]["count"], 0)
 
-    def test_channel_one(self):
-        one = self.channels[1]
+    def test_channel_zero(self):
+        one = self.channels[0]
         self.assertEqual(one["note_ons"], 2)
         self.assertAlmostEqual(one["notes_per_second"], 2 / 0.48, places=5)
         self.assertEqual(one["density"], 0.5)
@@ -55,14 +60,14 @@ class AnalyzeTinyModuleTests(unittest.TestCase):
         self.assertEqual(one["longest_gap_without_note"]["rows"], 2)
         self.assertAlmostEqual(one["longest_gap_without_note"]["seconds"], 0.24)
 
-    def test_channel_two_gap_is_the_first_longest_run(self):
-        two = self.channels[2]
+    def test_channel_one_gap_is_the_first_longest_run(self):
+        two = self.channels[1]
         self.assertEqual((two["note_ons"], two["lowest_note"], two["range_semitones"]), (1, "C-3", 0))
         self.assertEqual(two["longest_gap_without_note"]["rows"], 2)
         self.assertEqual(two["longest_gap_without_note"]["start_played_row"], 0)
 
     def test_silent_channels_and_effects(self):
-        three, four = self.channels[3], self.channels[4]
+        three, four = self.channels[2], self.channels[3]
         self.assertEqual((three["note_ons"], three["lowest_note"], three["range_semitones"]), (0, None, None))
         self.assertEqual(three["longest_gap_without_note"]["rows"], 4)
         self.assertEqual(four["effects"], {"D": 1})
@@ -86,10 +91,12 @@ class AnalyzeTinyModuleTests(unittest.TestCase):
         usage = self.report["samples"]
         self.assertEqual(usage["never_played_slots"], [2])
         self.assertEqual(usage["slots"][0]["note_ons"], 3)
-        self.assertEqual(usage["slots"][0]["channels"], [1, 2])
+        self.assertEqual(usage["slots"][0]["channels"], [0, 1])
         codes = {(item["code"], item.get("channel", item.get("slot"))) for item in self.report["warnings"]
                  if item["code"] != "sample_level_off_reference"}  # level warnings are tested in test_synth_mode
-        self.assertEqual(codes, {("channel_never_plays", 3), ("channel_never_plays", 4), ("sample_never_played", 2)})
+        self.assertEqual(codes, {("channel_never_plays", 2), ("channel_never_plays", 3), ("sample_never_played", 2)})
+        self.assertIn("Channel 2 starts no note", " ".join(item["message"] for item in self.report["warnings"]))
+        self.assertEqual([entry["channel"] for entry in self.report["channels"]], [0, 1, 2, 3])
 
     def test_json_serializable_and_deterministic(self):
         json.dumps(self.report, allow_nan=False)
@@ -208,6 +215,72 @@ class ExampleProjectTests(unittest.TestCase):
         json.dumps(report, allow_nan=False)
         self.assertEqual(report, analyze(module))
         self.assertIn("not judgments", report["scope"])
+
+
+class LoudnessReferenceTests(unittest.TestCase):
+    """`report` picks the default sample bank for a library-mode project and says which reference it used."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="chiploom report reference ")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.default = self.root / "exports" / "sample_library"
+
+    def build_bank(self, path: Path) -> None:
+        pulse = Sample("pulse", (60, 60, -60, -60) * 8, 40, 0, 0, 32)
+        source = self.root / "bank source.mod"
+        source.write_bytes(mod.encode(Module("t", [pulse], [pattern((0, 0, cell("C-2", 1)))], [0])))
+        SampleLibrary(path).extract(source)
+
+    def module(self, mode: str | None) -> Module:
+        module = tiny_module()
+        if mode == "declared":
+            module.metadata["sample_source"] = "library"
+        elif mode == "ids":
+            module.metadata["sample_sources"] = {"1": {"library_id": "SMP-0001", "origin": "module-extracted"}}
+        return module
+
+    def test_library_mode_uses_the_default_bank_when_it_exists(self):
+        self.build_bank(self.default)
+        for mode in ("declared", "ids"):
+            with self.subTest(mode=mode):
+                module = self.module(mode)
+                info = analyze(module, loudness_reference(module, default=self.default))["samples"]["loudness_reference"]
+                self.assertEqual((info["source"], info["selection"], info["path"]),
+                                 ("library", "automatic", str(self.default.resolve())))
+                self.assertIn("Library-mode project", info["reason"])
+
+    def test_defaults_without_a_bank_or_outside_library_mode(self):
+        module = self.module("declared")
+        info = analyze(module, loudness_reference(module, default=self.default))["samples"]["loudness_reference"]
+        self.assertEqual((info["source"], info["path"]), ("defaults", None))
+        self.assertIn("no sample bank", info["reason"])
+        self.build_bank(self.default)
+        plain = self.module(None)
+        info = analyze(plain, loudness_reference(plain, default=self.default))["samples"]["loudness_reference"]
+        self.assertEqual(info["source"], "defaults")
+        self.assertIn("Not a library-mode project", info["reason"])
+        self.assertEqual(analyze(plain)["samples"]["loudness_reference"]["selection"], "default")
+
+    def test_explicit_library_overrides_and_must_exist(self):
+        other = self.root / "other bank"
+        self.build_bank(other)
+        plain = self.module(None)
+        info = analyze(plain, loudness_reference(plain, other))["samples"]["loudness_reference"]
+        self.assertEqual((info["source"], info["selection"], info["path"]), ("library", "explicit", str(other.resolve())))
+        with self.assertRaises(ValidationError):
+            loudness_reference(plain, self.root / "missing")
+
+    def test_cli_report_falls_back_to_the_bank_under_the_working_directory(self):
+        self.build_bank(self.default)
+        source = self.root / "song.json"
+        project.write_json(source, project.to_dict(self.module("declared")))
+        environment = {**os.environ, "PYTHONPATH": str(ROOT)}
+        result = subprocess.run([sys.executable, "-m", "tracker4agents", "report", str(source)], cwd=self.root,
+                                capture_output=True, text=True, encoding="utf-8", timeout=60, env=environment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        info = json.loads(result.stdout)["samples"]["loudness_reference"]
+        self.assertEqual((info["source"], info["selection"]), ("library", "automatic"))
 
 
 class FeedbackTests(unittest.TestCase):

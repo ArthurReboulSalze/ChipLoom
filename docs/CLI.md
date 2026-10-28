@@ -32,6 +32,7 @@ python -m tracker4agents demo --song first-light --output exports/first-light --
 python -m tracker4agents demo --song pixel-rush --mp3
 python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --grid --rows 8
 python -m tracker4agents validate examples/pixel_rush.project.json
+python -m tracker4agents new --output exports/new-song/project.json --channels 8 --patterns 4 --bpm 120
 python -m tracker4agents patch examples/pixel_rush.project.json --output exports/variation.project.json --op '{"op": "transpose", "pattern": 1, "channel": 1, "semitones": 2}'
 python -m tracker4agents export exports/variation.project.json --output exports/custom.mod
 python -m tracker4agents report exports/variation.project.json
@@ -44,6 +45,8 @@ python -m tracker4agents gui examples/pixel_rush.project.json
 ```
 
 `preview --output` is a **new directory**, not an HTML filename. It renders one complete supported cycle and creates `preview.html`, `module.mod`, `module.project.json`, `module.wav`, `validation.json`, sample WAVs, and optionally `module.mp3`. It publishes the directory only after successful completion. The HTML player loops from the module's computed restart time after the first pass.
+
+`new --output NEW.json` writes a blank project to start a song: `--patterns N` empty patterns played in order (default 1), one empty sample slot, `Fxx` speed and BPM on the first row (`--speed`, default 6; `--bpm`, default 125), `--channels N` (2 to 32, default 4; other counts than 4 use the `protracker-nch-pal-v1` profile), `--title` and `--sample-source library|synthesized|mixed|none` (recorded as `metadata.sample_source`, default `library`). Fill the empty slot with `samples add` or a `library_sample` operation. The output must not exist yet (`OUTPUT_PATH`). The result is `inspect`'s summary plus `output`, `speed`, `bpm` and `sample_source`.
 
 `analyze --output` is a JSON filename. `--probe` adds ffprobe/libopenmpt duration estimates. Without that flag, analysis uses only the standard library. Per-file failures appear under `analysis_error`; successful entries remain in the report. A report with any failed file returns exit code 2. `editable_in_current_profile: false` is a compatibility fact, not an analysis failure. Archives are limited to 512 entries and 64 MiB expanded; each MOD is limited to 4 MiB.
 
@@ -92,6 +95,31 @@ playback settings, measured features and editable labels. `pcm/` holds exact sig
 settings remain separate entries. Original filenames, titles, sample labels and source
 fingerprints exist only in `private/provenance.json`; ordinary search/inspect results
 do not include them. A generated `.gitignore` excludes bank contents from Git.
+
+**Pitch estimate.** `samples inspect` adds `sample.pitch`, a measurement (`"measurement": "estimate"`) of the
+fundamental heard when the sample plays at tracker note `C-2`:
+
+```json
+{"measurement": "estimate", "method": "loop-cycles", "reference_note": "C-2", "finetune": 0,
+ "playback_rate_hz": 8287.137, "loop_length": 112, "loop_cycles": 4, "cycle_length": 28.0,
+ "periodicity": 1.0, "region": [0, 112], "estimated_hz_at_c2": 295.969, "nearest_note": "D4",
+ "pitch_class": "D", "cents": 13.5, "transpose_semitones": 2, "reason": null, "note": "..."}
+```
+
+- `playback_rate_hz` is the PAL rate at `C-2` for the sample's finetune (ProTracker period table: 8287 Hz at finetune 0).
+- `method: "loop-cycles"` (loops up to 1024 bytes): the loop repeats, so the pitch is `playback_rate_hz x loop_cycles / loop_length`. `loop_cycles` is the largest number of whole cycles for which every shift by a multiple of `loop_length / loop_cycles` still correlates at 0.85 or more (circular autocorrelation). A 112-byte loop can hold 4 cycles of 28. `periodicity` is the weakest of those correlations.
+- `method: "autocorrelation"`: a YIN estimate over a longer loop, or over a one-shot after its loudest attack. `cycle_length` is the period in bytes; `periodicity` is 1 minus the aperiodicity (1 is perfectly periodic).
+- `method: null`, with every frequency field null and a `reason`, for silent samples, flat loops, loops that repeat below 20 Hz, and noise or drums with no stable period.
+- `nearest_note` uses scientific pitch names (A4 = 440 Hz). `transpose_semitones` (-5..+6) is the pitch-class offset from the written note to the heard note: +2 means a written C sounds D, so write a note 2 semitones lower to hear the written pitch class. Each semitone up multiplies the frequency by 2^(1/12).
+
+`samples list` items carry a compact `pitch` (`estimated_hz_at_c2`, `nearest_note`, `cents`, `transpose_semitones`,
+`loop_cycles`) for loops up to 1024 bytes and `null` otherwise; inspect a one-shot for its estimate.
+
+`samples preview` writes the WAV and returns the same measurements as `synth preview`: `volume`, `finetune`,
+`sample` (`bytes`, `looped`, `loop_start`, `loop_length`, `pcm_peak`), `loudness` (`role`: null for a library sample,
+`group` from the entry's category and tags, `loudness_db`, `peak_db`, `default_reference_db`, `note`) and `audio`
+(`peak`, `peak_dbfs`, `rms_dbfs`, `clipped_samples`), plus the `pitch` block with `at_preview_note`
+(`note`, `estimated_hz`, `nearest_note`, `pitch_class`, `cents`, `transpose_semitones`, or null without an estimate).
 
 Reimport preserves IDs, user-edited names/tags and playback variants. Only one writer
 may update a bank at a time. A stale `.write.lock` left by a terminated process must be
@@ -210,7 +238,7 @@ python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --
 "pattern": {
   "index": 0,
   "name": "Boot",
-  "columns": "row | track 1 | track 2 | track 3 | track 4 (note sample effect)",
+  "columns": "row | ch0 | ch1 | ch2 | ch3 (note sample effect)",
   "grid": [
     "00 | C-2 04 F06 | E-1 06 FA0 | E-2 08 037 | E-2 0A E01",
     "01 | --- -- ... | --- -- A03 | --- -- 037 | --- 0B 412",
@@ -224,7 +252,7 @@ python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --
 
 ## Patch
 
-`patch` applies a list of operations to a copy of a project and writes the result. The operations form **one transaction**: if any fails, or the final score does not validate, nothing is written. A failure names the operation, for example `ops[1] (set): …`. Patterns, orders, rows and channels are zero-based; sample slots are 1–31. Cells use the grid text above.
+`patch` applies a list of operations to a copy of a project and writes the result. The operations form **one transaction**: if any fails, or the final score does not validate, nothing is written. A failure names the operation, for example `ops[1] (set): …`. Patterns, orders, rows and channels are zero-based; sample slots are 1–31. The same numbering is used in every result an agent reads (`changes`, `inspect`, `report`, `live score`); only the window and the browser studio show tracks from 1. Cells use the grid text above.
 
 ```sh
 python -m tracker4agents patch exports/song/project.json --output exports/song/v2.project.json \
@@ -266,7 +294,7 @@ echo '[{"op": "transpose", "pattern": 0, "row": 0, "rows": 16, "channel": 1, "se
 }
 ```
 
-`changes` lists up to 40 lines (`P00 r04 ch1` is pattern 0, row `04`, channel 1 as displayed) and ends with a count when more cells changed; order, pattern-count, sample and title changes get their own lines. `results` has one entry per operation; `add_pattern` and `insert_order` report the new `pattern` and `order` index.
+`changes` lists up to 40 lines (`P00 r04 ch1` is pattern 0, row `04`, channel 1, counted from 0 like the operations, so the second channel) and ends with a count when more cells changed; order, pattern-count, sample and title changes get their own lines. `results` has one entry per operation; `add_pattern` and `insert_order` report the new `pattern` and `order` index.
 
 ### Operations
 
@@ -290,7 +318,7 @@ Every operation is an object with an `"op"` and the fields below. Unknown fields
 | `title` | `title` | Set the module title (ASCII, validated) |
 | `timing` | `bpm` (33–255), `speed` (1–31) | Write `Fxx` speed and BPM on the first played row. Needs two free effect columns there or existing `Fxx` effects, otherwise `TIMING`; other effects are never overwritten |
 | `sample` | `slot` (1–31), optional `volume` (0–64), `finetune` (−8 to 7), `name` | Change a sample's playback settings or name. PCM is never touched |
-| `library_sample` | `library`, `id`, optional `slot`, `replace`, `adapt` | Insert a library entry exactly like `samples add`: exact PCM, occupied slots need `slot` + `replace`, `adapt` only for the documented one-shot adaptation. Refused (`SAMPLE_SOURCE`) in a project declared `synthesized` |
+| `library_sample` | `id`, optional `library` (default `exports/sample_library`), `slot`, `replace`, `adapt` | Insert a library entry exactly like `samples add`: exact PCM, occupied slots need `slot` + `replace`, `adapt` only for the documented one-shot adaptation. Refused (`SAMPLE_SOURCE`) in a project declared `synthesized` |
 | `recipe_sample` | `name`, `recipe`, optional `slot` (1–31; default: the first free slot), `volume` (0–64), `finetune` (−8 to 7), `replace`, `role`, `match`, `library` | Insert a created sample (see [Created samples](#created-samples-synth)). An occupied slot is refused (`SAMPLE_SLOT`) unless `replace` is true. Without `volume`, the volume is set from the reference level of the sample's `role` (`kick`, `snare`, `hat`, `bass`, `lead`, `chord`, `texture`; inferred from the recipe when omitted): `match` is `"defaults"` (default), `"library"` (with `library`: a bank folder) or `"none"` (volume 40). The result lists the slot, the measured facts and the `loudness` record. Refused (`SAMPLE_SOURCE`) in a project declared `library` |
 
 `timing`, `Fxx` effects and any order operation change the playback plan, so read `duration_seconds` and `warnings` in the result.
@@ -378,7 +406,7 @@ A project may declare `"sample_source"` in `metadata`: `"library"` (only PCM fro
 python -m tracker4agents report exports/song/project.json
 ```
 
-`report` takes a project or MOD (`--library PATH` compares loudness with a sample bank's medians instead of the fixed reference levels) and prints `chiploom.report.v1` JSON. Everything in it is a **measurement of the symbolic score along its playback timeline** (first replay cycle, with repeated orders, jumps and tempo changes counted as played). It does not render audio and is not a quality verdict. The `scope` field says so in the output itself.
+`report` takes a project or MOD and prints `chiploom.report.v1` JSON. Loudness is compared with a reference chosen in this order: `--library PATH` (explicit, must exist); for a library-mode project (`metadata.sample_source: "library"`, or `library_id` entries in `metadata.sample_sources`) the default bank `exports/sample_library` under the working directory when it exists; otherwise the fixed reference levels. `samples.loudness_reference` says which one was used and why: `{"source": "library" | "defaults", "path": "<bank folder>" | null, "selection": "explicit" | "automatic" | "default", "reason": "..."}`. Channels are numbered from 0 everywhere in the report (`channels[].channel`, repetition blocks, the `channels` list of each sample slot, warning messages such as "Channel 0 starts no note"), like patch operations. Everything in it is a **measurement of the symbolic score along its playback timeline** (first replay cycle, with repeated orders, jumps and tempo changes counted as played). It does not render audio and is not a quality verdict. The `scope` field says so in the output itself.
 
 | Section | Contents |
 | --- | --- |
@@ -386,7 +414,7 @@ python -m tracker4agents report exports/song/project.json
 | `channels` | Per channel: note starts, notes per second, density, lowest and highest note, range, samples used, effects used, portamento targets, longest gap without a note |
 | `global` | Note starts, rows with and without a note start, pitch-class counts, and a `key_estimate` |
 | `repetition` | Identical patterns, distinct pattern contents, patterns never played, repeated-block fractions for 4-, 8- and 16-row blocks |
-| `samples` | Per slot: size, loop, volume, note starts, channels, `source` (`recipe` or `embedded_pcm`), `loudness_db`, `peak_db`, `group`, `reference_db`, `deviation_db`; empty and never-played slots; `sources` counts (`recipe`, `embedded_pcm`, `declared`) |
+| `samples` | Per slot: size, loop, volume, note starts, channels, `source` (`recipe` or `embedded_pcm`), `loudness_db`, `peak_db`, `group`, `reference_db`, `deviation_db`; empty and never-played slots; `sources` counts (`recipe`, `embedded_pcm`, `declared`); `loudness_reference` |
 | `warnings` | Duration and other warnings, including `sample_level_off_reference` for a played sample more than 6 dB from its group's reference |
 
 The key is the only estimate: a correlation with standard major and minor profiles, labelled `is_estimate: true` with a margin and a confidence level whose thresholds are heuristics chosen for this tool. Tracker note names are period labels and sample tuning is unknown, so the sounding pitch can differ from the written note. A "row without a note start" is not audible silence, because sustained or looped samples keep sounding.
@@ -514,15 +542,16 @@ Each tool call runs the equivalent `chiploom` command in a **child process**, so
 | Tools | Maps to |
 | --- | --- |
 | `estimate`, `validate`, `inspect`, `export`, `render`, `preview`, `migrate` | the commands of the same name (`validate` takes `report`, `inspect` takes `pattern`, `grid`, `row`, `rows`) |
-| `patch` | `patch` with `source`, `output`, `ops` (a JSON array) and `label` |
+| `patch` | `patch` with `source`, `output`, `ops` (a JSON array) or `ops_file` (a path to a JSON file holding it; give exactly one) and `label` |
+| `new_project` | `new` with `output`, `title`, `channels`, `patterns`, `speed`, `bpm`, `sample_source` |
 | `report`, `compare`, `feedback` | the commands of the same name; `compare` offers `mp3`, `language`, `seed` and `seconds` but not `labels` |
 | `samples_list`, `samples_inspect`, `samples_preview`, `samples_add` | `samples list`, `inspect`, `preview`, `add` (no `extract`, `edit` or `audit`) |
 | `sample_schema`, `sample_edit`, `sample_draw`, `sample_waveform`, `instruments_list`, `instruments_show`, `instruments_save`, `instruments_delete`, `instruments_apply` | the `sample` and `instruments` commands of the [sound workshop](#sound-workshop-sample-editing-and-instruments); `trim`, `loop` and `fade` are two-integer arrays, `phrase` a list of strings |
 | `convert`, `export_format` | `convert` and `export --format` ([multi-channel MOD and XM](#multi-channel-mod-and-xm)) |
 | `synth_types`, `synth_levels`, `synth_preview`, `synth_add`, `synth_palette` | `synth types`, `levels`, `preview`, `add`, `palette`; `recipe` is a JSON object, `match_library` a bank folder, `no_match` a boolean |
-| `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops`, `base_revision`, `label`, `propose`, `author` |
+| `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops` or `ops_file`, `base_revision`, `label`, `propose`, `author` |
 
-There are 45 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
+There are 46 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
 
 Configuration for a client that launches stdio servers (field names vary by client; this is the common shape):
 
@@ -719,7 +748,7 @@ ChipLoom reads and writes MOD files with 2 to 32 channels and a first FastTracke
 
 `Module.channels` is 4 by default. A MOD names its channel count by signature: `M.K.`/`M!K!`/`FLT4`/`4CHN` (four), `2CHN` to `9CHN`, `10CH` to `32CH`. `FLT8` (Startrekker pairs of patterns) is refused with `MOD_FLT8`; `CD61`/`CD81`/`OCTA`/`TDZx` (Octalyser and TakeTracker rules) with `MOD_VARIANT`. libopenmpt and libxmp place MOD channels left-right-right-left, repeating, for 6 and 8 channels as for 4; a plan agrees with libxmp's trace on 2, 6, 8, 10 and 16 channels.
 
-In a project, `channels` is a top-level field (absent means 4) and the profile is `protracker-4ch-pal-v1` for four channels or `protracker-nch-pal-v1` otherwise. A grid row holds one cell per channel separated by `|`; `events` use `"channel": 0..N-1`. Patch operations (`set`, `write` with `lines` or `cells`, `copy`, `move`, `clear`, `transpose`, `timing`) and the live `select` request check rows and channels against the pattern and the module. `audible` in a live context has one boolean per channel.
+`new --channels N` writes a blank project with N channels. In a project, `channels` is a top-level field (absent means 4) and the profile is `protracker-4ch-pal-v1` for four channels or `protracker-nch-pal-v1` otherwise. A grid row holds one cell per channel separated by `|`; `events` use `"channel": 0..N-1`. Patch operations (`set`, `write` with `lines` or `cells`, `copy`, `move`, `clear`, `transpose`, `timing`) and the live `select` request check rows and channels against the pattern and the module. `audible` in a live context has one boolean per channel.
 
 ### XM profile (`fasttracker2-xm-v1`)
 

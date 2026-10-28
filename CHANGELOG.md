@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Feedback from an agent that composed an eight-channel library-mode song through the MCP adapter.
+
+- Add `chiploom new` and the MCP tool `new_project`: a blank project with one empty sample slot, empty patterns in order, initial speed and BPM, a channel count from 2 to 32 (`protracker-nch-pal-v1` beyond four) and `metadata.sample_source` (`library` by default). A library-mode song no longer starts from a hand-written JSON file, and `samples: []` is refused with an English message that points to it.
+- The `library_sample` operation defaults `library` to `exports/sample_library`, like `samples add`.
+- The MCP `patch` and `live_patch` tools take `ops_file` (a path to a JSON list of operations) as an alternative to inline `ops`.
+- `samples inspect` gives a `pitch` block: the estimated fundamental at C-2 with its method, nearest note, cents and `transpose_semitones`. For a short loop it counts the whole cycles the loop holds (a looped cycle's pitch follows its loop length); otherwise it uses a YIN autocorrelation estimate, or `null` with a reason. `samples list` items carry a compact version.
+- `samples preview` returns the same `audio`, `loudness` and `sample` measurements as `synth preview` (one shared helper), plus the pitch at the preview note.
+- `report` on a library-mode project uses `exports/sample_library` as its loudness reference when it exists, instead of the fixed defaults; `samples.loudness_reference` says which reference was used and why. `--library` still overrides it.
+- The blind comparison page labelled channel 0 wrongly (a falsy check); fixed with the zero-based numbering.
+- Channel numbers are zero-based in every result an agent reads, as in the operations: `changes` lines (`ch0` is the first channel), `inspect --grid` and `live score` headers, and `report`. The window and the browser studio still show tracks from 1.
+- The MCP server instructions, the skill and the patch reference describe MOD with 4 to 32 channels instead of four only.
+
 ## 0.8.2 — 2026-10-28
 
 - Fix `chiploom-cli mcp` in the standalone builds: its tools started the CLI with `-m tracker4agents`, which a frozen program does not accept, so every tool call failed. Installs from a checkout or a wheel were not affected. The release workflow now makes one MCP tool call through each archive.

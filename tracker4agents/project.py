@@ -44,6 +44,7 @@ PROFILES = {"mod": (PROFILE, MOD_PROFILE_N), "xm": (XM_PROFILE,)}
 LIMITS = {"mod": {"samples": 31, "patterns": MAX_PATTERNS, "orders": 128, "rows": 64},
           "xm": {"samples": 128, "patterns": 256, "orders": 256, "rows": 256}}
 MAX_XM_PCM_BYTES = 2 * 1_048_576
+EMPTY_HINT = " A blank project (one empty slot) comes from `chiploom new` (MCP tool new_project)."
 
 
 def atomic_bytes(path: Path, payload: bytes) -> None:
@@ -236,7 +237,7 @@ def from_dict(data: object) -> Module:
     limits = LIMITS[fmt]
     samples_data, patterns_data, orders = data.get("samples"), data.get("patterns"), data.get("orders")
     if not isinstance(samples_data, list) or not 1 <= len(samples_data) <= limits["samples"]:
-        raise ValidationError(f"samples: tableau de 1 à {limits['samples']} emplacements attendu.", "SAMPLE_SLOT")
+        raise ValidationError(f"samples: array of 1 to {limits['samples']} slots expected.{EMPTY_HINT}", "SAMPLE_SLOT")
     if not isinstance(patterns_data, list) or not 1 <= len(patterns_data) <= limits["patterns"]:
         raise ValidationError(f"patterns: array of 1 to {limits['patterns']} patterns expected.", "PATTERNS")
     if not isinstance(orders, list):
@@ -414,7 +415,7 @@ def diagnose(data: object) -> list[dict]:
                              ("orders", limits["orders"], "ORDERS")):
         value = data.get(key)
         if not isinstance(value, list) or not 1 <= len(value) <= limit:
-            add(key, f"{key}: tableau de 1 à {limit} entrées attendu.", code)
+            add(key, f"{key}: array of 1 to {limit} entries expected." + (EMPTY_HINT if key == "samples" else ""), code)
         else:
             containers[key] = value
     samples, patterns, orders = (containers.get(key, []) for key in ("samples", "patterns", "orders"))

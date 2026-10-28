@@ -1,6 +1,6 @@
 ---
 name: chiploom
-description: Compose and revise four-channel MOD music with ChipLoom, including live co-composition with the owner's open window, or build a local sample bank from a user-provided selection of MOD files and ZIP archives. Use its CLI or Python API for extraction, neutral labeling, sample search, audition, validated batch editing (patch), measurement and MOD export.
+description: Compose and revise tracker music (MOD with 4 to 32 channels, XM) with ChipLoom, including live co-composition with the owner's open window, or build a local sample bank from a user-provided selection of MOD files and ZIP archives. Use its CLI or Python API for extraction, neutral labeling, sample search, audition, validated batch editing (patch), measurement and MOD export.
 ---
 
 # ChipLoom
@@ -54,14 +54,21 @@ music made with that PCM local unless the user explicitly requests publication.
 2. Search and audition a coherent palette. Inspect loops, volume, fine tune and MOD
    compatibility. IDs are local to a bank: discover them, never assume `SMP-0001`
    is a particular instrument. A tracker note does not establish a sample's pitch.
-3. Create a new schema v2 JSON project under `exports/<song>/`, embedding selected PCM
-   through `SampleLibrary.insert` or `samples add`. Record returned library IDs and
-   slots. Write original notes and arrangement rather than copying reference patterns.
-   Patterns are grid `rows`: `"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"`
-   (keys `00`-`3F`; four cells `NOTE SS EEE`; `---`, `--`, `...` are empty).
-4. Plan duration with `estimate`. The strict profile uses four channels, 64 rows per
-   pattern, sample slots 1–31 and notes `C-1` through `B-3` (`G#3`, not `G#-3`).
-   Effects and sample numbers in tracker cells are hexadecimal.
+3. Start a new schema v2 JSON project under `exports/<song>/` with `new` (`--channels`,
+   `--patterns`, `--speed`, `--bpm`; it records `"sample_source": "library"` and holds one
+   empty slot), then embed selected PCM through `samples add` or the `library_sample`
+   patch operation (the bank defaults to `exports/sample_library`). Record returned
+   library IDs and slots. Write original notes and arrangement rather than copying
+   reference patterns. Patterns are grid `rows`:
+   `"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"` (keys `00`-`3F`; one cell
+   `NOTE SS EEE` per channel; `---`, `--`, `...` are empty).
+4. Plan duration with `estimate`. A MOD has four channels by default and 2 to 32 with
+   `new --channels N` (profile `protracker-nch-pal-v1`, signature such as `8CHN`), 64 rows
+   per pattern, sample slots 1–31 and notes `C-1` through `B-3` (`G#3`, not `G#-3`).
+   Effects and sample numbers in tracker cells are hexadecimal. Channels, rows, patterns
+   and orders count from 0 in operations and in every result (`ch0` is the first channel).
+   `samples inspect` gives a sample's estimated pitch at C-2; a looped cycle's pitch
+   follows its loop length, so check that the palette agrees before writing chords.
 5. Validate, export the real MOD, then render that exported file if audio tools are
    available. For a longer score, use bounded section renders; each render is at
    most 120 seconds. Choose a new directory for each HTML bundle.
@@ -69,6 +76,7 @@ music made with that PCM local unless the user explicitly requests publication.
    judgments and actual listening. Revise from the user's feedback.
 
 ```sh
+python -m tracker4agents new --output exports/song/project.json --channels 8 --bpm 120 --patterns 4
 python -m tracker4agents validate exports/song/project.json --report
 python -m tracker4agents export exports/song/project.json --output exports/song/song.mod
 python -m tracker4agents render exports/song/song.mod --output exports/song/song.wav --mp3-output exports/song/song.mp3

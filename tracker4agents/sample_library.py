@@ -11,12 +11,13 @@ import copy
 import hashlib
 import io
 import math
+from operator import mul
 from pathlib import Path
 import re
 import zipfile
 
 from . import project, sample_source
-from .model import (NOTE_TO_PERIOD, Module, Sample, ValidationError,
+from .model import (NOTE_TO_PERIOD, PAL_CLOCK, Module, Sample, ValidationError,
                     ascii_field, require_int, validate, validate_sample)
 from .reference_layout import MAX_ARCHIVE, MAX_FILE, parse_layout
 
@@ -26,6 +27,20 @@ MAX_ENTRIES = 10_000
 MAX_PCM = 131_070  # A 16-bit length in words in a 31-sample reference header.
 CATEGORIES = ("cycle", "percussion", "texture", "effect", "unclassified", "silent")
 SETTINGS = ("pcm_sha256", "loop_start", "loop_length", "finetune", "volume")
+
+# Pitch estimates. C-2 periods for finetunes 0..7 then -8..-1 (ProTracker tuning, the same table as
+# audio.sample_preview); a sample plays PAL_CLOCK / period bytes per second at tracker note C-2.
+C2_PERIODS = (428, 425, 422, 419, 416, 413, 410, 407, 453, 450, 447, 444, 441, 437, 434, 431)
+PITCH_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+MAX_CYCLE_LOOP = 1024  # loops up to this length are searched for whole cycles; longer ones use autocorrelation
+CYCLE_CORRELATION = 0.85  # every shift by a multiple of the cycle must correlate at least this much
+MIN_PITCH_HZ = 20.0
+MAX_ANALYSIS = 1024  # samples compared per lag in the autocorrelation estimate
+APERIODICITY_LIMIT = 0.2  # YIN threshold on the cumulative-mean-normalized difference
+PITCH_NOTE = ("Measured estimate, not a listening judgment: fundamental frequency when the sample plays at "
+              "tracker note C-2 with its finetune (PAL ProTracker periods). nearest_note uses scientific pitch "
+              "names (A4 = 440 Hz); transpose_semitones is the pitch-class offset from the written note to the "
+              "heard one (+2: a written C sounds D). Each semitone up multiplies the frequency by 2^(1/12).")
 
 
 def _digest(raw: bytes) -> str:
@@ -102,6 +117,161 @@ def characterize(raw: bytes, loop_start: int, loop_length: int) -> tuple[dict, s
         category, prefix = "effect", "FX Short"
         tags.append("transient")
     return metrics, category, prefix, _tags(tags)
+
+
+def c2_playback_rate(finetune: int) -> float:
+    """Bytes per second played at tracker note C-2 for a MOD finetune (-8..7)."""
+    return PAL_CLOCK / C2_PERIODS[finetune & 15]
+
+
+def _nearest(frequency: float) -> dict:
+    position = 69 + 12 * math.log2(frequency / 440)
+    number = round(position)
+    pitch_class = number % 12
+    return {"nearest_note": f"{PITCH_NAMES[pitch_class]}{number // 12 - 1}", "pitch_class": PITCH_NAMES[pitch_class],
+            "cents": round((position - number) * 100, 1), "transpose_semitones": (pitch_class + 5) % 12 - 5}
+
+
+def _loop_cycles(loop: list[float]) -> tuple[int, float] | None:
+    """(whole cycles inside a circular loop, worst correlation of its shifts); None for a flat loop.
+
+    The loop holds k cycles when shifting it by every multiple of length/k reproduces it; the
+    largest such k wins. Fractional shifts interpolate the integer-lag circular autocorrelation.
+    """
+    size = len(loop)
+    energy = sum(map(mul, loop, loop))
+    if energy <= 1e-9:
+        return None
+    correlation = [sum(map(mul, loop, loop[lag:] + loop[:lag])) / energy for lag in range(size)]
+
+    def at(lag: float) -> float:
+        low = int(lag)
+        fraction = lag - low
+        return correlation[low % size] * (1 - fraction) + correlation[(low + 1) % size] * fraction
+
+    for cycles in range(size // 2, 1, -1):
+        step = size / cycles
+        worst = 1.0
+        for multiple in range(1, cycles):
+            worst = min(worst, at(step * multiple))
+            if worst < CYCLE_CORRELATION:
+                break
+        else:
+            return cycles, worst
+    return 1, 1.0
+
+
+def _yin(values: list[float], rate: float) -> tuple[float, float] | None:
+    """(period in samples, aperiodicity) from YIN's normalized difference; None without a clear period."""
+    max_lag = min(int(rate / MIN_PITCH_HZ), len(values) // 2)
+    width = min(MAX_ANALYSIS, len(values) - max_lag)
+    if max_lag < 8 or width < 64:
+        return None
+    count = width + max_lag
+    mean = sum(values[:count]) / count
+    values = [value - mean for value in values[:count]]
+    head = values[:width]
+    head_energy = sum(map(mul, head, head))
+    squares = [0.0]
+    for value in values:
+        squares.append(squares[-1] + value * value)
+    normalized = [1.0]
+    running = 0.0
+    for lag in range(1, max_lag + 1):
+        tail = values[lag:lag + width]
+        difference = head_energy + squares[lag + width] - squares[lag] - 2 * sum(map(mul, head, tail))
+        running += difference
+        normalized.append(difference * lag / running if running > 1e-9 else 1.0)
+    lag = next((index for index in range(2, max_lag) if normalized[index] < APERIODICITY_LIMIT), None)
+    if lag is None:
+        return None
+    while lag + 1 < max_lag and normalized[lag + 1] < normalized[lag]:
+        lag += 1
+    before, here, after = normalized[lag - 1], normalized[lag], normalized[lag + 1]
+    bend = before - 2 * here + after
+    offset = (before - after) / (2 * bend) if bend > 1e-12 else 0.0
+    return lag + max(-.5, min(.5, offset)), max(0.0, here)
+
+
+def estimate_pitch(sample: Sample) -> dict:
+    """Estimated fundamental of a sample at tracker note C-2: a measurement with its method, or null and a reason.
+
+    Looped samples up to MAX_CYCLE_LOOP bytes: playback rate x whole cycles in the loop / loop length.
+    Other samples: YIN autocorrelation over the loop or, for a one-shot, over the part after its loudest attack.
+    """
+    rate = c2_playback_rate(sample.finetune)
+    pcm = sample.pcm
+    looped = bool(sample.loop_length) and sample.loop_start + sample.loop_length <= len(pcm)
+    result = {"measurement": "estimate", "method": None, "reference_note": "C-2", "finetune": sample.finetune,
+              "playback_rate_hz": round(rate, 3), "loop_length": sample.loop_length if looped else None,
+              "loop_cycles": None, "cycle_length": None, "periodicity": None, "region": None,
+              "estimated_hz_at_c2": None, "nearest_note": None, "pitch_class": None, "cents": None,
+              "transpose_semitones": None, "reason": None, "note": PITCH_NOTE}
+    if not any(pcm):
+        result["reason"] = "silent sample"
+        return result
+    found = None
+    if looped and sample.loop_length <= MAX_CYCLE_LOOP:
+        start, end = sample.loop_start, sample.loop_start + sample.loop_length
+        loop = pcm[start:end]
+        mean = sum(loop) / len(loop)
+        cycles = _loop_cycles([value - mean for value in loop])
+        result["region"] = [start, end]
+        if cycles is None:
+            result["reason"] = "the loop is flat (constant level): no pitch"
+            return result
+        frequency = rate * cycles[0] / sample.loop_length
+        if frequency < MIN_PITCH_HZ:
+            result["reason"] = (f"the loop repeats at {frequency:.2f} Hz, below the pitch range "
+                                "(a noise or texture loop)")
+            return result
+        result.update(method="loop-cycles", loop_cycles=cycles[0],
+                      cycle_length=round(sample.loop_length / cycles[0], 3), periodicity=round(cycles[1], 3),
+                      estimated_hz_at_c2=round(frequency, 3), **_nearest(frequency))
+        return result
+    if looped:
+        start, end = sample.loop_start, sample.loop_start + sample.loop_length
+        loop = [float(value) for value in pcm[start:end]]
+        needed = MAX_ANALYSIS + int(rate / MIN_PITCH_HZ)
+        found = _yin((loop * (needed // len(loop) + 1))[:needed], rate)
+        reason = "no stable periodicity in the loop (noise or inharmonic sound)"
+    else:
+        from .loudness import WINDOW, audible_region
+        begin, end = audible_region(Sample(sample.name, pcm, sample.volume, sample.finetune, 0, 0))
+        energies = [sum(value * value for value in pcm[index:index + WINDOW]) for index in range(begin, end, WINDOW)]
+        loudest = begin + WINDOW * max(range(len(energies)), key=energies.__getitem__)
+        # Skip the loudest window (the attack) when enough of the sound remains after it.
+        start = loudest + WINDOW if end - loudest - WINDOW >= 512 else loudest
+        found = _yin([float(value) for value in pcm[start:end]], rate)
+        reason = "no stable periodicity after the attack (noise, drum, or too short to measure)"
+    result["region"] = [start, end]
+    if found is None:
+        result["reason"] = reason
+        return result
+    period, aperiodicity = found
+    frequency = rate / period
+    result.update(method="autocorrelation", cycle_length=round(period, 3), periodicity=round(1 - aperiodicity, 3),
+                  estimated_hz_at_c2=round(frequency, 3), **_nearest(frequency))
+    return result
+
+
+def pitch_at_note(pitch: dict, note: str) -> dict | None:
+    """The C-2 estimate moved to another tracker note (period ratio, finetune kept); None without an estimate."""
+    if pitch.get("estimated_hz_at_c2") is None:
+        return None
+    frequency = pitch["estimated_hz_at_c2"] * NOTE_TO_PERIOD["C-2"] / NOTE_TO_PERIOD[note]
+    return {"note": note, "estimated_hz": round(frequency, 3), **_nearest(frequency)}
+
+
+def _pitch_summary(sample: Sample) -> dict | None:
+    """Compact list-view estimate: only the cheap loop-cycle method on short loops; None otherwise."""
+    if not sample.loop_length or sample.loop_length > MAX_CYCLE_LOOP:
+        return None
+    pitch = estimate_pitch(sample)
+    if pitch["method"] != "loop-cycles":
+        return None
+    return {key: pitch[key] for key in ("estimated_hz_at_c2", "nearest_note", "cents", "transpose_semitones",
+                                        "loop_cycles")}
 
 
 def _read_sources(source: Path) -> tuple[str, list[tuple[str, bytes]]]:
@@ -226,15 +396,22 @@ class SampleLibrary:
             text = " ".join([item["id"], item["name"], item["category"], *item["tags"]]).casefold()
             if not all(word in text for word in query.casefold().split()):
                 continue
-            compatible = _compatibility(item, self._pcm(item))["compatible"]
+            raw = self._pcm(item)
+            compatible = _compatibility(item, raw)["compatible"]
             if compatible_only and not compatible:
                 continue
             summary = {key: copy.deepcopy(item[key]) for key in
                        ("id", "name", "category", "tags", "bytes", "volume", "finetune", "loop_start", "loop_length")}
             summary["compatible"] = compatible
-            results.append(summary)
+            results.append((summary, raw))
+        page = results[offset:offset + limit]
+        for summary, raw in page:
+            summary["pitch"] = _pitch_summary(_sample(summary, raw))
         return {"ok": True, "total": len(results), "offset": offset,
-                "samples": results[offset:offset + limit]}
+                "samples": [summary for summary, _ in page],
+                "pitch_note": "pitch: estimated fundamental at C-2 for loops up to "
+                              f"{MAX_CYCLE_LOOP} bytes (null otherwise; samples inspect also estimates one-shots). "
+                              "A measurement, not a listening judgment."}
 
     def extract(self, source: Path) -> dict:
         source = Path(source).resolve()
@@ -340,6 +517,12 @@ class SampleLibrary:
             project.write_json(self._path("library.json"), manifest)
         return self.get(sample_id)
 
+    def inspect(self, sample_id: str) -> dict:
+        """The entry with its compatibility and an estimated pitch at C-2 (see `estimate_pitch`)."""
+        entry = self.get(sample_id)
+        entry["pitch"] = estimate_pitch(_sample(entry, self._pcm(entry)))
+        return entry
+
     def read_sample(self, sample_id: str) -> Sample:
         """Verified stored PCM for inspection; it may be outside the MOD profile."""
         entry = self.get(sample_id)
@@ -396,11 +579,19 @@ class SampleLibrary:
         output = Path(output).resolve()
         if output.suffix.lower() != ".wav" or output.is_relative_to(self.path):
             raise ValidationError("Audition output must be a WAV outside the sample bank.")
+        from . import loudness
+        from .synth_tools import audition_measurements
         entry = self.get(sample_id)
         require_int(entry["volume"], "volume", 0, 64)
         sample = _sample(entry, self._pcm(entry))
         result = audition_sample(sample, output, note, seconds)
-        return {"ok": True, "id": sample_id, **result}
+        pitch = estimate_pitch(sample)
+        pitch["at_preview_note"] = pitch_at_note(pitch, note)
+        facts = {"bytes": len(sample.pcm), "looped": bool(sample.loop_length), "loop_start": sample.loop_start,
+                 "loop_length": sample.loop_length, "pcm_peak": max(map(abs, sample.pcm), default=0)}
+        return {"ok": True, "id": sample_id, **result, "volume": sample.volume, "finetune": sample.finetune,
+                "sample": facts, **audition_measurements(sample, output, None, loudness.library_group(entry)),
+                "pitch": pitch}
 
     def audit(self) -> dict:
         entries = self._manifest()["samples"]

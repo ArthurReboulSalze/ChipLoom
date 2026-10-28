@@ -16,7 +16,7 @@ The command workflow is exercised by this project's tests and by Codex during de
 
 1. Establish duration, approximate tempo, mood and target MOD profile. The current owner-approved workflow uses the local sample library exclusively; new sample synthesis and waveform drawing are deferred until the owner resumes them.
 2. Inspect an included project and, when useful, read the reference study. Use a reference's construction ideas without assuming its samples or melody should be copied.
-3. Create a **new** schema v2 project JSON with embedded library PCM, patterns and order list. Record the library IDs and select a coherent palette before writing the arrangement. Avoid replacing the included examples. Write patterns as grid `rows` (see [Project data and samples](#project-data-and-samples)), or build the first version with `patch` operations on a copy.
+3. Create a **new** schema v2 project JSON with embedded library PCM, patterns and order list: `new --output exports/my-song/project.json [--channels N] [--patterns N] [--bpm B]` writes a blank library-mode project to fill with `samples add` or `library_sample` operations. Record the library IDs and select a coherent palette before writing the arrangement. Avoid replacing the included examples. Write patterns as grid `rows` (see [Project data and samples](#project-data-and-samples)), or build the first version with `patch` operations on a copy.
 4. Read what you wrote back with `inspect --pattern N --grid` and validate. Fix any rejected note range, sample loop or unsupported effect before exporting. `validate --report` lists every independent problem with a stable `code` and a `path`.
 5. Revise with `patch`: batches of operations that apply as one validated transaction ([below](#editing-with-patch-operations)). Write each revision to a new file so earlier versions stay available.
 6. Export the actual MOD, then render that exported file. Generate an HTML listening bundle if useful.
@@ -26,6 +26,7 @@ The command workflow is exercised by this project's tests and by Codex during de
 
 ```sh
 python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --grid --rows 8
+python -m tracker4agents new --output exports/my-song/project.json --patterns 4 --bpm 120
 python -m tracker4agents validate exports/my-song/project.json
 python -m tracker4agents export exports/my-song/project.json --output exports/my-song/my-song.mod
 python -m tracker4agents render exports/my-song/my-song.mod --output exports/my-song/my-song.wav --mp3-output exports/my-song/my-song.mp3
@@ -108,7 +109,7 @@ with `lead-up.ops.json`:
 ]
 ```
 
-The result lists `changes` (one line per changed cell, such as `P01 r00 ch1: C-2 04 C38 → C-3 04 C38`), the new `duration_seconds` and any `warnings`. Read `changes` to confirm that the edit touched what you meant. The operations are `set`, `write`, `clear`, `copy`, `move`, `transpose`, `add_pattern`, `remove_pattern`, `rename_pattern`, `set_orders`, `insert_order`, `remove_order`, `move_order`, `title`, `timing`, `sample` and `library_sample`; every field is in the [operations table](CLI.md#operations).
+The result lists `changes` (one line per changed cell, such as `P01 r00 ch1: C-2 04 C38 → C-3 04 C38`; channels count from 0 there as in the operations, `report` and `inspect`), the new `duration_seconds` and any `warnings`. Read `changes` to confirm that the edit touched what you meant. The operations are `set`, `write`, `clear`, `copy`, `move`, `transpose`, `add_pattern`, `remove_pattern`, `rename_pattern`, `set_orders`, `insert_order`, `remove_order`, `move_order`, `title`, `timing`, `sample` and `library_sample`; every field is in the [operations table](CLI.md#operations).
 
 Habits that work well:
 
@@ -116,11 +117,11 @@ Habits that work well:
 - Use `write` with `lines` for a whole bar and `cells` with `step` for a line of notes on one channel; use `copy` and `move` for repeating or shifting phrases; use `transpose` for key changes.
 - Keep one patch to one musical intent and label it. Several small patches give a clearer history than one large rewrite.
 - An empty string in `cells` clears that cell; `"--- -- ..."` is an explicit empty cell.
-- `library_sample` inserts library audio by ID with the same exact-PCM rules as `samples add`. New sample synthesis stays deferred.
+- `library_sample` inserts library audio by ID with the same exact-PCM rules as `samples add`; `library` defaults to `exports/sample_library`. New sample synthesis stays deferred.
 
 ## Project data and samples
 
-New projects use the schema `tracker4agents.project.v2`. Version 1 files still load, and `chiploom migrate SRC --output NEW.json` rewrites them without changing the encoded MOD (`pixel_rush` goes from 192 KB to 34 KB). `examples/*.project.json` are complete executable examples and may still be v1. In v2 a pattern is a grid of `rows`: each key is a two-digit hexadecimal row `00` to `3F` and each value holds four cells separated by `|`, written `NOTE SS EEE`, where `---`, `--` and `...` mean empty note, sample and effect. Rows that are completely empty are left out.
+New projects use the schema `tracker4agents.project.v2`. Version 1 files still load, and `chiploom migrate SRC --output NEW.json` rewrites them without changing the encoded MOD (`pixel_rush` goes from 192 KB to 34 KB). `examples/*.project.json` are complete executable examples and may still be v1. In v2 a pattern is a grid of `rows`: each key is a two-digit hexadecimal row `00` to `3F` and each value holds one cell per channel (four by default) separated by `|`, written `NOTE SS EEE`, where `---`, `--` and `...` mean empty note, sample and effect. Rows that are completely empty are left out.
 
 ```json
 {"name": "Hook", "rows": {
@@ -161,7 +162,10 @@ python -m tracker4agents samples add SMP-0001 --project exports/song/project.jso
 ```
 
 Inspect the sample's loop and fine tune before assigning musical notes. A sample slot
-or tracker note is not a standardized instrument pitch. Start with compatible entries;
+or tracker note is not a standardized instrument pitch. `samples inspect` estimates the
+pitch a sample plays at C-2 (for a looped cycle it follows the loop length), and
+`samples preview` measures the audition's level like `synth preview`. Check that the
+palette's samples agree in pitch before writing chords across them. Start with compatible entries;
 use `--adapt` only when the documented one-shot adaptation is desired. The inserted
 project embeds the audio and keeps neutral provenance in `metadata.sample_sources`.
 
@@ -289,7 +293,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## MCP adapter
 
-`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 45 tools (estimate, validate, inspect, patch, export, render, preview, report, compare, feedback, migrate, convert, `export_format`, four `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`.
+`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 46 tools (estimate, validate, inspect, `new_project`, patch, export, render, preview, report, compare, feedback, migrate, convert, `export_format`, four `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`, or as a path to a JSON file in `ops_file` for large generated patches.
 
 A client that launches stdio servers can use this shape (field names vary by client):
 
@@ -303,7 +307,7 @@ The adapter is covered by the project's automated tests and is driven by the off
 
 Check `inspect` first: `channels`, `profile` and, for an XM, `format: "xm"` tell you what you are writing. Grid rows have one cell per channel, so a six-channel `write` with `lines` needs six cells; the `columns` field of `inspect --grid` shows the layout. Everything about notation, limits and refusal codes is in [CLI.md](CLI.md#multi-channel-mod-and-xm); the short version:
 
-- **More channels** (MOD `6CHN`, `8CHN` ... up to 32): same effects and flow rules as four channels; a patch bounds-checks the extra channels. Reference modules with two channels are editable too.
+- **More channels** (MOD `6CHN`, `8CHN` ... up to 32): start the song with `chiploom new --output P.json --channels 8` (MCP `new_project`); same effects and flow rules as four channels; a patch bounds-checks the extra channels. Reference modules with two channels are editable too.
 - **XM** gives you 16-bit samples, ping-pong loops, per-sample panning, a volume column and patterns of any length from 1 to 256 rows. Remember that one XM instrument is exactly one sample, that note labels differ (`C-4` is middle C; a MOD's `C-2` is an XM `C-4`), and that the volume column is a raw hexadecimal byte (`40` sets volume 64, `C8` sets panning 8).
 - **Sample tools**: `library_sample`, `recipe_sample`, `sample_loop|trim|gain|fade|set_pcm|match_level` and `apply_instrument` edit 8-bit MOD samples and are refused on an XM (`XM_OP_UNSUPPORTED`); `sample` can set `volume`, `finetune`, `panning`, `relative_note` and `loop_mode`. Load a MOD sample into an XM with `convert`, then keep composing.
 - **Convert deliberately**: `chiploom convert song.mod --output song.xm` keeps the music and reports what an XM plays differently; going back with `convert song.xm --output song.mod` works only when the XM stayed inside the MOD profile, and otherwise returns every reason.

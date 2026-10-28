@@ -70,7 +70,7 @@ def describe(module: Module, pattern_index: int | None = None, grid: bool = Fals
             xm = module.format == "xm"
             result["pattern"] = {"index": pattern_index, "name": module.patterns[pattern_index].name,
                                  "rows": total,
-                                 "columns": "row | " + " | ".join(f"track {i + 1}" for i in range(module.channels))
+                                 "columns": "row | " + " | ".join(f"ch{i}" for i in range(module.channels))
                                             + (" (note instrument volume effect)" if xm else " (note sample effect)"),
                                  "grid": pattern_grid(module, pattern_index, row, count)}
         else:
@@ -114,6 +114,29 @@ def patch_project(args: argparse.Namespace) -> dict:
     return {"ok": True, "output": str(output), "changed": applied["changed"], "results": applied["results"],
             "changes": summarize(applied["diff"], 40), "cells_changed": len(applied["diff"]["cells"]),
             "duration_seconds": plan["duration_seconds"], "warnings": audio.duration_warnings(plan["duration_seconds"])}
+
+
+def new_project(args: argparse.Namespace) -> dict:
+    """A blank MOD project: one empty sample slot, empty patterns in order, initial speed/BPM."""
+    from .model import MAX_PATTERNS, MOD_MAX_CHANNELS, Pattern, Sample, ascii_field
+    from .patch import set_initial_timing
+    output = args.output.resolve()
+    if output.suffix.lower() != ".json":
+        raise ValidationError("A new project is written as an editable .json project.", "OUTPUT_PATH")
+    if output.exists():
+        raise ValidationError(f"{output} already exists; choose a new path.", "OUTPUT_PATH")
+    require_int(args.channels, "channels", 2, MOD_MAX_CHANNELS, "CHANNELS")
+    require_int(args.patterns, "patterns", 1, MAX_PATTERNS)
+    ascii_field(args.title, 20, "MOD title")
+    metadata = {} if args.sample_source == "none" else {"sample_source": args.sample_source}
+    module = Module(args.title, [Sample("", (), 0)], [Pattern(f"Pattern {index:02d}") for index in range(args.patterns)],
+                    list(range(args.patterns)), metadata, args.channels)
+    set_initial_timing(module, args.bpm, args.speed)
+    validate(module)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    project.write_json(output, project.to_dict(module))
+    return {"ok": True, "output": str(output), "speed": args.speed, "bpm": args.bpm,
+            "sample_source": metadata.get("sample_source"), **describe(module)}
 
 
 def record_feedback(args: argparse.Namespace) -> dict:
@@ -264,7 +287,7 @@ def create_demo(args: argparse.Namespace) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="chiploom", description="ChipLoom: an agent-driven four-channel MOD tracker.")
+    parser = argparse.ArgumentParser(prog="chiploom", description="ChipLoom: an agent-driven tracker toolkit (MOD with 4 or more channels, XM).")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
     estimate = commands.add_parser("estimate", help="Estimate duration before writing a score (constant timing).")
@@ -329,6 +352,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_synth_parser(commands)
     add_sample_parser(commands)
     add_instrument_parser(commands)
+    new = commands.add_parser("new", help="Write a blank project: empty patterns, one empty sample slot, speed/BPM.")
+    new.add_argument("--output", type=Path, required=True, help="New .json project; must not exist yet.")
+    new.add_argument("--title", default="", help="MOD title, up to 20 ASCII characters.")
+    new.add_argument("--channels", type=int, default=4, help="Channel count, 2 to 32 (default 4; other counts "
+                                                             "use the protracker-nch-pal-v1 profile).")
+    new.add_argument("--patterns", type=int, default=1, help="Empty patterns, played in order (default 1).")
+    new.add_argument("--speed", type=int, default=6)
+    new.add_argument("--bpm", type=int, default=125)
+    new.add_argument("--sample-source", choices=("library", "synthesized", "mixed", "none"), default="library",
+                     help="Recorded metadata.sample_source (default library; none records nothing).")
     migrate_parser = commands.add_parser("migrate", help="Rewrite a project (v1 or v2) or MOD as a schema v2 project.")
     migrate_parser.add_argument("source", type=Path)
     migrate_parser.add_argument("--output", type=Path, required=True, help="New .json project; must differ from the source.")
@@ -342,7 +375,8 @@ def build_parser() -> argparse.ArgumentParser:
     report = commands.add_parser("report", help="Measure a composition: density, ranges, gaps, repetition, estimated key.")
     report.add_argument("source", type=Path)
     report.add_argument("--library", type=Path, help="Sample bank whose median levels are the loudness reference "
-                                                     "(default: fixed reference levels).")
+                                                     "(default: exports/sample_library for a library-mode project "
+                                                     "when it exists, else fixed reference levels).")
     compare = commands.add_parser("compare", help="Build a blind A/B listening page for two versions in a new directory.")
     compare.add_argument("first", type=Path)
     compare.add_argument("second", type=Path)
@@ -438,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             elif action == "list":
                 result = bank.search(args.query, args.tag, args.category, args.compatible, args.offset, args.limit)
             elif action == "inspect":
-                result = {"ok": True, "sample": bank.get(args.id)}
+                result = {"ok": True, "sample": bank.inspect(args.id)}
             elif action == "audit":
                 result = bank.audit()
             elif action == "preview":
@@ -513,13 +547,12 @@ def main(argv: list[str] | None = None) -> int:
             result = convert_command(args)
         elif args.command == "patch":
             result = patch_project(args)
+        elif args.command == "new":
+            result = new_project(args)
         elif args.command == "report":
-            from .report import analyze
-            reference = None
-            if args.library is not None:
-                from .synth_tools import resolve_reference
-                reference = resolve_reference("library", args.library)
-            result = {"ok": True, **analyze(load(args.source), reference)}
+            from .report import analyze, loudness_reference
+            module = load(args.source)
+            result = {"ok": True, **analyze(module, loudness_reference(module, args.library))}
         elif args.command == "compare":
             from .compare import create_comparison
             result = create_comparison(args.first, args.second, args.output, mp3=args.mp3, ffmpeg=args.ffmpeg,

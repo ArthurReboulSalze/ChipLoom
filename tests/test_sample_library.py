@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from pathlib import Path
+import random
 import subprocess
 import sys
 import tempfile
@@ -11,8 +13,8 @@ import wave
 from unittest.mock import patch
 import zipfile
 
-from tracker4agents import mod, project
-from tracker4agents.model import Module, Pattern, Sample, cell
+from tracker4agents import mod, project, synth_tools
+from tracker4agents.model import PAL_CLOCK, Module, Pattern, Sample, cell
 from tracker4agents.sample_library import SampleLibrary
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -245,9 +247,16 @@ class SampleLibraryTests(unittest.TestCase):
         self.assertEqual(data["entries"], 1)
         result, data = invoke("samples", "list", "--library", self.bank.path, "--query", "cycle", "--limit", 1)
         self.assertEqual(data["total"], 1)
+        self.assertEqual(data["samples"][0]["pitch"]["loop_cycles"], 4)
         result, data = invoke("samples", "preview", "SMP-0001", "--library", self.bank.path,
                               "--output", self.root / "listen.wav", "--seconds", .1)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(data["audio"]), {"peak", "peak_dbfs", "rms_dbfs", "clipped_samples"})
+        self.assertEqual(set(data["loudness"]), {"role", "group", "loudness_db", "peak_db", "default_reference_db", "note"})
+        self.assertEqual(data["pitch"]["method"], "loop-cycles")
+        result, data = invoke("samples", "inspect", "SMP-0001", "--library", self.bank.path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(data["sample"]["pitch"]["measurement"], "estimate")
         source, output = self.root / "score.json", self.root / "with-sample.json"
         project.write_json(source, project.to_dict(Module("Test", [Sample("empty", ())], [Pattern()], [0])))
         result, data = invoke("samples", "add", "SMP-0001", "--library", self.bank.path,
@@ -261,6 +270,91 @@ class SampleLibraryTests(unittest.TestCase):
         result, data = invoke("samples", "inspect", "SMP-9999", "--library", self.bank.path)
         self.assertEqual(result.returncode, 2)
         self.assertFalse(data["ok"])
+
+
+def square(period: int, size: int) -> tuple[int, ...]:
+    return tuple(90 if index % period < period / 2 else -90 for index in range(size))
+
+
+class PitchEstimateTests(unittest.TestCase):
+    """Pitch block of `samples inspect` / `samples preview` and the compact `samples list` summary."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="chiploom pitch bank ")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        tone = tuple(round(100 * math.exp(-index / 3000) * math.sin(2 * math.pi * index * 220 / 8287.1369))
+                     for index in range(4000))
+        generator = random.Random(7)
+        noise = (0, 0) + tuple(generator.randint(-100, 100) for _ in range(2000))
+        self.samples = [
+            Sample("single", square(112, 112), 64, 0, 0, 112),      # SMP-0001: one cycle of 112
+            Sample("four", square(28, 112), 64, 0, 0, 112),         # SMP-0002: four cycles of 28
+            Sample("short", square(32, 32), 64, 0, 0, 32),          # SMP-0003
+            Sample("tuned down", square(112, 112), 64, -8, 0, 112),  # SMP-0004: finetune -8 (period 453)
+            Sample("tone", (0, 0) + tone, 48),                      # SMP-0005: one-shot 220 Hz at C-2
+            Sample("noise", noise, 40),                             # SMP-0006: unpitched one-shot
+        ]
+        source = self.root / "source.mod"
+        source.write_bytes(mod.encode(Module("Pitch", self.samples, [Pattern(cells={(0, 0): cell("C-2", 1)})], [0])))
+        self.bank = SampleLibrary(self.root / "bank")
+        self.bank.extract(source)
+
+    def pitch(self, sample_id: str) -> dict:
+        return self.bank.inspect(sample_id)["pitch"]
+
+    def test_loop_pitch_comes_from_the_loop_length_and_its_cycles(self):
+        rate = PAL_CLOCK / 428
+        single, four, short = self.pitch("SMP-0001"), self.pitch("SMP-0002"), self.pitch("SMP-0003")
+        self.assertEqual((single["method"], single["loop_length"], single["loop_cycles"]), ("loop-cycles", 112, 1))
+        self.assertAlmostEqual(single["playback_rate_hz"], rate, places=2)
+        self.assertAlmostEqual(single["estimated_hz_at_c2"], rate / 112, places=2)
+        self.assertEqual((single["nearest_note"], single["pitch_class"], single["transpose_semitones"]), ("D2", "D", 2))
+        self.assertAlmostEqual(single["cents"], 13.5, delta=.2)
+        self.assertEqual((four["loop_cycles"], four["cycle_length"], four["nearest_note"]), (4, 28.0, "D4"))
+        self.assertAlmostEqual(four["estimated_hz_at_c2"], rate / 28, places=2)
+        self.assertEqual((short["nearest_note"], short["transpose_semitones"]), ("C4", 0))
+        self.assertAlmostEqual(short["cents"], -17.6, delta=.2)
+        self.assertEqual(single["measurement"], "estimate")
+        self.assertIsNone(single["reason"])
+
+    def test_finetune_uses_the_protracker_c2_period(self):
+        tuned = self.pitch("SMP-0004")
+        self.assertEqual(tuned["finetune"], -8)
+        self.assertAlmostEqual(tuned["playback_rate_hz"], PAL_CLOCK / 453, places=2)
+        self.assertAlmostEqual(tuned["estimated_hz_at_c2"], PAL_CLOCK / 453 / 112, places=2)
+
+    def test_one_shots_use_autocorrelation_or_report_no_pitch(self):
+        tone, noise = self.pitch("SMP-0005"), self.pitch("SMP-0006")
+        self.assertEqual((tone["method"], tone["loop_length"], tone["nearest_note"]), ("autocorrelation", None, "A3"))
+        self.assertAlmostEqual(tone["estimated_hz_at_c2"], 220, delta=1)
+        self.assertGreater(tone["periodicity"], .9)
+        self.assertIsNone(noise["method"])
+        self.assertIsNone(noise["estimated_hz_at_c2"])
+        self.assertIn("no stable periodicity", noise["reason"])
+
+    def test_list_carries_a_compact_loop_pitch_summary(self):
+        listed = {item["id"]: item["pitch"] for item in self.bank.search(limit=10)["samples"]}
+        self.assertEqual(listed["SMP-0002"], {"estimated_hz_at_c2": self.pitch("SMP-0002")["estimated_hz_at_c2"],
+                                              "nearest_note": "D4", "cents": 13.5, "transpose_semitones": 2,
+                                              "loop_cycles": 4})
+        self.assertIsNone(listed["SMP-0005"])  # one-shots are estimated by samples inspect only
+        self.assertNotIn("pitch", self.bank.get("SMP-0001"))
+
+    def test_preview_returns_synth_preview_measurements_and_pitch(self):
+        result = self.bank.audition("SMP-0001", self.root / "d.wav", "E-2", .1)
+        synth = synth_tools.preview({"type": "wave", "shape": "pulse"}, "x", self.root / "synth.wav", seconds=.1)
+        for block in ("audio", "loudness"):
+            self.assertEqual(set(result[block]), set(synth[block]), block)
+        self.assertEqual((result["volume"], result["finetune"]), (64, 0))
+        self.assertEqual(result["loudness"]["role"], None)
+        self.assertEqual(result["loudness"]["group"], "bass")  # a pulse cycle tagged bass-candidate
+        self.assertEqual(result["audio"]["clipped_samples"], 0)
+        self.assertEqual(result["sample"]["loop_length"], 112)
+        self.assertEqual(result["pitch"]["nearest_note"], "D2")
+        moved = result["pitch"]["at_preview_note"]
+        self.assertEqual((moved["note"], moved["nearest_note"]), ("E-2", "F#2"))
+        self.assertAlmostEqual(moved["estimated_hz"], PAL_CLOCK / 339 / 112, places=2)
 
 
 if __name__ == "__main__":

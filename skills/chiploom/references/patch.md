@@ -14,13 +14,14 @@ python -m tracker4agents patch exports/song/v1.project.json --output exports/son
 ```
 
 `inspect --grid` prints rows as `04 | C-2 05 C31 | --- -- ... | E-2 08 037 | --- -- ...`:
-row in hex, then four cells, each `NOTE SS EEE` (note or `---`, sample in hex or `--`,
+row in hex, then one cell per channel (four by default), each `NOTE SS EEE` (note or `---`, sample in hex or `--`,
 effect in hex or `...`). The same text is what `set`, `write` and the project file use.
 The result of `patch` lists `changes` such as `P01 r04 ch1: C-2 05 C31 → E-2 04 C28`
-(pattern 1, row `04`, channel 1), `cells_changed`, `duration_seconds` and `warnings`.
+(pattern 1, row `04`, channel 1, counted from 0 like the operations: `ch0` is the first channel), `cells_changed`, `duration_seconds` and `warnings`.
 Read them: they tell you what actually moved.
 
-Options: `--ops FILE` (or `-` for stdin) or repeated `--op JSON`; `--output` must be a
+Options: `--ops FILE` (or `-` for stdin) or repeated `--op JSON` (the MCP `patch` and
+`live_patch` tools take `ops` inline or `ops_file`, a path to the same JSON list); `--output` must be a
 `.json` path; writing over the source needs `--in-place` (avoid it: keep versions).
 
 ## Operations
@@ -31,7 +32,7 @@ A block is `row` (default 0), `rows`, `channel` (default 0), `channels`.
 | `op` | Fields | Notes |
 | --- | --- | --- |
 | `set` | `pattern`, `row`, `channel`, `cell` or `note`/`sample`/`effect` | With separate fields, omitted ones keep their value |
-| `write` | `pattern`, `row`, `step`, and `cells` + `channel`, or `lines` | `lines` are whole grid rows (four cells each); `""` or `---` clears a cell |
+| `write` | `pattern`, `row`, `step`, and `cells` + `channel`, or `lines` | `lines` are whole grid rows (one cell per channel); `""` or `---` clears a cell |
 | `clear` | `pattern`, block | Defaults to one cell |
 | `copy`, `move` | `pattern`, block, `to_pattern`, `to_row`, `to_channel` | Destination defaults to the same place; `move` empties the source |
 | `transpose` | `pattern`, `semitones`, block | Notes only; block runs to the end of the pattern on one channel by default; leaving `C-1`-`B-3` fails |
@@ -43,7 +44,7 @@ A block is `row` (default 0), `rows`, `channel` (default 0), `channels`.
 | `title` | `title` | ASCII, length-limited |
 | `timing` | `bpm`, `speed` | Writes `Fxx` on the first played row; needs two free effect columns or existing `Fxx`, else `TIMING` |
 | `sample` | `slot`, `volume`, `finetune`, `name` | Settings and name only; PCM is never changed |
-| `library_sample` | `library`, `id`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM); refused in a project declared `synthesized` |
+| `library_sample` | `id`, `library`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM); `library` defaults to `exports/sample_library`; fills the first empty slot unless `slot` is given; refused in a project declared `synthesized` |
 | `recipe_sample` | `name`, `recipe`, `slot`, `volume`, `finetune`, `replace`, `role`, `match`, `library` | Created sample for the owner-requested created-samples mode; occupied slots need `replace`; volume matched to the role's level unless `volume` is given; refused in a project declared `library` |
 
 Examples:
@@ -56,6 +57,9 @@ Examples:
 {"op": "add_pattern", "copy_of": 1, "name": "A - Hook B", "insert_order": 3}
 ```
 
+A song with more than four channels starts from `chiploom new --channels N` (MCP
+`new_project`); the operations then accept channels 0 to N-1 and `lines` hold N cells.
+
 ## Habits
 
 - One patch, one musical intent, one `--label`. Write each revision to a new file.
@@ -63,7 +67,7 @@ Examples:
 - Do not use patches to change the stored PCM of a library sample; insert another library
   entry instead. Create samples (`recipe_sample`) only when the owner asks for a song made with created samples.
 - Common failures: `NOTE_UNKNOWN` (use `C-1`..`B-3`, `G#3` not `G#-3`), `PATCH_CELL`
-  (bad cell text), `PATCH_BOUNDS` (past row 63 or channel 3), `ORDERS` (a pattern is
+  (bad cell text), `PATCH_BOUNDS` (past row 63 or the last channel, 3 in a four-channel song), `ORDERS` (a pattern is
   still used, or the last pattern is not in the order list), `TIMING`.
 - Full field list and error codes: `docs/CLI.md` (sections Patch and Error contract).
 

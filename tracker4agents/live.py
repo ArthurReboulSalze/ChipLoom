@@ -419,7 +419,7 @@ class LiveSession:
             return {"revision": self._revision, "pattern": pattern, "name": module.patterns[pattern].name,
                     "start": start, "rows": len(lines),
                     "used_in_orders": [i for i, value in enumerate(module.orders) if value == pattern],
-                    "header": "ROW | " + " | ".join(f"channel {i + 1}" for i in range(module.channels))
+                    "header": "ROW | " + " | ".join(f"ch{i}" for i in range(module.channels))
                               + (" (cells: NOTE II VV EEE)" if module.format == "xm" else " (cells: NOTE SS EEE)"),
                     "lines": lines}
         sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}

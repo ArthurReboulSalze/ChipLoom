@@ -225,14 +225,22 @@ def preview(recipe: dict, name: str, output: Path, note: str = "C-2", seconds: f
     ascii_field(name, 22, "Sample name")
     sample = from_recipe(name, recipe, volume, finetune)
     result = audio.audition_sample(sample, output, note, seconds)
-    metrics = audio.analyze_wav(output)
     role = loudness.role_for_recipe(recipe) if role is None else loudness.check_role(role)
-    group = loudness.ROLES[role]
-    level = loudness.measure(sample)
     return {"ok": True, "name": name, "recipe": recipe, **result, "volume": volume, "finetune": finetune,
-            "sample": recipe_facts(sample),
-            "loudness": {"role": role, "group": group, "loudness_db": level["loudness_db"],
-                         "peak_db": level["peak_db"], "default_reference_db": loudness.target_db(role),
+            "sample": recipe_facts(sample), **audition_measurements(sample, output, role)}
+
+
+def audition_measurements(sample: Sample, output: Path, role: str | None, group: str | None = None) -> dict:
+    """The `loudness` and `audio` blocks shared by synth and library previews.
+
+    `role` is a recipe role; a library sample has none and passes its loudness `group` instead.
+    """
+    from . import audio
+    metrics = audio.analyze_wav(output)
+    level = loudness.measure(sample)
+    key = role if role is not None else group
+    return {"loudness": {"role": role, "group": loudness.ROLES.get(key, key), "loudness_db": level["loudness_db"],
+                         "peak_db": level["peak_db"], "default_reference_db": loudness.target_db(key),
                          "note": "Sample loudness at this volume (RMS of its audible part), dB re full scale."},
             "audio": {key: metrics[key] for key in ("peak", "peak_dbfs", "rms_dbfs", "clipped_samples")}}
 

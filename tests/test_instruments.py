@@ -392,7 +392,7 @@ class CliTests(unittest.TestCase):
                              "--dir", self.folder)
         self.assertEqual((code, err), (0, None), err)
         self.assertEqual((out["applied"]["slot"], out["applied"]["rows_written"]), (2, [4, 5, 6, 7]))
-        self.assertTrue(out["changes"][0].startswith("P00 r04 ch2: --- -- ... → C-2 02 ..."))
+        self.assertTrue(out["changes"][0].startswith("P00 r04 ch1: --- -- ... → C-2 02 ..."))
         self.assertIn("sample 02 changed", out["changes"])
         applied = project.load(self.dir / "out.json")
         self.assertEqual(applied.patterns[0].get(5, 1).effect, "C30")

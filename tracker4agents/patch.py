@@ -386,9 +386,9 @@ def _sample(module: Module, op: dict) -> dict:
 
 
 def _library_sample(module: Module, op: dict) -> dict:
-    _fields(op, {"library", "id"}, {"slot", "replace", "adapt"})
-    from .sample_library import SampleLibrary
-    candidate, info = SampleLibrary(Path(op["library"])).insert(
+    _fields(op, {"id"}, {"library", "slot", "replace", "adapt"})
+    from .sample_library import DEFAULT_LIBRARY, SampleLibrary
+    candidate, info = SampleLibrary(Path(op.get("library", DEFAULT_LIBRARY))).insert(
         module, op["id"], op.get("slot"), bool(op.get("replace", False)), bool(op.get("adapt", False)))
     module.__dict__.update(candidate.__dict__)
     return info
@@ -660,8 +660,8 @@ def touched(diff: dict) -> set:
 
 
 def summarize(diff: dict, limit: int = 12) -> list[str]:
-    """Short human/agent-readable lines: 'P03 r10 ch2: E-2 01 ... → G-2 01 ...'."""
-    lines = [f"P{item['pattern']:02X} r{item['row']:02X} ch{item['channel'] + 1}: {item['before']} → {item['after']}"
+    """Short agent-readable lines: 'P03 r10 ch2: E-2 01 ... → G-2 01 ...' (channels zero-based, as in operations)."""
+    lines = [f"P{item['pattern']:02X} r{item['row']:02X} ch{item['channel']}: {item['before']} → {item['after']}"
              for item in diff.get("cells", [])[:limit]]
     if len(diff.get("cells", [])) > limit:
         lines.append(f"… {len(diff['cells']) - limit} more cells")

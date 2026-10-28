@@ -138,7 +138,7 @@ class DiffAndMergeTests(unittest.TestCase):
         self.assertEqual(diff["cells"], [{"pattern": 0, "row": 4, "channel": 1, "before": "E-2 02 ...", "after": "G-2 02 ..."}])
         self.assertIn(("cell", 0, 4, 1), touched(diff))
         self.assertIn(("structure",), touched(diff))
-        self.assertIn("P00 r04 ch2: E-2 02 ... → G-2 02 ...", summarize(diff))
+        self.assertIn("P00 r04 ch1: E-2 02 ... → G-2 02 ...", summarize(diff))
 
     def test_three_way_merge_keeps_both_sides_and_reports_conflicts(self):
         base = tiny()

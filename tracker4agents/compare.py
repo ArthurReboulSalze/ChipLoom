@@ -245,7 +245,7 @@ function renderResult(){
   var tbody=el('tbody');
   answer.metrics.forEach(function(row){
     var tr=el('tr'),label=TEXTS[lang]['metric_'+row.key];
-    if(!label&&row.channel){label=TEXTS[lang]['metric_'+row.key.replace(/^ch\d+_/,'channel_')].replace('{n}',row.channel)}
+    if(!label&&row.channel!==undefined){label=TEXTS[lang]['metric_'+row.key.replace(/^ch\d+_/,'channel_')].replace('{n}',row.channel)}
     tr.appendChild(el('td',label||row.key));tr.appendChild(el('td',show(row.x)));tr.appendChild(el('td',show(row.y)));tbody.appendChild(tr);
   });
   table.appendChild(tbody);box.appendChild(table);

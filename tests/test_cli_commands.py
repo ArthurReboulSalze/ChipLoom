@@ -40,7 +40,7 @@ class CliCommandTests(unittest.TestCase):
         self.assertEqual((status, result.get("code")), (2, "PATCH_FORMAT"))  # --ops and --op are exclusive
         status, result = run("patch", self.source, "--output", self.directory / "out.json", "--ops", ops)
         self.assertEqual(status, 0, result)
-        self.assertEqual(result["changes"], ["P00 r02 ch4: --- -- 603 → C-3 08 ...", "P00 r03 ch4: --- -- C00 → D-3 08 ..."])
+        self.assertEqual(result["changes"], ["P00 r02 ch3: --- -- 603 → C-3 08 ...", "P00 r03 ch3: --- -- C00 → D-3 08 ..."])
         written = json.loads((self.directory / "out.json").read_text(encoding="utf-8"))
         self.assertEqual(written["schema"], project.SCHEMA_V2)
         self.assertEqual(written["patterns"][0]["rows"]["02"].split(" | ")[3], "C-3 08 ...")

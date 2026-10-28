@@ -108,6 +108,59 @@ class McpProtocolTests(unittest.TestCase):
             finally:
                 server.close()
 
+    def test_library_song_from_a_blank_eight_channel_project(self):
+        # A library-mode song from scratch: new_project, then library_sample with the default bank and ops_file.
+        from tracker4agents import mod
+        from tracker4agents.model import Module, Pattern, Sample, cell
+        from tracker4agents.sample_library import SampleLibrary
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            reference = directory / "ref.mod"
+            reference.write_bytes(mod.encode(Module("t", [Sample("a", (50, -50) * 8, 64, 0, 0, 16)],
+                                                    [Pattern(cells={(0, 0): cell("C-2", 1)})], [0])))
+            SampleLibrary(directory / "exports" / "sample_library").extract(reference)
+            server = McpProcess(directory)
+            try:
+                server.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
+                                              "clientInfo": {"name": "test", "version": "1"}})
+                created = server.request("tools/call", {"name": "new_project", "arguments": {
+                    "output": "songs/blank.json", "channels": 8, "bpm": 120, "patterns": 2, "title": "Eight"}})
+                self.assertFalse(created["result"]["isError"], created)
+                content = created["result"]["structuredContent"]
+                self.assertEqual((content["channels"], content["profile"], content["sample_source"]),
+                                 (8, "protracker-nch-pal-v1", "library"))
+                again = server.request("tools/call", {"name": "new_project", "arguments": {"output": "songs/blank.json"}})
+                self.assertEqual(again["result"]["structuredContent"]["code"], "OUTPUT_PATH")
+
+                (directory / "ops.json").write_text(json.dumps([
+                    {"op": "library_sample", "id": "SMP-0001"},
+                    {"op": "set", "pattern": 1, "row": 0, "channel": 7, "cell": "C-2 01 ..."}]), encoding="utf-8")
+                patched = server.request("tools/call", {"name": "patch", "arguments": {
+                    "source": "songs/blank.json", "output": "songs/v1.json", "ops_file": "ops.json"}})
+                self.assertFalse(patched["result"]["isError"], patched)
+                self.assertIn("P01 r00 ch7: --- -- ... → C-2 01 ...", patched["result"]["structuredContent"]["changes"])
+                song = project.load(directory / "songs/v1.json")
+                self.assertEqual((song.channels, song.patterns[1].get(0, 7).note), (8, "C-2"))
+                self.assertEqual(len(song.samples), 1)  # the empty slot was filled, not followed
+                checked = server.request("tools/call", {"name": "validate", "arguments": {
+                    "source": "songs/v1.json", "sample_source": "library"}})
+                self.assertFalse(checked["result"]["isError"], checked)
+
+                for arguments in ({}, {"ops": [], "ops_file": "ops.json"}):
+                    refused = server.request("tools/call", {"name": "patch", "arguments": {
+                        "source": "songs/blank.json", "output": "songs/x.json", **arguments}})
+                    self.assertEqual(refused["result"]["structuredContent"]["code"], "INVALID_ARGUMENTS")
+                empty = directory / "empty.json"
+                data = project.read_json(directory / "songs/blank.json")
+                project.write_json(empty, {**data, "samples": []})
+                invalid = server.request("tools/call", {"name": "validate", "arguments": {"source": "empty.json",
+                                                                                          "report": True}})
+                message = invalid["result"]["structuredContent"]["errors"][0]["message"]
+                self.assertIn("array of 1 to 31 entries expected", message)
+                self.assertIn("new_project", message)
+            finally:
+                server.close()
+
     def test_schemas_are_strict_and_cover_every_tool(self):
         server = Server()
         for tool in TOOLS:
