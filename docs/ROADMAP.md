@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 28 October 2026, after the 0.8.1 release. Earlier planning notes (translated from the original French) are kept in
+Updated 28 October 2026, after the 0.8.2 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together

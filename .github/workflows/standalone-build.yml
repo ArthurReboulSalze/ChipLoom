@@ -46,6 +46,13 @@ jobs:
           "$cli" --version
           "$cli" estimate --orders 8 --bpm 160
           ls build/${{ matrix.folder }}/ChipLoom/_internal/tracker4agents/web/app.js
+          # One MCP tool call through the frozen program (its tools start the CLI again).
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"estimate","arguments":{"orders":8,"bpm":160}}}' \
+            | "$cli" mcp | tee mcp.out
+          grep -q '\\"duration_seconds\\": 48.0' mcp.out
       - name: Render with the system FFmpeg from the bundle (Linux)
         # The bundle must not hand its own libraries to FFmpeg (LD_LIBRARY_PATH).
         if: runner.os == 'Linux'

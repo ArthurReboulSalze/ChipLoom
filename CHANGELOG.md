@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 — 2026-10-28
 
-- Fix `chiploom-cli mcp` in the standalone builds: its tools started the CLI with `-m tracker4agents`, which a frozen program does not accept, so every tool call failed. Installs from a checkout or a wheel were not affected.
+- Fix `chiploom-cli mcp` in the standalone builds: its tools started the CLI with `-m tracker4agents`, which a frozen program does not accept, so every tool call failed. Installs from a checkout or a wheel were not affected. The release workflow now makes one MCP tool call through each archive.
+- README: new screenshots of 0.8.1 (an eight-channel MOD with the sound workshop, the Agent tab, the browser studio) and wording for up to 32 channels.
 
 ## 0.8.1 — 2026-10-28
 
