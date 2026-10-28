@@ -455,9 +455,9 @@ class FallbackJamTests(JamCase):
             self.assertEqual(audition.call_count, 2)
             self.assertNotEqual(window.sample_player.source(), first)    # monophonic: the new note replaces it
             self.assertEqual(fingerprint(window.document.module), state)
-            with patch.object(window.sample_player, "stop") as stop:
+            with patch("tracker4agents.desktop_jam.media_call") as stop:
                 self.key(table, KEY_RELEASE, ord("X"), "x")                # a looped sample stops with its key
-            stop.assert_called_once()
+            stop.assert_called_once_with(window.sample_player, "stop")
             self.key(table, KEY_RELEASE, ord("Z"), "z")
         self.tap(table, "z")                                              # the same note again comes from the cache
         self.assertEqual(len(window.jam._wavs), 2)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
                                QLineEdit, QListWidget, QListWidgetItem, QSizePolicy,
                                QVBoxLayout, QWidget)
 
-from .desktop_widgets import XM_REFUSED_TIP
+from .desktop_widgets import XM_REFUSED_TIP, media_call
 from .model import NOTES
 from .sample_library import CATEGORIES, DEFAULT_LIBRARY, SampleLibrary
 
@@ -382,8 +382,8 @@ class SampleBrowser(QWidget):
                 return
             self.window.meter.reset()
             self.window.pause_playback()
-            self.window.sample_player.stop()
-            self.window.sample_player.setSource(QUrl.fromLocalFile(str(path)))
+            media_call(self.window.sample_player, "stop")
+            media_call(self.window.sample_player, "setSource", QUrl.fromLocalFile(str(path)))
             self.window.sample_player.play()
 
         def failed(detail):
@@ -394,7 +394,7 @@ class SampleBrowser(QWidget):
 
     def stop(self):
         self.cancel_preview()
-        self.window.sample_player.stop()
+        media_call(self.window.sample_player, "stop")
         self.window.meter.reset()
 
     def add_to_song(self):

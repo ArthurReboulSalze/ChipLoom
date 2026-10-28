@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QLineE
 from . import sample_tools
 from .desktop_input import note_name, semitone
 from .desktop_mixer import render_wav
+from .desktop_widgets import media_call
 from .model import Sample, ValidationError
 
 FALLBACK_CACHE = 32
@@ -92,7 +93,7 @@ class JamController(QObject):
         if self.window.rt is not None:
             self.window.rt.jam_off(key)
         elif looped:
-            self.window.sample_player.stop()   # a one-shot is left to finish
+            media_call(self.window.sample_player, "stop")   # a one-shot is left to finish
         return True
 
     def release_all(self):

@@ -112,6 +112,8 @@ jobs:
         run: python tools/setup_reference.py
       - name: Install with desktop extra
         run: python -m pip install -e ".[desktop]" py-spy
+      - name: Show the runner's audio devices
+        run: python -c "from PySide6.QtMultimedia import QMediaDevices; print([d.description() for d in QMediaDevices.audioOutputs()] or 'no audio output device')"
       - name: Run real-time engine and desktop tests
         # One process per module: a Qt hang stays in its module, the log names it and shows every thread.
         shell: bash

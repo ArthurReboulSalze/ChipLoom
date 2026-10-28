@@ -6,12 +6,25 @@ import hashlib
 from pathlib import Path
 import tempfile
 
-from PySide6.QtCore import QObject, QPointF, QRunnable, QSize, Qt, Signal
+from PySide6.QtCore import Q_ARG, QCoreApplication, QEvent, QMetaObject, QObject, QPointF, QRunnable, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from .model import Sample
 from .themes import icon_colors
+
+
+def media_call(player, method: str, *args):
+    """Call a QMediaPlayer slot through the event loop, so the GIL is released while Qt runs it.
+
+    `stop()` and `setSource()` make Qt's FFmpeg backend wait for its audio thread, which is then
+    destroying a renderer connected to our QAudioOutput. That object is a Python wrapper, so the
+    thread needs the GIL to read its meta-object; a direct call holds the GIL during the wait and
+    both threads stall for good (seen in CI on Windows). Queuing the call and delivering it with
+    sendPostedEvents, which PySide runs without the GIL, keeps the call synchronous.
+    """
+    QMetaObject.invokeMethod(player, method, Qt.ConnectionType.QueuedConnection, *(Q_ARG(type(arg), arg) for arg in args))
+    QCoreApplication.sendPostedEvents(player, QEvent.Type.MetaCall)
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 # Said on every control that edits MOD samples (loop, trim, gain, fades, library, recipes, instruments) when the open

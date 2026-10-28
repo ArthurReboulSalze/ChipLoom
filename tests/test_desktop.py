@@ -27,6 +27,7 @@ try:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit
     from tracker4agents.desktop import STYLE, TrackerWindow
+    from tracker4agents.desktop_widgets import media_call
     from tracker4agents.level_meter import WavLevels
 except ModuleNotFoundError:
     TrackerWindow = None
@@ -128,7 +129,7 @@ class DesktopTests(unittest.TestCase):
         window.play_sample()
         self.wait_until(lambda: window.sample_player.position() >= 30, 5)
         self.assertEqual(window.sample_player.error(), QMediaPlayer.Error.NoError)
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         window.solos[1].click()
         self.wait_for_audio()
         solo = Path(window.player.source().toLocalFile())
@@ -323,7 +324,7 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(window.meter.levels, (0.0, 0.0))
         window.play_sample()
         self.wait_until(lambda: window.meter.buffer_count > before, 5)
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         for control in window.mutes:
             control.click()
         self.wait_for_audio()

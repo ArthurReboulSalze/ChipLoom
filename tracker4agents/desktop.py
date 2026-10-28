@@ -31,7 +31,7 @@ from .desktop_pattern import ChannelStrip, PatternModel, PatternView, input_loca
 from .desktop_samples import SampleBrowser
 from .desktop_services import AppState, AudioCache
 from .desktop_sync import DiskSync, changed_cells, mark_clean
-from .desktop_widgets import (ASSETS, ElidedLabel, ShortcutPopup, Task, TaskSignals, Waveform, brand_icon, button,
+from .desktop_widgets import (ASSETS, ElidedLabel, ShortcutPopup, Task, TaskSignals, Waveform, brand_icon, button, media_call,
                               clock, label, sample_name, separator, ui_icons)
 from .document import Document
 from .i18n import error_text, translate
@@ -991,8 +991,8 @@ class TrackerWindow(QMainWindow):
         self._last_position = -1  # the playhead jumps while a new render loads; that is not a seek
         self._want_play, self._resume_ms = play, position
         self.meter.reset()
-        self.player.stop()
-        self.player.setSource(QUrl())
+        media_call(self.player, "stop")
+        media_call(self.player, "setSource", QUrl())
         self.play_button.setText(self.t('Preparing…'))
         self.play_button.setEnabled(False)
         self.message('Preparing playback…')
@@ -1005,7 +1005,7 @@ class TrackerWindow(QMainWindow):
             if token != self._audio_token or path is None:
                 return
             self._await_media = True
-            self.player.setSource(QUrl.fromLocalFile(str(path)))
+            media_call(self.player, "setSource", QUrl.fromLocalFile(str(path)))
 
         def failure(text):
             if token == self._audio_token:
@@ -1063,7 +1063,7 @@ class TrackerWindow(QMainWindow):
         if not self.document or self._loading_audio:
             return
         self.sample_browser.cancel_preview()
-        self.sample_player.stop()
+        media_call(self.sample_player, "stop")
         if self.rt is not None:
             self.rt.pause() if self.rt.playing else self.rt.play()
         elif not self._audio_ready:
@@ -1078,10 +1078,10 @@ class TrackerWindow(QMainWindow):
         self._loop_epoch += 1
         self._want_play = False
         self._resume_ms = 0
-        self.player.stop()
+        media_call(self.player, "stop")
         if self.rt is not None:
             self.rt.stop()
-        self.sample_player.stop()
+        media_call(self.sample_player, "stop")
         self.meter.reset()
 
     def seek_to(self, milliseconds):
@@ -1208,7 +1208,7 @@ class TrackerWindow(QMainWindow):
             path = self.cache.sample(self.document.module, index)
             self.meter.reset()
             self.pause_playback()
-            self.sample_player.setSource(QUrl.fromLocalFile(str(path)))
+            media_call(self.sample_player, "setSource", QUrl.fromLocalFile(str(path)))
             self.sample_player.play()
         except (OSError, ValueError, RuntimeError) as exc:
             self.message(str(exc), True)
@@ -1228,8 +1228,8 @@ class TrackerWindow(QMainWindow):
             project.atomic_bytes(path, wav)
         self.meter.reset()
         self.pause_playback()
-        self.sample_player.stop()
-        self.sample_player.setSource(QUrl.fromLocalFile(str(path)))
+        media_call(self.sample_player, "stop")
+        media_call(self.sample_player, "setSource", QUrl.fromLocalFile(str(path)))
         self.sample_player.play()
         return path
 
@@ -1248,8 +1248,8 @@ class TrackerWindow(QMainWindow):
         self._debounce_play = False
         if self.rt is not None:
             # Real-time: the engine takes the edit at once; playback (if any) simply continues.
-            self.sample_player.stop()
-            self.sample_player.setSource(QUrl())
+            media_call(self.sample_player, "stop")
+            media_call(self.sample_player, "setSource", QUrl())
             self.refresh_document()
             self.rt.reload()
             self.message('Change applied · Ctrl+Z to undo')
@@ -1259,8 +1259,8 @@ class TrackerWindow(QMainWindow):
         self._audio_token += 1
         self._loading_audio = self._await_media = False
         self.player.pause()
-        self.sample_player.stop()
-        self.sample_player.setSource(QUrl())
+        media_call(self.sample_player, "stop")
+        media_call(self.sample_player, "setSource", QUrl())
         self._audio_ready = False
         self.refresh_document()
         self.debounce.start()
@@ -1345,7 +1345,7 @@ class TrackerWindow(QMainWindow):
             mark_clean(document)
         cells = changed_cells(before, document.module)
         self.live.external_edit("Merge agent changes" if kind == "merge" else "Agent changes")
-        self.sample_player.stop()
+        media_call(self.sample_player, "stop")
         self.refresh_document()
         self.pattern_model.flash(cells)
         if self.rt is not None:
@@ -1468,7 +1468,7 @@ class TrackerWindow(QMainWindow):
         playing = self._want_play if self._loading_audio else self.is_playing()
         position = self._resume_ms if self._loading_audio else self.playback_ms()
         self.monitor_module = module
-        self.sample_player.stop()
+        media_call(self.sample_player, "stop")
         if self.rt is not None:
             self.rt.reload()   # the audio thread swaps the module in on the row being played
         else:
@@ -1546,7 +1546,7 @@ class TrackerWindow(QMainWindow):
         """Someone else (an agent, an accepted proposal, a browser) changed the document through the session."""
         kind = "human_change" if entry["author"] in HUMAN_AUTHORS else "agent_change"
         if self.rt is not None:
-            self.sample_player.stop()
+            media_call(self.sample_player, "stop")
             self.refresh_document()
             self.pattern_model.flash(entry["diff"].get("cells", []), kind)
             self.rt.reload()
@@ -1559,7 +1559,7 @@ class TrackerWindow(QMainWindow):
         self._debounce_play = self._debounce_play or playing
         self._audio_token += 1
         self._loading_audio = self._await_media = self._audio_ready = False
-        self.sample_player.stop()
+        media_call(self.sample_player, "stop")
         self.refresh_document()
         self.pattern_model.flash(entry["diff"].get("cells", []), kind)
         self.debounce.start()
@@ -1709,12 +1709,12 @@ class TrackerWindow(QMainWindow):
         self.sample_browser.shutdown()
         self._audio_token += 1
         self.timer.stop()
-        self.player.stop()
-        self.player.setSource(QUrl())
+        media_call(self.player, "stop")
+        media_call(self.player, "setSource", QUrl())
         if self.rt is not None:
             self.rt.shutdown()
-        self.sample_player.stop()
-        self.sample_player.setSource(QUrl())
+        media_call(self.sample_player, "stop")
+        media_call(self.sample_player, "setSource", QUrl())
         self.state.values.update(volume=self.volume.value(), loop=self.loop.isChecked(), follow=self.follow.isChecked(),
                                  theme=self.theme, language=self.language, keyboard=self.keyboard_combo.currentData(),
                                  edit_octave=self.edit_octave.value(), edit_step=self.edit_step.value(),

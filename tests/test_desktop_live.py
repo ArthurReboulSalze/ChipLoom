@@ -28,6 +28,7 @@ try:
     from PySide6.QtMultimedia import QMediaPlayer
     from PySide6.QtWidgets import QApplication, QMessageBox
     from tracker4agents.desktop import TrackerWindow
+    from tracker4agents.desktop_widgets import media_call
 except ModuleNotFoundError:
     TrackerWindow = None
 
@@ -304,7 +305,7 @@ class DesktopLiveTests(unittest.TestCase):
         panel.listen_button.click()
         self.wait_until(lambda: window.sample_player.source().isValid() and not window._jobs)
         self.assertTrue(window.sample_player.source().toLocalFile().endswith(".wav"))
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         self.assertEqual((fingerprint(window.document.module), window.document.revision), (before, revision))
         panel.clear_button.click()
         self.assertIsNone(self.model.overlay)

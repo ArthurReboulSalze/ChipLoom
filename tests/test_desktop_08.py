@@ -29,6 +29,7 @@ try:
     from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox
     from tracker4agents import desktop_live, desktop_playback
     from tracker4agents.desktop import TrackerWindow
+    from tracker4agents.desktop_widgets import media_call
 except ModuleNotFoundError:
     TrackerWindow = None
 
@@ -113,7 +114,7 @@ class WindowCase(unittest.TestCase):
         window = self.window
         window.document.dirty and window.document.save_project(self.directory / "tear-down.project.json")
         for player in (window.sample_player, window.player):   # let go of audition files before the window goes
-            player.stop()
+            media_call(player, "stop")
         self.app.processEvents()
         window.close()
         window.pool.waitForDone(10000)

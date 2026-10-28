@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- The meter now reads the rendered WAV at the playback position instead of receiving decoded buffers from Qt's audio thread, so no Qt audio thread calls into Python any more. An occasional freeze of rendered playback in `QMediaPlayer.stop()` on Windows machines without an audio device is still being investigated.
-- CI prints the stack of a desktop test module that hangs and stops it after 4 minutes.
+- Fix a freeze of the window in rendered playback (sample auditions, and the song without libxmp), seen about one run in two in the Windows CI. `QMediaPlayer.stop()` and `setSource()` make Qt's FFmpeg backend wait for its audio thread while that thread destroys a renderer connected to the window's `QAudioOutput`; as that object is a Python wrapper, the thread needs the GIL, which the direct call holds, so both wait for ever. The window now runs these two calls through the event loop with `media_call` (PySide releases the GIL there), still synchronously. The meter also reads the rendered WAV at the playback position instead of receiving decoded buffers from the audio thread.
+- CI runs each desktop test module in a child process and prints every thread, native frames included, if it hangs.
 - The Windows build now includes the browser studio page (the first 0.8.0 zip lacked it and was replaced).
 
 ## 0.8.0 — 2026-10-28

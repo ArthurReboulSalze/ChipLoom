@@ -18,7 +18,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
                                QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget)
 
-from .desktop_widgets import ElidedLabel
+from .desktop_widgets import ElidedLabel, media_call
 from .document import Document
 from . import live as live_module
 from .live import LiveConflict, LiveServer, LiveSession
@@ -645,7 +645,7 @@ class AgentPanel(QWidget):
         def play(path):
             window.meter.reset()
             window.pause_playback()
-            window.sample_player.setSource(QUrl.fromLocalFile(str(path)))
+            media_call(window.sample_player, "setSource", QUrl.fromLocalFile(str(path)))
             window.sample_player.play()
             window.message("Listening to proposal {id}", id=proposal_id)
 

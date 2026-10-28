@@ -18,6 +18,7 @@ try:
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     from tracker4agents import desktop_browser, desktop_create
+    from tracker4agents.desktop_widgets import media_call
 except ModuleNotFoundError:
     QApplication = None
 
@@ -106,14 +107,14 @@ class SampleEditorTests(Workshop):
         self.assertIsNotNone(editor.wave.ghost)                      # the edited copy is drawn over the original
         self.assertIn("Loop 2 → 34", editor.report.text())
         self.assertTrue(window.sample_player.source().toLocalFile().endswith(".wav"))   # and auditioned
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         self.assertEqual(self.state(), before)
         self.assertFalse(window.document.dirty)
         editor.gain_db.setValue(-6)                                  # changing a field drops the stale preview
         self.assertIsNone(editor.last_preview)
         self.assertIsNone(editor.wave.ghost)
         self.assertEqual(editor.preview("gain")["report"]["db"], -6.0)
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         self.assertEqual(self.state(), before)
 
     def test_each_edit_is_one_undoable_patch(self):
@@ -332,7 +333,7 @@ class CreateTests(Workshop):
         self.assertIn("Loudness", create.measures.text())
         self.assertIn("dBFS", create.measures.text())
         self.assertTrue(window.sample_player.source().toLocalFile().endswith(".wav"))   # auto-listen
-        window.sample_player.stop()
+        media_call(window.sample_player, "stop")
         create.auto_listen.setChecked(False)
         sources = []
         with patch.object(window, "audition_wav", side_effect=sources.append):
