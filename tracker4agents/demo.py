@@ -98,8 +98,8 @@ def create(seed: int = 104729) -> Module:
         "First Light", samples, patterns, [0, 1, 2, 3],
         {
             "description": "Original 16-bar chiptune test loop; no imported music or samples.",
-            "display_description": "Une boucle chiptune composée par l’agent. Huit samples dessinés ou synthétisés pour le projet, quatre voies et seize mesures.",
-            "arrangement": "Progression Am – F – C – G. La seconde moitié développe la mélodie, puis un roulement ramène au début.",
+            "display_description": "A chiptune loop composed by the agent. Eight samples drawn or synthesized for the project, four channels and sixteen bars.",
+            "arrangement": "Am – F – C – G progression. The second half develops the melody, then a drum roll leads back to the start.",
             "bars": 16,
             "seed": seed, "author": "tracker4agents / agent prototype",
             "channel_names": ["Drums", "Bass", "Arpeggio", "Lead"],

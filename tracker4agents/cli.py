@@ -8,13 +8,15 @@ import json
 from pathlib import Path
 import sys
 
-from . import __version__, audio, demo, mod, pixel_rush, project, sample_source
+from . import __version__, audio, convert, demo, formats, mod, pixel_rush, project, sample_source
 from .document import Document
 from .errors import diagnostic_payload, error_payload
 from .patch import pattern_grid, summarize
-from .model import PROFILE, Module, ValidationError, playback_plan, require_int, validate
+from .model import MOD_PROFILE_N, PROFILE, XM_PROFILE, Module, ValidationError, playback_plan, require_int, validate
 from .review import write_preview
 from .synth_cli import add_parser as add_synth_parser, run as run_synth
+from .sample_cli import add_parser as add_sample_parser, run as run_sample
+from .instrument_cli import add_parser as add_instrument_parser, run as run_instruments
 
 
 def emit(value: object, stream=None) -> None:
@@ -22,41 +24,63 @@ def emit(value: object, stream=None) -> None:
 
 
 def load(path: Path) -> Module:
-    return project.load(path) if path.suffix.lower() == ".json" else mod.read(path)
+    return project.load(path) if path.suffix.lower() == ".json" else formats.read(path)
+
+
+def _profile_of(module: Module) -> str:
+    if module.format == "xm":
+        return XM_PROFILE
+    return PROFILE if module.channels == 4 else MOD_PROFILE_N
+
+
+def _sample_bytes(sample) -> bytes:
+    if sample.bits == 16:
+        import struct
+        return struct.pack(f"<{len(sample.pcm)}h", *sample.pcm)
+    return bytes(value & 255 for value in sample.pcm)
 
 
 def describe(module: Module, pattern_index: int | None = None, grid: bool = False,
              row: int = 0, rows: int | None = None) -> dict:
     plan = playback_plan(module)
     result = {
-        "title": module.title, "profile": PROFILE, "channels": 4,
+        "title": module.title, "profile": _profile_of(module), "channels": module.channels,
         "orders": module.orders, "patterns": len(module.patterns),
         "duration_seconds": plan["duration_seconds"], "loop_start_seconds": plan["loop_start_seconds"],
         "warnings": audio.duration_warnings(plan["duration_seconds"]),
         "sample_count": sum(bool(sample.pcm) for sample in module.samples),
         "samples": [{
-            "index": index, "name": sample.name, "bytes": len(sample.pcm),
+            "index": index, "name": sample.name, "bytes": len(sample.pcm) * sample.bits // 8,
             "volume": sample.volume, "finetune": sample.finetune,
             "loop_start": sample.loop_start, "loop_length": sample.loop_length,
-            "sha256": hashlib.sha256(bytes(value & 255 for value in sample.pcm)).hexdigest(),
+            "sha256": hashlib.sha256(_sample_bytes(sample)).hexdigest(),
+            **{key: getattr(sample, key) for key, default in (("bits", 8), ("loop_mode", "forward"), ("panning", 128),
+                                                               ("relative_note", 0)) if getattr(sample, key) != default},
         } for index, sample in enumerate(module.samples, 1) if sample.pcm or sample.name],
     }
+    if module.format == "xm":
+        result["format"] = "xm"
     if pattern_index is None and (grid or row or rows is not None):
         raise ValidationError("--grid, --row and --rows need --pattern N.", "PATCH_FIELD")
     if pattern_index is not None:
         require_int(pattern_index, "pattern", 0, len(module.patterns) - 1)
-        count = 64 - row if rows is None else rows
+        total = module.patterns[pattern_index].rows
+        count = total - row if rows is None else rows
         if grid:
+            xm = module.format == "xm"
             result["pattern"] = {"index": pattern_index, "name": module.patterns[pattern_index].name,
-                                 "columns": "row | track 1 | track 2 | track 3 | track 4 (note sample effect)",
+                                 "rows": total,
+                                 "columns": "row | " + " | ".join(f"track {i + 1}" for i in range(module.channels))
+                                            + (" (note instrument volume effect)" if xm else " (note sample effect)"),
                                  "grid": pattern_grid(module, pattern_index, row, count)}
         else:
-            require_int(row, "row", 0, 63)
-            require_int(count, "rows", 1, 64 - row)
+            require_int(row, "row", 0, total - 1)
+            require_int(count, "rows", 1, total - row)
             result["pattern"] = {
                 "index": pattern_index, "name": module.patterns[pattern_index].name,
                 "rows": [{"row": index, "cells": [module.patterns[pattern_index].get(index, channel).text()
-                                                  for channel in range(4)]} for index in range(row, row + count)],
+                                                  for channel in range(module.channels)]}
+                         for index in range(row, row + count)],
             }
     return result
 
@@ -114,14 +138,60 @@ def migrate(source: Path, output: Path) -> dict:
         module = project.from_dict(data)
         source_schema = data.get("schema")
     else:
-        module, source_schema = mod.read(source), "mod"
+        module, source_schema = formats.read(source), module_format_name(source)
     score = project.to_dict(module)
-    if mod.encode(project.from_dict(score)) != mod.encode(module):
+    if formats.encode(project.from_dict(score)) != formats.encode(module):
         raise ValidationError("Migration would change the exported MOD; nothing was written.", "MIGRATION_MISMATCH")
     project.write_json(output, score)
     return {"ok": True, "source_schema": source_schema, "schema": score["schema"],
             "output": str(output.resolve()), "source_bytes": source.stat().st_size,
-            "output_bytes": output.stat().st_size, "mod_sha256": hashlib.sha256(mod.encode(module)).hexdigest()}
+            "output_bytes": output.stat().st_size, "mod_sha256": hashlib.sha256(formats.encode(module)).hexdigest()}
+
+
+def module_format_name(path: Path) -> str:
+    return "xm" if path.suffix.lower() == ".xm" else "mod"
+
+
+def export_module(args: argparse.Namespace) -> dict:
+    """`export`: write the module file. The format comes from --format, else the output extension,
+    else the project's own; a project of the other format is converted first (see `convert`)."""
+    module = project.load(args.source)
+    target = args.format or formats.format_of_path(args.output) or module.format
+    if formats.format_of_path(args.output) not in (None, target):
+        raise ValidationError(f"--format {target} does not match the extension of {args.output.name}.", "OUTPUT_PATH")
+    report = None
+    if target != module.format:
+        module, report = convert.convert(module, target)
+    payload = formats.encode(module)
+    project.atomic_bytes(args.output, payload)
+    result = {"ok": True, "output": str(args.output.resolve()), "bytes": len(payload),
+              "sha256": audio.sha256(args.output)}
+    if module.format == "xm":
+        result["format"] = "xm"
+    if report is not None:
+        result["conversion"] = report
+    return result
+
+
+def convert_command(args: argparse.Namespace) -> dict:
+    """`convert`: MOD to XM (lossless for the notes, effects and PCM of a MOD), or XM to MOD when it fits."""
+    if args.source.resolve() == args.output.resolve():
+        raise ValidationError("La sortie doit être distincte du fichier source.", "OUTPUT_PATH")
+    suffix = args.output.suffix.lower()
+    target = args.to or formats.format_of_path(args.output)
+    if target is None:
+        raise ValidationError("Give --to mod|xm, or an output ending in .mod or .xm.", "OUTPUT_PATH")
+    if suffix not in (".json", f".{target}"):
+        raise ValidationError(f"A {target.upper()} is written to a .{target} file (or a .json project).", "OUTPUT_PATH")
+    module = load(args.source)
+    converted, report = convert.convert(module, target)
+    if suffix == ".json":
+        project.write_json(args.output, project.to_dict(converted, recipes=False))
+    else:
+        project.atomic_bytes(args.output, formats.encode(converted))
+    return {"ok": True, "output": str(args.output.resolve()), "from": module.format, "to": target,
+            "conversion": report, **{key: value for key, value in describe(converted).items()
+                                     if key in ("title", "profile", "channels", "duration_seconds")}}
 
 
 def create_demo(args: argparse.Namespace) -> dict:
@@ -257,6 +327,8 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--category", choices=CATEGORIES)
             command.add_argument("--tag", action="append", default=None, help="Replaces tags; repeat for multiple tags.")
     add_synth_parser(commands)
+    add_sample_parser(commands)
+    add_instrument_parser(commands)
     migrate_parser = commands.add_parser("migrate", help="Rewrite a project (v1 or v2) or MOD as a schema v2 project.")
     migrate_parser.add_argument("source", type=Path)
     migrate_parser.add_argument("--output", type=Path, required=True, help="New .json project; must differ from the source.")
@@ -288,6 +360,11 @@ def build_parser() -> argparse.ArgumentParser:
     feedback.add_argument("--source", default="owner", help="Who gave the feedback (default owner).")
     feedback.add_argument("--version", help="Version label the feedback refers to.")
     feedback.add_argument("--output", type=Path, required=True)
+    convert_parser = commands.add_parser(
+        "convert", help="Convert between MOD and XM (a MOD to XM keeps notes, effects and PCM; XM to MOD only when it fits).")
+    convert_parser.add_argument("source", type=Path, help="MOD, XM or project JSON.")
+    convert_parser.add_argument("--output", type=Path, required=True, help="New .mod, .xm or .json file.")
+    convert_parser.add_argument("--to", choices=("mod", "xm"), help="Target format; default: the output extension.")
     mcp = commands.add_parser("mcp", help="Run the Model Context Protocol adapter on stdio (for MCP clients).")
     mcp.add_argument("--root", type=Path, help="Working directory for relative paths in tool calls.")
     from .live_cli import add_parser as add_live_parser
@@ -307,6 +384,10 @@ def build_parser() -> argparse.ArgumentParser:
                                       "(no recipe). Without it, a declared metadata.sample_source is checked.")
         if name in ("export", "import", "render"):
             command.add_argument("--output", type=Path, required=True)
+        if name == "export":
+            command.add_argument("--format", choices=("mod", "xm"),
+                                 help="Module format; default: the output extension, else the project's own. "
+                                      "A project of the other format is converted (see `convert`).")
         if name == "render":
             command.add_argument("--engine", choices=("openmpt", "xmp"), default="openmpt")
             command.add_argument("--seconds", type=float)
@@ -377,6 +458,10 @@ def main(argv: list[str] | None = None) -> int:
                 result = {"ok": True, "output": str(output), **info}
         elif args.command == "synth":
             result = run_synth(args)
+        elif args.command == "sample":
+            result = run_sample(args)
+        elif args.command == "instruments":
+            result = run_instruments(args)
         elif args.command == "analyze":
             from .references import analyze_source
             if args.source.resolve() == args.output.resolve():
@@ -418,15 +503,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.source.resolve() == args.output.resolve():
                 raise ValidationError("La sortie doit être distincte du fichier source.")
             if args.command == "export":
-                payload = mod.encode(project.load(args.source))
-                project.atomic_bytes(args.output, payload)
-                result = {"ok": True, "output": str(args.output.resolve()), "bytes": len(payload),
-                          "sha256": audio.sha256(args.output)}
+                result = export_module(args)
             else:
-                module = mod.read(args.source)
+                module = formats.read(args.source)
                 project.write_json(args.output, project.to_dict(module, recipes=False))
                 result = {"ok": True, "output": str(args.output.resolve()), "schema": project.SCHEMA_V2,
-                          **describe(module)}
+                          **describe(module), "import_notes": formats.import_notes(module)}
+        elif args.command == "convert":
+            result = convert_command(args)
         elif args.command == "patch":
             result = patch_project(args)
         elif args.command == "report":

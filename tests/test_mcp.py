@@ -92,7 +92,10 @@ class McpProtocolTests(unittest.TestCase):
                 self.assertFalse((directory / "bad.json").exists())
 
                 invalid = server.request("tools/call", {"name": "estimate", "arguments": {"orders": "eight"}})
-                self.assertEqual(invalid["error"]["code"], -32602)
+                self.assertTrue(invalid["result"]["isError"])  # A tool error the model can read and correct.
+                self.assertEqual(invalid["result"]["structuredContent"]["code"], "INVALID_ARGUMENTS")
+                unknown = server.request("tools/call", {"name": "no_such_tool", "arguments": {}})
+                self.assertEqual(unknown["error"]["code"], -32602)
                 self.assertEqual(server.request("nope")["error"]["code"], -32601)
                 self.assertEqual(server.request("ping")["result"], {})
             finally:
@@ -104,9 +107,95 @@ class McpProtocolTests(unittest.TestCase):
             self.assertFalse(tool["inputSchema"]["additionalProperties"])
             response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                       "params": {"name": tool["name"], "arguments": {"unexpected": 1}}})
-            self.assertEqual(response["error"]["code"], -32602, tool["name"])
+            self.assertTrue(response["result"]["isError"], tool["name"])
+            self.assertEqual(response["result"]["structuredContent"]["code"], "INVALID_ARGUMENTS", tool["name"])
         self.assertIsNone(server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "id": 9, "result": {}}))  # A client's answer: no reply.
         self.assertEqual(server.handle({"jsonrpc": "1.0", "id": 3, "method": "ping"})["error"]["code"], -32600)
+
+    def test_schemas_suit_strict_clients(self):
+        for tool in TOOLS:
+            schema = tool["inputSchema"]
+            self.assertNotEqual(schema.get("required"), [], tool["name"])  # Omitted rather than empty.
+            self.assertTrue(set(schema.get("required", ())) <= set(schema["properties"]), tool["name"])
+            for name, spec in schema["properties"].items():
+                self.assertIn("type", spec, f"{tool['name']}.{name}")  # Enums carry their type too.
+            self.assertFalse(tool["annotations"]["openWorldHint"])
+
+    def test_protocol_negotiation_and_object_results(self):
+        server = Server()
+        for requested, expected in (("2025-11-25", "2025-11-25"), ("2024-11-05", "2024-11-05"),
+                                    ("2026-07-28", "2025-11-25"), (None, "2025-11-25")):
+            params = {"capabilities": {}} | ({"protocolVersion": requested} if requested else {})
+            result = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params})["result"]
+            self.assertEqual(result["protocolVersion"], expected)
+        self.assertEqual(Server._tool_result(True, ["a"])["structuredContent"], {"result": ["a"]})
+        self.assertIsInstance(server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {"cursor": "x"}})
+                              ["result"]["tools"], list)
+
+    def test_sound_workshop_tools(self):
+        """Sample editing, drawn waves, waveform summaries and instruments, through the tool interface."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / "song.json").write_bytes((ROOT / "examples/pixel_rush.project.json").read_bytes())
+            server = Server(directory)
+
+            def call(name, arguments):
+                result = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                        "params": {"name": name, "arguments": arguments}})["result"]
+                return result["isError"], result["structuredContent"]
+
+            names = {tool["name"] for tool in TOOLS}
+            self.assertTrue({"sample_schema", "sample_edit", "sample_draw", "sample_waveform", "instruments_list",
+                             "instruments_show", "instruments_save", "instruments_delete",
+                             "instruments_apply"} <= names)
+            error, schema = call("sample_schema", {})
+            self.assertFalse(error)
+            self.assertIn("draw", [item["type"] for item in schema["types"]])
+            error, edited = call("sample_edit", {"project": "song.json", "slot": 1, "output": "edited.json",
+                                                 "trim": [0, 400], "fade": [0, 40], "gain": -2})
+            self.assertFalse(error, edited)
+            self.assertEqual((edited["sample"]["bytes"], edited["sample"]["recipe"]), (400, False))
+            self.assertEqual(edited["sample"]["provenance"]["derived_from"], "recipe")
+            error, refused = call("sample_edit", {"project": "song.json", "slot": 1, "output": "x.json", "gain": 30})
+            self.assertEqual((error, refused["code"]), (True, "SAMPLE_CLIP"))
+            error, waveform = call("sample_waveform", {"source": "edited.json", "slot": 1, "buckets": 8})
+            self.assertEqual((error, len(waveform["buckets"])), (False, 8))
+            error, drawn = call("sample_draw", {"project": "song.json", "slot": 14, "points": [0, 1, 0, -1],
+                                                "cycles": 8, "output": "drawn.json", "name": "Hand"})
+            self.assertFalse(error, drawn)
+            self.assertEqual((drawn["sample"]["slot"], drawn["sample"]["looped"]), (14, True))
+            error, saved = call("instruments_save", {"dir": "inst", "name": "Pluck", "phrase": ["000", "C30", "C10"],
+                                                     "recipe": {"type": "wave", "shape": "triangle"}, "tag": ["bass"]})
+            self.assertFalse(error, saved)
+            self.assertEqual(saved["instrument"]["id"], "INS-0001")
+            error, listing = call("instruments_list", {"dir": "inst", "tag": ["bass"]})
+            self.assertEqual((error, listing["total"]), (False, 1))
+            error, shown = call("instruments_show", {"dir": "inst", "id": "INS-0001"})
+            self.assertEqual(shown["instrument"]["phrase"], ["000", "C30", "C10"])
+            error, applied = call("instruments_apply", {"project": "song.json", "output": "applied.json", "dir": "inst",
+                                                        "instrument": "INS-0001", "pattern": 0, "channel": 1,
+                                                        "row": 2, "note": "C-2"})
+            self.assertFalse(error, applied)
+            self.assertEqual(applied["applied"]["slot"], 14)
+            self.assertEqual(project.load(directory / "applied.json").patterns[0].get(2, 1).sample, 14)
+            error, deleted = call("instruments_delete", {"dir": "inst", "id": "INS-0001"})
+            self.assertEqual((error, deleted["deleted"]), (False, "INS-0001"))
+            error, missing = call("instruments_show", {"dir": "inst", "id": "INS-0001"})
+            self.assertEqual((error, missing["code"]), (True, "INSTRUMENT_NOT_FOUND"))
+            # The edit operations are also reachable through the generic patch tool.
+            error, patched = call("patch", {"source": "song.json", "output": "patched.json", "ops": [
+                {"op": "sample_gain", "slot": 1, "db": -3}, {"op": "sample_match_level", "slot": 2, "role": "snare"}]})
+            self.assertFalse(error, patched)
+            self.assertEqual([item["op"] for item in patched["results"]], ["sample_gain", "sample_match_level"])
+
+    def test_documentation_lists_exactly_the_tools(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        try:
+            import mcp_docs
+        finally:
+            sys.path.remove(str(ROOT / "tools"))
+        self.assertTrue(mcp_docs.is_current(), "docs/MCP.md is out of date; run: python tools/mcp_docs.py --write")
 
 
 if __name__ == "__main__":

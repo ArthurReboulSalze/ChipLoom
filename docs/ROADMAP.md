@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 27 October 2026, with version 0.7.0. Earlier planning notes, in French, are kept in
+Updated 28 October 2026, after the 0.8.0 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together
@@ -18,29 +18,29 @@ Version 0.7 groups what was first planned as four releases (0.7 to 1.0).
 
 See the [changelog](../CHANGELOG.md) for details and the [CLI reference](CLI.md) for contracts.
 
-## Next
+## 0.8.0: shape sounds and share the session
 
-These are proposals, in priority order. Each still needs the owner's agreement.
+Version 0.8 groups what was proposed after 0.7 as four releases (0.8 to 1.0).
 
-1. **Real-time playback, next steps.** The window now plays through libxmp in real time when the
-   library is available, so edits, mutes and solos are heard at once; without it, playback falls back
-   to a rendered WAV. Exports and listening copies still use FFmpeg/libopenmpt, so the two engines can
-   differ slightly. What remains: shipping libxmp in more builds, and checking the engines against each
-   other and on real audio hardware beyond Windows.
-2. **Browser editing session.** A local web page that joins the same live session as the
-   window, so the owner can edit and compose with their agent from a browser, without the Qt
-   application. It needs a safe way for the page to obtain the session token: today the live
-   server deliberately refuses browser requests so that other websites cannot change a song.
-3. **Publishing.** Upload the package to PyPI and attach the Windows build to a GitHub release. Both
-   are owner actions: the repository only prepares them.
-4. **Wider MOD import.** Accept `E6x` pattern loops and `EEx` pattern delays in the playback plan, then
-   other four-channel signatures, with explicit and reversible conversions. Six of the fifteen
-   reference modules currently pass the editing profile.
-5. **Linux desktop listening.** CI now runs the window offscreen on Linux; a session on a real Linux
-   desktop with audio output remains to be done.
-6. **XM**, with its own validation profile, after the MOD workflow is stable.
-7. **Sample creation**: songs made only with created samples exist as an owner-requested mode
-   (`synth` commands, tuned waves, a starter palette and loudness matching to the owner's library). Interactive
-   waveform drawing in the window remains deferred, and library samples stay the default.
-8. **Local phrase model** (see the October study in the history folder), only if the agent with
-   references proves insufficient.
+| Theme | What landed |
+| --- | --- |
+| Consolidation | MCP adapter tested with real clients and documented configurations; window: drag-and-drop of blocks, comparing a take with the current song, a reliable "agent connected" indicator, agent `open` requests that never time out on the owner's prompt; Linux desktop tested on a real Debian machine with sound; CI actions on current versions |
+| Sound workshop in the window | Sample editor (loop points, volume, fine tune, trim) on undoable copies; recipe editor with immediate listening and waveform drawing; sample levels against the bank with one-click matching; reusable instruments (a sample plus a short effect phrase) |
+| Browser studio | A local web page joining the same live session as the window, opened by its address, with no code; listening, an editable grid and the Agent tab, usable from a tablet; works with a headless `live serve` too |
+| Wider formats | `E6x` pattern loops and `EEx` pattern delays, more four-channel MOD variants, MOD with 2 to 32 channels, and a first XM profile with its own validation, all editable in the window |
+| Playing by ear | Keyboard audition of the current instrument, sample, recipe or instrument, up to 6 notes mixed with the song in the real-time stream |
+
+## After 0.8
+
+These are proposals. Each still needs the owner's agreement.
+
+1. **Musical intelligence.** A `variations` command that writes several versions of a section from one
+   brief for A/B listening; a taste profile built from feedback, A/B choices and accepted or rejected
+   proposals, read by the agent before composing; arrangement templates (intro, verse, build, chorus,
+   bridge) with durations and densities measured on the owner's references.
+2. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows build to
+   GitHub releases.
+3. **macOS.** Not tested yet: window, real-time audio and a standalone build.
+4. **Richer XM.** Multi-sample instruments, full envelopes and the rest of the XM effect set, then IT.
+5. **Local phrase model** (see the October study in the history folder), only if the agent with
+   references, variations and the taste profile proves insufficient.

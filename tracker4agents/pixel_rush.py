@@ -158,8 +158,8 @@ def create(seed: int = 104729) -> Module:
     patterns[-1].put(63, 0, cell(effect="B00"))
     module = Module("Pixel Rush", samples, patterns, [0, 1, 2, 3, 4, 1, 5, 6], {
         "description": "Original fast chip piece, composed with newly drawn waves and synthetic percussion.",
-        "display_description": "Un morceau chiptune rapide : basses triangulaires, arpèges et mélodie carrée dont le timbre change pendant les notes.",
-        "arrangement": "32 mesures : entrée, thème et réponse, passage plus aéré, montée, retour du thème puis relance. Les patterns sont réutilisés comme dans les références.",
+        "display_description": "A fast chiptune piece: triangle basses, arpeggios and a square-wave melody whose timbre changes during the notes.",
+        "arrangement": "32 bars: intro, theme and answer, a lighter passage, a build-up, the theme's return, then a restart. Patterns are reused as in the references.",
         "bars": 32, "seed": seed, "author": "tracker4agents / agent composition",
         "channel_names": ["Chip drums", "Triangle bass", "Pulse arpeggio", "PWM lead"],
         "note_convention": "ProTracker C-1..B-3, not scientific octave numbers",

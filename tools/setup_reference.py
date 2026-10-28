@@ -36,7 +36,7 @@ def find_cmake() -> str:
         for candidate in result.stdout.splitlines():
             if Path(candidate).is_file():
                 return candidate
-    raise RuntimeError("CMake introuvable. Installe les outils C++/CMake de Visual Studio.")
+    raise RuntimeError("CMake not found. Install the Visual Studio C++/CMake tools.")
 
 
 def main() -> int:
@@ -44,17 +44,17 @@ def main() -> int:
     target.mkdir(parents=True, exist_ok=True)
     archive = target / f"libxmp-{VERSION}.tar.gz"
     if not archive.is_file():
-        print(f"Téléchargement de libxmp {VERSION} depuis son dépôt officiel…", flush=True)
+        print(f"Downloading libxmp {VERSION} from its official repository…", flush=True)
         request = urllib.request.Request(URL, headers={"User-Agent": "tracker4agents-prototype"})
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = response.read(4_000_001)
         if len(payload) > 4_000_000:
-            raise RuntimeError("Archive anormalement grande.")
+            raise RuntimeError("The archive is unusually large.")
         if hashlib.sha256(payload).hexdigest() != SHA256:
-            raise RuntimeError("Le SHA256 de l'archive ne correspond pas à la version attendue.")
+            raise RuntimeError("The archive's SHA256 does not match the expected version.")
         archive.write_bytes(payload)
     if hashlib.sha256(archive.read_bytes()).hexdigest() != SHA256:
-        raise RuntimeError(f"Archive locale invalide : {archive}")
+        raise RuntimeError(f"Invalid local archive: {archive}")
 
     source = target / f"libxmp-{VERSION}"
     if not source.is_dir():
@@ -74,7 +74,7 @@ def main() -> int:
     )
     libraries = list(build.rglob("*xmp*.dll")) if sys.platform == "win32" else list(build.rglob("libxmp.so*"))
     if not libraries:
-        raise RuntimeError("Compilation terminée mais bibliothèque partagée introuvable.")
+        raise RuntimeError("The build finished but the shared library was not found.")
     manifest = {
         "name": "libxmp", "version": VERSION, "source_url": URL,
         "archive_sha256": SHA256, "library": str(libraries[0].resolve()),

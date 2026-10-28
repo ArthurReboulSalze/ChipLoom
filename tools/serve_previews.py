@@ -64,7 +64,7 @@ class PreviewHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Écouter et inspecter les compositions sur un serveur local.")
+    parser = argparse.ArgumentParser(description="Listen to and inspect compositions through a local server.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--directory", type=Path, default=Path(__file__).resolve().parents[1] / "exports")
     args = parser.parse_args()

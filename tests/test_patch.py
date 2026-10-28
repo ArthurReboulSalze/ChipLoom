@@ -167,5 +167,39 @@ class DiffAndMergeTests(unittest.TestCase):
         self.assertEqual(merged.patterns[0].get(1, 3).note, "C-2")
 
 
+class SampleOperationTests(unittest.TestCase):
+    """The sample_* operations follow the patch conventions; their details live in tests/test_sample_edit.py."""
+
+    def test_registered_strict_and_all_or_nothing(self):
+        from tracker4agents.patch import OPERATIONS
+        for name in ("sample_loop", "sample_trim", "sample_gain", "sample_fade", "sample_set_pcm",
+                     "sample_match_level", "apply_instrument"):
+            self.assertIn(name, OPERATIONS)
+        module = tiny()
+        before = copy.deepcopy(module)
+        with self.assertRaises(ValidationError) as caught:
+            apply_ops(module, [{"op": "title", "title": "x"}, {"op": "sample_gain", "slot": 2, "db": 5, "oops": 1}])
+        self.assertEqual((caught.exception.code, str(caught.exception)[:22]), ("UNKNOWN_FIELD", "ops[1] (sample_gain): "))
+        with self.assertRaises(ValidationError) as caught:  # slot 1 peaks at 40: +12 dB would clip
+            Document(module).patch([{"op": "sample_gain", "slot": 1, "db": 12}])
+        self.assertEqual(caught.exception.code, "SAMPLE_CLIP")
+        document = Document(module)
+        document.patch([{"op": "sample_gain", "slot": 2, "db": -6.0206}])
+        self.assertEqual(document.module.samples[1].pcm[2:4], (30, -30))
+        self.assertEqual(diff_modules(before, document.module)["samples"], [2])
+        self.assertTrue(diff_modules(before, document.module)["metadata"])
+
+    def test_source_errors_keep_their_violations_through_the_wrapper(self):
+        from tracker4agents.sample_source import SampleSourceError
+        from tracker4agents.synth import from_recipe
+        module = tiny()
+        module.samples[0] = from_recipe("K", {"type": "kick"})
+        module.metadata["sample_source"] = "synthesized"
+        with self.assertRaises(SampleSourceError) as caught:
+            apply_ops(module, [{"op": "sample_gain", "slot": 1, "db": -1}])
+        self.assertEqual((caught.exception.code, caught.exception.violations[0]["slot"]), ("SAMPLE_SOURCE", 1))
+        self.assertTrue(str(caught.exception).startswith("ops[0] (sample_gain): "))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,12 +12,14 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections import deque
+import dataclasses
 import os
 import threading
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaDevices
 
+from .desktop_mixer import JamMixer
 from .level_meter import pcm_levels
 from .realtime import RealtimeError, XmpEngine, find_library
 
@@ -30,6 +32,7 @@ FRAME_BYTES = 4                    # 16-bit stereo
 BUFFER_CHOICES = (("low", 80), ("normal", 150), ("high", 300), ("very_high", 600))
 DEFAULT_BUFFER = "normal"
 TICK_MS = 10
+JAM_QUEUE_MS = 40                  # audio kept queued while only jam voices sound: a key is heard within ~this
 LIBXMP_HINT = ("Real-time playback needs libxmp (not found): playing rendered audio instead. Run "
                "`python tools/setup_reference.py`, install libxmp or set CHIPLOOM_LIBXMP.")
 
@@ -96,6 +99,8 @@ class AudioCore(QObject):
         self.processed = 0                     # commands handled, so the GUI knows when its view is current
         self._level_seq, self._last_levels = 0, None
         self._times_plan, self._times = None, {}
+        self.jam = JamMixer(SAMPLE_RATE)       # notes played from the keyboard, mixed into whatever is streaming
+        self.jamming = False                   # the sink is open for jam voices alone (no song playing)
         self._prefix, self._prefix_markers = b"", []   # audio already rendered while moving to a row
         self._reset_stream()
         self.timer = None
@@ -165,14 +170,18 @@ class AudioCore(QObject):
         self._publish_fn({"playing": self.playing, "ms": milliseconds, "marker": marker,
                           "queued": self._queued_frames(), "rendered": self._rendered, "underruns": self.underruns,
                           "levels": self._last_levels, "level_seq": self._level_seq, "processed": self.processed,
+                          "jam": self.jamming or self.jam.active, "voices": self.jam.snapshot(),
                           "sink_state": self.sink.state().name if hasattr(self.sink, "state") else "",
                           "thread": threading.get_ident()})
 
     # --- commands (audio thread) ---------------------------------------------------------
     def cmd_load(self, module, play: bool, position_ms: int, audible, loop: bool):
         """Load a module and position it: a document was opened, or the real-time engine restarts."""
+        self.jam.clear()
         self._stop_stream()
-        self.engine.set_audible(audible)
+        # The engine still holds the previous module's channels: it takes the states as they are and `load` fits
+        # them to the new module (an 8-channel song after a 4-channel one, or the other way round).
+        self.engine.audible = tuple(bool(value) for value in audible)
         self.engine.loop = bool(loop)
         self._position(0, 0, module)
         self.idle_ms = 0
@@ -181,8 +190,10 @@ class AudioCore(QObject):
         if play:
             self.cmd_play()
 
-    def cmd_reload(self, module):
+    def cmd_reload(self, module, audible=None):
         """Swap the edited module in without stopping: the queued audio plays out, the new notes follow it."""
+        if audible is not None and len(audible) == module.channels:   # the channel count may have changed
+            self.engine.audible = tuple(bool(value) for value in audible)
         if self.playing and self.sink is not None:
             self._skip = max(0, self._rendered - self._row_start)  # the row being rendered is already queued
         order, row = self.engine.position["order"], self.engine.position["row"]
@@ -190,7 +201,8 @@ class AudioCore(QObject):
         self._draining = False
 
     def cmd_audible(self, audible):
-        self.engine.set_audible(audible)
+        channels = self.engine.channels
+        self.engine.set_audible(tuple(audible[:channels]) + (True,) * max(0, channels - len(audible)))
 
     def cmd_loop(self, loop: bool):
         self.engine.loop = bool(loop)
@@ -260,6 +272,7 @@ class AudioCore(QObject):
             self.engine.seek(0, 0)
             self.idle_ms = 0
         self._open_sink()
+        self.jamming = False
         self.playing = True
         self._feed()
         self.timer.start()
@@ -301,6 +314,7 @@ class AudioCore(QObject):
         else:
             self.idle_ms = milliseconds
             self._position_at(milliseconds / 1000)
+        self._resume_jam()
 
     def cmd_pause(self):
         self._stop_stream()
@@ -315,6 +329,7 @@ class AudioCore(QObject):
         self._prefix, self._prefix_markers = b"", []
         if self.engine.plan is not None:
             self.engine.seek(0, 0)
+        self._resume_jam()
 
     def cmd_seek(self, milliseconds: int):
         milliseconds = max(0, int(milliseconds))
@@ -327,10 +342,73 @@ class AudioCore(QObject):
             self._reset_stream()
             self._feed()
 
+    # --- jam voices ----------------------------------------------------------------------
+    def cmd_jam_on(self, key: int, note: str, sample, name: str, fmt: str = "mod"):
+        """A key went down: start a voice. With no song playing the sink opens for the voice alone."""
+        self.jam.note_on(key, note, sample, name, fmt)
+        if not self.playing and not self.jamming:
+            self._start_jam()
+        elif self.jamming:
+            self._feed_jam()
+
+    def cmd_jam_off(self, key: int):
+        self.jam.note_off(key)
+
+    def cmd_jam_clear(self):
+        self.jam.clear()
+
+    def _start_jam(self):
+        if not self.jam.active or self.timer is None:
+            return
+        self._open_sink()
+        self.jamming = True
+        self.timer.start()
+        self._feed_jam()
+
+    def _resume_jam(self):
+        if self.jam.active and not self.playing:
+            self._start_jam()
+
+    def _end_jam(self):
+        self.timer.stop()
+        self._close_sink()
+        self._reset_stream()
+        self.jamming = False
+
+    def _feed_jam(self):
+        """Jam voices alone: keep only a short queue, so a key press is heard within a few tens of milliseconds."""
+        if not self.jamming or self.sink is None:
+            return
+        queued = self._queued_frames()
+        if self._carry:
+            written = self.device.write(self._carry)
+            self._carry = self._carry[max(0, written):]
+            self._delivered += max(0, written) // FRAME_BYTES
+            if self._carry:
+                return
+        if not self.jam.active:
+            if queued == 0:
+                self._end_jam()      # the last note has played out
+            return
+        wanted = SAMPLE_RATE * JAM_QUEUE_MS // 1000 - queued
+        frames = min(self.sink.bytesFree() // FRAME_BYTES, wanted)
+        if frames < 64:
+            return
+        pcm = self.jam.mix(bytes(frames * FRAME_BYTES))
+        rms, peaks = pcm_levels(pcm)
+        self._levels.append((self._rendered, rms, peaks))
+        self._rendered += frames
+        written = max(0, self.device.write(pcm))
+        self._delivered += written // FRAME_BYTES
+        self._carry = pcm[written:]
+
     # --- feeding -------------------------------------------------------------------------
     def feed(self):
         """Timer tick: top the sink up to the chosen queue length, then publish the position."""
-        self._feed()
+        if self.playing:
+            self._feed()
+        else:
+            self._feed_jam()
         self._publish()
 
     def _feed(self):
@@ -374,6 +452,8 @@ class AudioCore(QObject):
             if self.engine.finished:
                 self._draining = True
             return
+        if self.jam.active:
+            pcm = self.jam.mix(pcm)     # notes played on the keyboard join the song
         start = self._rendered
         times = self._song_times()
         for marker in markers:
@@ -498,16 +578,15 @@ class RealtimeTransport(QObject):
         """Load the window's module and position it; used when a document is opened or monitoring restarts."""
         self.audible, self.loop = self.window.audible(), self.window.loop.isChecked()
         self._playing = bool(play)
-        self._send("load", self.window.document.module, bool(play), int(position_ms), self.audible, self.loop)
+        self._send("load", self.window.listening_module(), bool(play), int(position_ms), self.audible, self.loop)
         self._override = (int(position_ms), self._sent)
         self.state_changed.emit()
 
     def reload(self):
-        """Swap the edited module in without stopping."""
-        document = self.window.document
-        if document is not None:
+        """Swap the edited module (or the take being compared) in without stopping."""
+        if self.window.document is not None:
             self.reloads += 1
-            self._send("reload", document.module)
+            self._send("reload", self.window.listening_module(), self.window.audible())
 
     def set_audible(self, audible):
         self.audible = tuple(bool(value) for value in audible)
@@ -547,6 +626,26 @@ class RealtimeTransport(QObject):
         if was:
             self.state_changed.emit()
 
+    # --- jam ---------------------------------------------------------------------------------
+    def jam_on(self, key: int, note: str, sample, name: str = "", fmt: str = "mod"):
+        """Start a voice for `sample` (a private copy is sent) at `note` of a `fmt` module; `key` identifies it
+        for `jam_off`."""
+        self._send("jam_on", key, note, dataclasses.replace(sample), name or sample.name, fmt)
+
+    def jam_off(self, key: int):
+        self._send("jam_off", key)
+
+    def jam_clear(self):
+        self._send("jam_clear")
+
+    def jam_voices(self) -> list[dict]:
+        """The voices sounding as of the audio thread's last tick."""
+        return list(self.snapshot().get("voices", []))
+
+    @property
+    def jam_active(self) -> bool:
+        return bool(self.snapshot().get("jam"))
+
     def seek_ms(self, milliseconds: int):
         milliseconds = max(0, int(milliseconds))
         self._send("seek", milliseconds)
@@ -569,7 +668,7 @@ class RealtimeTransport(QObject):
     def heard_levels(self):
         """(rms, peaks) reached since the last call, or None."""
         snap = self.snapshot()
-        if snap["level_seq"] != self._level_seen and snap["playing"]:
+        if snap["level_seq"] != self._level_seen and (snap["playing"] or snap.get("jam")):
             self._level_seen = snap["level_seq"]
             return snap["levels"]
         return None

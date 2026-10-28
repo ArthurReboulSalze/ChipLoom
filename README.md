@@ -13,7 +13,7 @@
   <a href="https://github.com/ArthurReboulSalze/ChipLoom/actions/workflows/tests.yml"><img src="https://github.com/ArthurReboulSalze/ChipLoom/actions/workflows/tests.yml/badge.svg" alt="Windows and Linux tests"></a>
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12 or newer">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-29bfa5" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/format-4--channel_MOD-8b5cf6" alt="4-channel MOD">
+  <img src="https://img.shields.io/badge/format-MOD_%C2%B7_XM-8b5cf6" alt="MOD and XM">
 </p>
 
 <p align="center">
@@ -21,8 +21,7 @@
   <a href="#get-started">Get started</a> ·
   <a href="skills/chiploom/SKILL.md">Agent skill</a> ·
   <a href="docs/AGENT_GUIDE.md">Agent guide</a> ·
-  <a href="docs/CLI.md">CLI reference</a> ·
-  <a href="docs/USAGE_FR.md">Français</a>
+  <a href="docs/CLI.md">CLI reference</a>
 </p>
 
 ---
@@ -66,7 +65,7 @@ Musical brief → Agent → JSON score + local samples → Validate → MOD
 
 <p align="center"><em>The Windows companion with the new bottom sample browser. Search, filter, listen and add sounds while keeping the tracker wide. The screenshot uses a local bank; its samples and the displayed test song are not distributed.</em></p>
 
-**No embedded model and no model-weight training.** Your agent provides the composition decisions; ChipLoom provides the musical tools. An optional, tested **MCP adapter** (`chiploom mcp`) wraps the command line for clients that prefer that protocol; it has not been tried with specific MCP clients, and agents with a terminal can simply use the CLI. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
+**No embedded model and no model-weight training.** Your agent provides the composition decisions; ChipLoom provides the musical tools. An optional, tested **MCP adapter** (`chiploom mcp`) wraps the command line for clients that prefer that protocol; it is driven by the official Python MCP SDK in a smoke test but has not been tried in a model-driven session with an application, and agents with a terminal can simply use the CLI. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
 
 ## Get started
 
@@ -197,6 +196,14 @@ When the window is open, your agent can edit the song you are looking at. In the
 
 Without the window, `chiploom live serve SONG.json` hosts the same session headless. The server listens on localhost only and needs a token the CLI reads for you. [Live commands →](docs/CLI.md#live-sessions) · [Collaboration guide for agents →](docs/AGENT_GUIDE.md#composing-with-the-owner-in-the-window-live)
 
+## New in 0.8
+
+- **Sound workshop:** shape the song's samples in the window (loop, trim, fades, gain, volume, levels against your bank), create sounds from recipes or by drawing, and save instruments, each as one undoable step. [User guide →](docs/USER_GUIDE.md#sound-workshop)
+- **Keyboard audition:** the piano keys play the current sound, a library entry, a recipe or an instrument, over the song when it plays. [User guide →](docs/USER_GUIDE.md#keyboard-audition)
+- **Browser studio:** a tablet or second screen edits the same live session, opened from **Agent → Open in a browser…** or by pasting the printed address, with no code to type. It stays on this computer unless you allow your local network (plain HTTP). [User guide →](docs/USER_GUIDE.md#open-in-a-browser)
+- **More formats:** MOD with 2 to 32 channels, the `E6x` and `EEx` effects, a first FastTracker 2 XM profile and `convert` between MOD and XM in the command line. [CLI reference →](docs/CLI.md#multi-channel-mod-and-xm)
+- **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 45 MCP tools. [Changelog →](CHANGELOG.md)
+
 ## Measure, compare, give feedback
 
 `report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. The A/B page is a casual test: its answer key sits in a file next to it, and loudness is not equalized.
@@ -208,7 +215,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## Two ways to listen and edit
 
-**Desktop:** open a MOD or JSON project, browse your sample bank, mute/solo tracks and watch agent changes arrive. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser and Agent tab stay below it. English is the default; French and four themes are available. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
+**Desktop:** open a MOD or JSON project, browse your sample bank, mute/solo tracks and watch agent changes arrive. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser and Agent tab stay below it. It also has a sound workshop, keyboard audition and the browser studio (see above). English is the default; French and four themes are available. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
 
 - **Type notes:** turn on **Edit mode** (Ctrl+E) and play the piano keys. The lower row starts at the base octave and the upper row one octave higher; **F1–F3** or numpad **+/−** change the octave, and **Step** sets how many rows the cursor advances after each entry. The keyboard setting (Auto, QWERTY, AZERTY) picks the key map; Auto chooses AZERTY for French input. Hex digits fill the sample and effect columns; **Delete** clears a cell and **Backspace** clears it and moves up.
 - **Work with blocks:** **Ctrl+C / X / V** copy, cut and paste. The clipboard holds the same grid text the agent prints, so you can paste what the agent wrote. **Alt+arrows** move the block, **Ctrl+↑/↓** transpose by a semitone and **Ctrl+Shift+↑/↓** by an octave.
@@ -216,7 +223,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 - **Follow outside changes:** when the file changes on disk, the window reloads it. Without local edits that is one undoable "Agent changes" step; with unsaved edits it does a three-way merge, lists conflicts in the status bar and keeps the file's version. Changed cells flash. **F5** still reloads by hand.
 - **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows build bundles libxmp when it was built.
 
-**HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in the browser is on the [roadmap](docs/ROADMAP.md). Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
+**HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in a browser goes through the [browser studio](docs/USER_GUIDE.md#browser-studio) of a live session. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 
 ## Learn from tracker construction
 
@@ -226,25 +233,26 @@ The read-only analyzer studies a MOD or a ZIP of modules: arrangement, sample lo
 python -m tracker4agents analyze path/to/selection.zip --output exports/study.json --probe
 ```
 
-The included [reference study](references/SELECTION_FR.md) covers 15 historical files. It shares structural observations, **not third-party MODs, PCM samples or recordings**. Studying references informs composition; it does not train a model.
+The included [reference study](references/SELECTION.md) covers 15 historical files. It shares structural observations, **not third-party MODs, PCM samples or recordings**. Studying references informs composition; it does not train a model.
 
 ## Current scope
 
 | Available now | Still ahead |
 | :--- | :--- |
-| Strict four-channel `M.K.` MOD import/export | XM and IT |
-| 64 rows per pattern, up to 64 patterns / 128 orders / 31 samples | Interactive sample drawing (deferred by the current library-only policy) |
-| Signed 8-bit mono samples; synthesized-only songs on request, loudness-matched to your bank | Wider MOD import (`E6x`, `EEx`, other signatures) |
-| Local sample banks, agent skill and bottom desktop browser | Richer instrument and phrase editing |
-| Compact v2 projects, `patch`, `migrate`, stable error codes | Browser editing session |
+| MOD import/export with 2 to 32 channels (`M.K.`, `M!K!`, `FLT4`, `4CHN`, `6CHN`, `8CHN` ...); a first XM profile (one sample per instrument, 16-bit samples, volume column) | Multi-sample XM instruments, envelope editing and IT |
+| MOD: 64 rows per pattern, up to 100 patterns (`M!K!` above 64), 128 orders, 31 samples; XM: 1 to 256 rows, 128 instruments | Richer instrument and phrase editing |
+| Signed 8-bit mono samples (16-bit in XM); synthesized-only songs on request, loudness-matched to your bank | Octalyser, Startrekker `FLT8` and the `EFx` effect |
+| Local sample banks, agent skill and bottom desktop browser | |
+| Compact v2 projects, `patch`, `migrate`, `convert`, stable error codes | |
+| Sound workshop (loops, trim, fades, gain, levels, created and drawn sounds, instruments), keyboard audition, browser studio | |
 | `report`, blind `compare`, `feedback` | Publishing to PyPI and a GitHub release |
 | Live sessions with the window; proposals and takes | Linux desktop validation on real hardware |
 | Keyboard entry, blocks, order editor, real-time playback with libxmp in the window | |
-| MCP stdio adapter (tested; no specific client tried) | |
+| MCP stdio adapter (tested with the official Python SDK as a client; no application tried) | |
 | Render up to 120 seconds per request, including excerpts | |
 | Windows desktop and standalone build; Windows/Linux CI; reported Debian agent use | |
 
-Some valid historical MOD variants are deliberately rejected. `E6x`, `EEx`, `EFx`, other signatures and restart-byte variants are outside the editing profile. [Format details](docs/USAGE_FR.md#profil-mod-pris-en-charge) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
+Some valid historical MOD variants are deliberately rejected: `EFx`, `FLT8`, Octalyser signatures and out-of-range periods. Imports keep or report restart bytes, inactive orders and odd headers. [Format details](docs/USER_GUIDE.md#supported-formats-and-limits) · [User guide](docs/USER_GUIDE.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 
 ## Development
 

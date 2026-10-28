@@ -21,8 +21,8 @@ import secrets
 import tempfile
 from datetime import datetime, timezone
 
-from . import __version__, audio, mod, project
-from .model import NOTES, Module, ValidationError, playback_plan
+from . import __version__, audio, formats, project
+from .model import NOTES, XM_NOTES, Module, ValidationError, playback_plan
 from .report import analyze
 
 COMPARISON_SCHEMA = "chiploom.comparison.v1"
@@ -245,7 +245,7 @@ function renderResult(){
   var tbody=el('tbody');
   answer.metrics.forEach(function(row){
     var tr=el('tr'),label=TEXTS[lang]['metric_'+row.key];
-    if(!label&&row.channel){label=TEXTS[lang]['metric_'+row.key.replace(/^ch\d_/,'channel_')].replace('{n}',row.channel)}
+    if(!label&&row.channel){label=TEXTS[lang]['metric_'+row.key.replace(/^ch\d+_/,'channel_')].replace('{n}',row.channel)}
     tr.appendChild(el('td',label||row.key));tr.appendChild(el('td',show(row.x)));tr.appendChild(el('td',show(row.y)));tbody.appendChild(tr);
   });
   table.appendChild(tbody);box.appendChild(table);
@@ -306,12 +306,12 @@ applyLang();
 
 
 def _loader(path: Path) -> Module:
-    return project.load(path) if path.suffix.lower() == ".json" else mod.read(path)
+    return project.load(path) if path.suffix.lower() == ".json" else formats.read(path)
 
 
 def _default_label(path: Path) -> str:
     name = path.name
-    for suffix in (".project.json", ".json", ".mod"):
+    for suffix in (".project.json", ".json", ".mod", ".xm"):
         if name.lower().endswith(suffix):
             return name[:-len(suffix)] or name
     return name
@@ -323,17 +323,17 @@ def _check_label(value: object, index: int) -> str:
     return value.strip()
 
 
-def _lowest_highest(channels: list[dict]) -> tuple[str | None, str | None]:
+def _lowest_highest(channels: list[dict], names: tuple[str, ...] = NOTES) -> tuple[str | None, str | None]:
     low = [entry["lowest_note"] for entry in channels if entry["lowest_note"]]
     high = [entry["highest_note"] for entry in channels if entry["highest_note"]]
-    return (min(low, key=NOTES.index) if low else None, max(high, key=NOTES.index) if high else None)
+    return (min(low, key=names.index) if low else None, max(high, key=names.index) if high else None)
 
 
-def _metrics(report: dict, wav: dict) -> dict:
-    """Flat, language-neutral measurements for the side-by-side table."""
+def _metrics(report: dict, wav: dict, names: tuple[str, ...] = NOTES) -> dict:
+    """Flat, language-neutral measurements for the side-by-side table (`names`: the note labels of the format)."""
     timing, overall = report["timing"], report["global"]
     key = overall["key_estimate"]
-    lowest, highest = _lowest_highest(report["channels"])
+    lowest, highest = _lowest_highest(report["channels"], names)
     bpm = (str(timing["bpm_min"]) if timing["bpm_min"] == timing["bpm_max"]
            else f"{timing['bpm_min']}-{timing['bpm_max']}")
     duration = timing["duration_seconds"]
@@ -448,10 +448,11 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
         for side, version in zip(("x", "y"), order):
             position = index_of[version]
             module = modules[position]
-            mod_path, wav_path = folder / f"{side}.mod", folder / f"{side}.wav"
-            project.atomic_bytes(mod_path, mod.encode(module))
+            extension = formats.extension(module)
+            mod_path, wav_path = folder / f"{side}{extension}", folder / f"{side}.wav"
+            project.atomic_bytes(mod_path, formats.encode(module))
             details = audio.render(mod_path, wav_path, seconds=seconds, ffmpeg=ffmpeg)
-            files = {"mod": f"{side}.mod", "wav": f"{side}.wav", "mp3": None}
+            files = {"mod": f"{side}{extension}", "wav": f"{side}.wav", "mp3": None}
             encoded = None
             if mp3:
                 encoded = audio.export_mp3(wav_path, folder / f"{side}.mp3", ffmpeg)
@@ -463,12 +464,14 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
                 "source_name": (first, second)[position].name,
                 "source_sha256": audio.sha256((first, second)[position]),
                 "mod_sha256": audio.sha256(mod_path), "files": files, "render": _kept_render(details),
-                "optional_mp3": encoded, "report": report, "metrics": _metrics(report, details["audio"]),
+                "optional_mp3": encoded, "report": report,
+                "metrics": _metrics(report, details["audio"], XM_NOTES if module.format == "xm" else NOTES),
             }
         metric_rows = []
-        for key in sides["x"]["metrics"]:
-            row = {"key": key, "x": sides["x"]["metrics"][key], "y": sides["y"]["metrics"][key]}
-            channel = re.match(r"ch(\d)_", key)
+        x_metrics, y_metrics = sides["x"]["metrics"], sides["y"]["metrics"]
+        for key in [*x_metrics, *(item for item in y_metrics if item not in x_metrics)]:  # channel counts may differ
+            row = {"key": key, "x": x_metrics.get(key), "y": y_metrics.get(key)}
+            channel = re.match(r"ch(\d+)_", key)
             if channel:
                 row["channel"] = int(channel.group(1))
             metric_rows.append(row)

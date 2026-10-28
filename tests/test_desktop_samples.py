@@ -43,7 +43,9 @@ class DesktopSampleTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication(["sample-browser-tests"])
         cls.app.setQuitOnLastWindowClosed(False)
-        cls.app.setStyle("Fusion")
+        if cls.app.property("chiploomFusion") is None:   # restyling widgets left by earlier modules can stall
+            cls.app.setStyle("Fusion")
+            cls.app.setProperty("chiploomFusion", True)
         if not QFontDatabase.families() and os.name == "nt":
             for name in ("segoeui.ttf", "consola.ttf"):
                 QFontDatabase.addApplicationFont(str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name))

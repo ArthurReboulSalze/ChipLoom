@@ -53,7 +53,9 @@ class DesktopLiveTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication(["live-tests"])
         cls.app.setQuitOnLastWindowClosed(False)
-        cls.app.setStyle("Fusion")
+        if cls.app.property("chiploomFusion") is None:   # restyling widgets left by earlier modules can stall
+            cls.app.setStyle("Fusion")
+            cls.app.setProperty("chiploomFusion", True)
         if not QFontDatabase.families() and os.name == "nt":
             for name in ("segoeui.ttf", "consola.ttf"):
                 QFontDatabase.addApplicationFont(str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name))
@@ -145,7 +147,7 @@ class DesktopLiveTests(unittest.TestCase):
         self.assertIs(AppState(self.directory / "state").values["live"], False)
         window.set_language("fr")
         self.assertEqual(window.live_status.text(), "Direct : désactivé")
-        self.assertEqual(window.sample_tabs.tabText(2), "Agent")
+        self.assertEqual(window.sample_tabs.tabText(window.sample_tabs.indexOf(window.agent_panel)), "Agent")
         window.set_language("en")
         window.close()
         self.open_window_without_server()
@@ -242,7 +244,7 @@ class DesktopLiveTests(unittest.TestCase):
         self.wait_until(lambda: panel.proposal_list.count() == 1)
         self.assertIn("Bass idea", panel.proposal_list.item(0).text())
         self.assertIn("2 cells", panel.proposal_list.item(0).text())
-        self.assertEqual(window.sample_tabs.tabText(2), "Agent (1)")
+        self.assertEqual(window.sample_tabs.tabText(window.sample_tabs.indexOf(window.agent_panel)), "Agent (1)")
         before = fingerprint(window.document.module)
         panel.proposal_list.setCurrentRow(0)
         self.assertIsNotNone(self.model.overlay)
@@ -256,7 +258,7 @@ class DesktopLiveTests(unittest.TestCase):
         self.assertIsNone(self.model.overlay)
         self.assertEqual((self.cell(1, 0), self.cell(2, 3)), (cell("F-2", 1), cell("A-1", 2)))
         self.assertEqual(panel.proposal_list.count(), 0)
-        self.assertEqual(window.sample_tabs.tabText(2), "Agent")
+        self.assertEqual(window.sample_tabs.tabText(window.sample_tabs.indexOf(window.agent_panel)), "Agent")
         self.assertEqual(set(self.model.flashed()), {(0, 1, 0), (0, 2, 3)})
         self.assertEqual(self.call("proposals", status="accepted")["proposals"][0]["id"], proposal["id"])
         window.undo()  # one undo step takes the whole accepted proposal back
@@ -345,18 +347,22 @@ class DesktopLiveTests(unittest.TestCase):
         self.assertIn("Alt mix", panel.take_list.item(0).text())
         window.apply_patch([set_op(0, 0, "C-2 01 ...")], "Unsaved work")
         self.assertTrue(window.document.dirty)
+        # With unsaved changes the owner's prompt can stay open for a long time: the agent is answered at
+        # once ("pending") and finds the outcome in the journal (see test_desktop_08 for more).
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Cancel) as question:
             declined = self.call("open", take=added["id"])
-        self.assertTrue(question.called)
-        self.assertEqual((declined["handled"], declined["reason"]), (False, "owner declined"))
+            self.wait_until(lambda: question.called and window.live._pending_open is None)
+        self.assertEqual((declined["handled"], declined["prompt"]), ("pending", True))
         self.assertEqual(window.document.module.title, "Live")
+        self.assertEqual(self.call("changes")["entries"][-1]["outcome"], "declined")
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Discard):
             opened = self.call("open", take=added["id"])
-        self.assertTrue(opened["handled"])
-        self.assertEqual(window.document.module.title, "Second take")
+            self.wait_until(lambda: window.document.module.title == "Second take")
+        self.assertEqual(opened["handled"], "pending")
         self.assertEqual(window.document.path, take.resolve())
         self.assertEqual(self.call("status")["title"], "Second take")
-        self.assertEqual(self.call("changes")["entries"][-1]["kind"], "open")
+        kinds = [entry["kind"] for entry in self.call("changes")["entries"]]
+        self.assertEqual(kinds[-2:], ["open", "request"])
         # The discovery file follows the new document.
         self.assertEqual(discover(self.home)[0]["path"], str(take.resolve()))
 

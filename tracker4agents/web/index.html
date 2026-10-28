@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>ChipLoom Studio</title>
+<link rel="icon" type="image/png" href="/web/emblem.png">
+<link rel="apple-touch-icon" href="/web/emblem.png">
+<link rel="stylesheet" href="/web/theme.css">
+<link rel="stylesheet" href="/web/style.css">
+<script src="/web/cells.js" defer></script>
+<script src="/web/app.js" defer></script>
+</head>
+<body>
+
+<!-- Connecting: shown while the page joins the session, or when it cannot. -->
+<section id="connect">
+  <div class="card connect-card">
+    <h1 class="sr">ChipLoom Studio</h1>
+    <div class="connect-head">
+      <img class="brand-logo" src="/web/logo.png" alt="ChipLoom" width="300" height="100">
+      <span class="stripes" aria-hidden="true"><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i></span>
+      <p class="eyebrow" data-i18n="connect.tagline">Compose with your agent from this browser</p>
+    </div>
+    <p id="connect-status" class="connect-status" role="status"><span class="spinner" id="connect-spinner"></span><span id="connect-text">Connecting…</span></p>
+    <p id="connect-error" class="connect-error" role="alert"></p>
+    <button class="btn primary" id="connect-retry" type="button" hidden data-i18n="retry">Try again</button>
+    <div class="connect-tools">
+      <button class="btn small ghost" type="button" data-action="theme"><span class="ico" aria-hidden="true">◐</span><span data-theme-label>Auto</span></button>
+      <button class="btn small ghost" type="button" data-action="lang" aria-label="Language">EN / FR</button>
+    </div>
+  </div>
+</section>
+
+<!-- The studio -->
+<div id="studio" hidden>
+  <header class="topbar">
+    <div class="brand"><img class="brand-logo small" src="/web/logo.png" alt="ChipLoom" width="132" height="44"><img class="brand-emblem" src="/web/emblem.png" alt="ChipLoom" width="32" height="32"></div>
+    <div class="song">
+      <h1 id="song-title">&nbsp;</h1>
+      <div class="meta" id="song-meta"></div>
+    </div>
+    <div class="top-actions">
+      <span class="net" id="net" role="status"><span class="dot" id="net-dot"></span><span class="text" id="net-text"></span></span>
+      <button class="btn small" type="button" data-action="theme" data-i18n-aria="aria.theme"><span class="ico" aria-hidden="true">◐</span><span class="label-text" data-theme-label>Auto</span></button>
+      <button class="btn small" type="button" data-action="lang" data-i18n-aria="aria.lang">EN / FR</button>
+    </div>
+  </header>
+  <div class="banner" id="offline" role="status" hidden>
+    <span class="dot bad" aria-hidden="true"></span><span id="offline-text"></span>
+    <button class="btn small" type="button" id="offline-retry" data-i18n="retry">Try again</button>
+  </div>
+
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <button class="btn" type="button" data-tab="score" aria-pressed="true"><span data-i18n="tab.score">Score</span></button>
+    <button class="btn" type="button" data-tab="agent" aria-pressed="false"><span data-i18n="tab.agent">Agent</span><span class="count" id="tab-count" hidden>0</span></button>
+  </nav>
+
+  <main data-tab="score" id="main">
+    <section class="pane" id="score-pane" aria-label="Score">
+      <div class="orders-row">
+        <div class="field" id="orders-field">
+          <span class="label" id="orders-label" data-i18n="orders">Orders</span>
+        </div>
+        <div class="field pattern-pick">
+          <label for="pattern-select" data-i18n="pattern">Pattern</label>
+          <select class="select" id="pattern-select"></select>
+        </div>
+      </div>
+      <div class="toolbar" id="toolbar">
+        <button class="btn" type="button" id="block-mode" aria-pressed="false"><span class="ico" aria-hidden="true">▦</span><span data-i18n="block">Select block</span></button>
+        <span class="hint grow" id="grid-hint"></span>
+      </div>
+      <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid" role="grid" data-i18n-aria="aria.grid"></div></div>
+    </section>
+
+    <aside class="pane" id="side-pane" aria-label="Details">
+      <section class="card editor-card empty-state" id="editor" aria-labelledby="editor-h">
+        <header><h2 id="editor-h" data-i18n="editor">Cell editor</h2><button class="btn small ghost sheet-close" type="button" id="editor-close" data-i18n-aria="aria.close"><span aria-hidden="true">✕</span></button></header>
+        <div class="body" id="editor-body"></div>
+      </section>
+
+      <section class="card" id="proposals-card" aria-labelledby="proposals-h">
+        <header><h2 id="proposals-h" data-i18n="proposals">Agent proposals</h2><span class="count" id="proposals-count">0</span></header>
+        <div class="body"><ul class="list" id="proposals"></ul></div>
+      </section>
+
+      <section class="card" id="activity-card" aria-labelledby="activity-h">
+        <header><h2 id="activity-h" data-i18n="activity">Recent changes</h2></header>
+        <div class="body"><ul class="list activity" id="activity"></ul></div>
+      </section>
+
+      <section class="card" id="takes-card" aria-labelledby="takes-h">
+        <header><h2 id="takes-h" data-i18n="takes">Takes</h2><span class="count" id="takes-count">0</span></header>
+        <div class="body"><ul class="list" id="takes"></ul></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="player" id="player">
+    <div class="group" id="speakers" hidden>
+      <span class="label" data-i18n="speakers">Sound</span>
+      <div class="seg">
+        <button class="btn small" type="button" data-speaker="browser" aria-pressed="true" data-i18n="speakers.here">This device</button>
+        <button class="btn small" type="button" data-speaker="computer" aria-pressed="false" data-i18n="speakers.computer">Computer</button>
+      </div>
+    </div>
+    <div class="group transport">
+      <button class="btn primary" type="button" id="listen-row"><span class="ico" aria-hidden="true">▶</span><span id="listen-row-text"></span></button>
+      <button class="btn" type="button" id="listen-order" data-i18n-aria="listen.order"><span class="ico" aria-hidden="true">⏮</span><span class="lbl" data-i18n="listen.order">Order</span></button>
+      <button class="btn" type="button" id="listen-stop" data-i18n-aria="listen.stop"><span class="ico" aria-hidden="true">■</span><span class="lbl" data-i18n="listen.stop">Stop</span></button>
+    </div>
+    <div class="group tracks">
+      <div class="field"><label class="sr" for="listen-seconds" data-i18n="listen.length">Length</label>
+        <select class="select" id="listen-seconds"></select></div>
+      <div class="chans" id="chans" role="group" data-i18n-aria="aria.channels"></div>
+    </div>
+    <div class="status" id="player-status" role="status"><span id="player-status-text"></span></div>
+    <audio id="audio" controls preload="none" hidden></audio>
+  </footer>
+</div>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>

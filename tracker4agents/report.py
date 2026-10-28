@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import math
 
 from . import loudness, sample_source
-from .model import NOTES, PITCHES, Module, ValidationError, playback_plan
+from .model import EFFECT_DIGITS, NOTES, PITCHES, XM_KEY_OFF, XM_NOTES, Module, ValidationError, playback_plan, xm_profile
 
 SCHEMA = "chiploom.report.v1"
 LONG_SILENCE_SECONDS = 2.0
@@ -129,42 +129,50 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     plan = playback_plan(module)  # Validates the module as well.
     timeline = plan["timeline"]
     rows = len(timeline)
-    row_seconds = [item["speed"] * 2.5 / item["bpm"] for item in timeline]
+    # An EEx pattern delay stretches its row; N channels and XM notes follow the module's own format.
+    row_seconds = [item["speed"] * 2.5 / item["bpm"] * (1 + item.get("delay", 0)) for item in timeline]
+    xm = module.format == "xm"
+    count = module.channels
+    note_names = XM_NOTES if xm else NOTES
+    default_speed, default_bpm = ((xm_profile(module).get("default_speed", 6), xm_profile(module).get("default_bpm", 125))
+                                  if xm else (6, 125))
+    empty_signature = (0,) * (5 if xm else 4)
     duration = plan["duration_seconds"]
     loop_start_seconds = plan["loop_start_seconds"]
     loop_start_played_row = next(index for index, item in enumerate(timeline) if item["seconds"] == loop_start_seconds)
 
     # One pass over the played rows: cells, note starts and the sample each note uses.
-    signatures: list[list[tuple[int, int, int, int]]] = [[], [], [], []]
-    note_flags = [[False] * rows for _ in range(4)]
-    channel_notes: list[list[int]] = [[], [], [], []]
-    channel_samples: list[dict[int, int]] = [{}, {}, {}, {}]
-    channel_effects: list[dict[str, int]] = [{}, {}, {}, {}]
-    channel_extended: list[dict[str, int]] = [{}, {}, {}, {}]
-    portamento_targets = [0, 0, 0, 0]
-    current_sample = [0, 0, 0, 0]
-    notes_without_sample = [0, 0, 0, 0]
+    signatures: list[list[tuple[int, ...]]] = [[] for _ in range(count)]
+    note_flags = [[False] * rows for _ in range(count)]
+    channel_notes: list[list[int]] = [[] for _ in range(count)]
+    channel_samples: list[dict[int, int]] = [{} for _ in range(count)]
+    channel_effects: list[dict[str, int]] = [{} for _ in range(count)]
+    channel_extended: list[dict[str, int]] = [{} for _ in range(count)]
+    portamento_targets = [0] * count
+    current_sample = [0] * count
+    notes_without_sample = [0] * count
     sample_channels: dict[int, set[int]] = {}
     for index, item in enumerate(timeline):
         pattern = module.patterns[item["pattern"]]
-        for channel in range(4):
+        for channel in range(count):
             value = pattern.get(item["row"], channel)
-            signatures[channel].append((value.period, value.sample, value.command, value.param))
+            signatures[channel].append((value.period, value.sample, value.command, value.param)
+                                       + ((value.volume,) if xm else ()))
             if value.sample:
                 current_sample[channel] = value.sample
             if value.command or value.param:
-                letter = f"{value.command:X}"
+                letter = EFFECT_DIGITS[value.command]
                 channel_effects[channel][letter] = channel_effects[channel].get(letter, 0) + 1
                 if value.command == 14:
                     extended = f"E{value.param >> 4:X}"
                     channel_extended[channel][extended] = channel_extended[channel].get(extended, 0) + 1
-            if not value.period:
+            if not value.period or value.period == XM_KEY_OFF and xm:
                 continue
-            if value.command in (3, 5):
+            if value.command in (3, 5) or (xm and value.volume >= 0xF0):
                 portamento_targets[channel] += 1
                 continue
             note_flags[channel][index] = True
-            channel_notes[channel].append(NOTES.index(value.note))
+            channel_notes[channel].append(value.period - 1 if xm else NOTES.index(value.note))
             slot = current_sample[channel]
             if slot:
                 channel_samples[channel][slot] = channel_samples[channel].get(slot, 0) + 1
@@ -173,15 +181,15 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                 notes_without_sample[channel] += 1
 
     channels = []
-    for channel in range(4):
+    for channel in range(count):
         notes = channel_notes[channel]
         gap = _longest_run(note_flags[channel], row_seconds)
         entry = {
             "channel": channel + 1, "note_ons": len(notes),
             "notes_per_second": _round(len(notes) / duration) if duration else 0.0,
             "density": _round(len(notes) / rows) if rows else 0.0,
-            "lowest_note": NOTES[min(notes)] if notes else None,
-            "highest_note": NOTES[max(notes)] if notes else None,
+            "lowest_note": note_names[min(notes)] if notes else None,
+            "highest_note": note_names[max(notes)] if notes else None,
             "range_semitones": max(notes) - min(notes) if notes else None,
             "samples_used": sorted(channel_samples[channel]),
             "effects": dict(sorted(channel_effects[channel].items())),
@@ -192,7 +200,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         }
         channels.append(entry)
 
-    any_note = [any(note_flags[channel][index] for channel in range(4)) for index in range(rows)]
+    any_note = [any(note_flags[channel][index] for channel in range(count)) for index in range(rows)]
     no_note = _longest_run(any_note, row_seconds)
     histogram = [0] * 12
     for notes in channel_notes:
@@ -202,7 +210,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
 
     # Timing: state after each row's commands; the replay starts at speed 6, BPM 125.
     events = []
-    previous = (6, 125)
+    previous = (default_speed, default_bpm)
     change_count = 0
     for item in timeline:
         state = (item["speed"], item["bpm"])
@@ -219,7 +227,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     timing = {
         "duration_seconds": duration, "loop_start_seconds": loop_start_seconds,
         "loop_start_played_row": loop_start_played_row, "loop_seconds": _round(duration - loop_start_seconds, 9),
-        "rows_played": rows, "orders_played": len(orders_played), "default_speed": 6, "default_bpm": 125,
+        "rows_played": rows, "orders_played": len(orders_played), "default_speed": default_speed,
+        "default_bpm": default_bpm,
         "speed_min": min(item["speed"] for item in timeline), "speed_max": max(item["speed"] for item in timeline),
         "bpm_min": min(item["bpm"] for item in timeline), "bpm_max": max(item["bpm"] for item in timeline),
         "tempo_changes": {"count": change_count, "events": events,
@@ -243,11 +252,12 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         seen_contents.add(content)
     played_patterns = {item["pattern"] for item in timeline}
     blocks = {}
-    combined = [tuple(signatures[channel][index] for channel in range(4)) for index in range(rows)]
+    combined = [tuple(signatures[channel][index] for channel in range(count)) for index in range(rows)]
     for size in BLOCK_SIZES:
         blocks[str(size)] = {
-            "channels": [{"channel": channel + 1, **_block_stats(signatures[channel], size, (0, 0, 0, 0))} for channel in range(4)],
-            "all_channels": _block_stats(combined, size, ((0, 0, 0, 0),) * 4),
+            "channels": [{"channel": channel + 1, **_block_stats(signatures[channel], size, empty_signature)}
+                         for channel in range(count)],
+            "all_channels": _block_stats(combined, size, (empty_signature,) * count),
         }
     repetition = {
         "identical_pattern_groups": identical, "stored_patterns": len(module.patterns),
@@ -270,19 +280,19 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         if not sample.pcm:
             empty_slots.append(slot)
             continue
-        count = sum(channel_samples[channel].get(slot, 0) for channel in range(4))
+        count_played = sum(channel_samples[channel].get(slot, 0) for channel in range(count))
         recorded = sources.get(str(slot)) if isinstance(sources, dict) else None
         key = loudness.sample_role(sample, recorded.get("role") if isinstance(recorded, dict) else None)
         group = loudness.ROLES.get(key, key)
         level = loudness.measure(sample)["loudness_db"]
         wanted = loudness.target_db(key, reference)
         samples.append({"slot": slot, "name": sample.name, "bytes": len(sample.pcm), "looped": bool(sample.loop_length),
-                        "volume": sample.volume, "note_ons": count,
+                        "volume": sample.volume, "note_ons": count_played,
                         "channels": sorted(channel + 1 for channel in sample_channels.get(slot, ())),
                         "source": "recipe" if sample.recipe is not None else "embedded_pcm",
                         "loudness_db": level, "peak_db": loudness.measure(sample)["peak_db"], "group": group,
                         "reference_db": wanted, "deviation_db": round(level - wanted, 2)})
-        if not count:
+        if not count_played:
             never_played.append(slot)
     found = sample_source.counts(module)
     sample_usage = {"slots_with_audio": len(samples), "empty_slots": empty_slots,
@@ -337,7 +347,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             "rows_with_note_start": sum(any_note),
             "rows_without_note_start": {"total_rows": rows - sum(any_note), "longest": no_note},
             "pitch_classes": {name: histogram[number] for number, name in enumerate(PITCH_CLASS_NAMES)},
-            "pitch_class_note": "Counts of note starts per pitch class of the written note name (C-1 = lowest).",
+            "pitch_class_note": "Counts of note starts per pitch class of the written note name "
+                                f"({'C-0' if xm else 'C-1'} = lowest).",
             "key_estimate": estimate_key(histogram),
         },
         "repetition": repetition,

@@ -9,6 +9,10 @@ needs a token that `live` reads from the discovery file under `CHIPLOOM_HOME` (d
 All commands are `python -m tracker4agents live <command>`; add `--session PID_OR_URL` if
 `live sessions` shows several.
 
+The owner may also have the song open in a browser (the studio, no code needed). Its edits are
+journaled as `human-web` and count as the owner's. `live web` prints the studio address and
+`live web --status` lists the connected browsers; you never need either to compose.
+
 ## Procedure
 
 1. **Discover.** `live sessions` (empty means no session: use the ordinary file workflow).
@@ -36,6 +40,9 @@ All commands are `python -m tracker4agents live <command>`; add `--session PID_O
 6. **Announce versions.** Write an alternative with `patch` to its own file, then
    `live take FILE --label "Brighter lead"`. The owner opens it from the window; `live
    takes` lists them. `live open --take t1` asks the window to open one.
+   With unsaved changes in the window the reply is `handled: "pending"` (the owner is being
+   asked to save or discard): do not resend. Read `pending_request` in `live status` and the
+   `kind: "request"` entry in `live changes` (`outcome`: `opened`, `declined`, `failed`).
 7. **Show and play.** `live select --pattern N --row R --channel C [--rows K --channels K]`
    points at a passage; `live play [--order N]` and `live stop` drive playback and fail
    with `LIVE_NO_WINDOW` on a headless session. `open` and `select` without a window

@@ -14,8 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install build requirements
@@ -28,7 +28,7 @@ jobs:
         run: |
           build\windows\ChipLoom\chiploom-cli.exe --version
           build\windows\ChipLoom\chiploom-cli.exe estimate --orders 8 --bpm 160
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ChipLoom-windows
           path: build/windows/ChipLoom-*-windows.zip

@@ -33,7 +33,7 @@ class LevelMeter(QWidget):
         super().__init__(window)
         self.window = window
         self.setObjectName("levelMeter")
-        self.setFixedSize(235, 54)
+        self.setFixedSize(246, 38)
         self.buffer_count = 0
         self.reset()
 
@@ -67,27 +67,33 @@ class LevelMeter(QWidget):
     def fraction(value):
         return max(0.0, min(1.0, (20 * math.log10(max(1e-9, value)) + 54) / 54))
 
+    SEGMENTS = 22
+
     def paintEvent(self, event):
         p = self.window.palette_colors
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(p["panel"]))
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QColor(p["border"]))
+        painter.setBrush(QColor(p["bg"]))
+        painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 6, 6)
         painter.setPen(QColor(p["muted"]))
         font = painter.font()
         font.setPixelSize(10)
         painter.setFont(font)
-        painter.drawText(6, 12, self.window.t("LEVEL"))
         peak = max(self.peaks)
-        text = f"{20 * math.log10(peak):.1f} dBFS" if peak > .001 else "−∞ dBFS"
-        painter.drawText(110, 0, 118, 16, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
-        for channel, y in enumerate((21, 38)):
+        text = f"{20 * math.log10(peak):.1f}" if peak > .001 else "−∞"
+        painter.drawText(self.width() - 52, 0, 44, self.height(), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                         text + " dB")
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        for channel, y in enumerate((8, 22)):
             painter.setPen(QColor(p["muted"]))
-            painter.drawText(6, y + 8, ("L", "R")[channel])
+            painter.drawText(8, y - 1, 12, 10, Qt.AlignmentFlag.AlignCenter, ("L", "R")[channel])
             level, peak_fraction = self.fraction(self.levels[channel]), self.fraction(self.peaks[channel])
-            for segment in range(26):
-                threshold = (segment + 1) / 26
+            for segment in range(self.SEGMENTS):
+                threshold = (segment + 1) / self.SEGMENTS
                 color = p["border"]
                 if threshold <= level:
                     color = p["error"] if threshold > .96 else p["warning"] if threshold > .82 else p["meter"]
-                painter.fillRect(22 + segment * 8, y, 6, 9, QColor(color))
+                painter.fillRect(24 + segment * 8, y, 6, 8, QColor(color))
             if peak_fraction > 0:
-                painter.fillRect(22 + round(peak_fraction * 206), y - 1, 2, 11, QColor(p["accent"]))
+                painter.fillRect(24 + round(peak_fraction * (self.SEGMENTS * 8 - 4)), y - 1, 2, 10, QColor(p["accent"]))
