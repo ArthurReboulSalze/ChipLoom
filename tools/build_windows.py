@@ -88,7 +88,7 @@ UNUSED_QT = [
 analysis = Analysis(
     [{gui_entry!r}, {cli_entry!r}],
     pathex=[{root!r}],
-    datas=[({assets!r}, "tracker4agents/assets")] + {extra_datas!r},
+    datas=[({assets!r}, "tracker4agents/assets")] + {web_datas!r} + {extra_datas!r},
     binaries={extra_binaries!r},
     hiddenimports=["tracker4agents.desktop", "tracker4agents.desktop_samples", "tracker4agents.desktop_services"],
     excludes=UNUSED_QT,
@@ -104,6 +104,10 @@ gui = EXE(archive, bootstrap + gui_script, exclude_binaries=True, name="ChipLoom
 cli = EXE(archive, bootstrap + cli_script, exclude_binaries=True, name="chiploom-cli", console=True, icon={icon!r})
 COLLECT(gui, cli, analysis.binaries, analysis.datas, name="ChipLoom", strip=False, upx=False)
 '''
+
+
+# The browser studio page, served from the package folder by tracker4agents.web.gateway.
+WEB_FILES = ("index.html", "app.js", "cells.js", "style.css")
 
 
 def libxmp_files() -> tuple[list, list]:
@@ -188,10 +192,11 @@ def build(output: Path, icon: bool) -> Path:
         gui_entry=str(work / "gui_entry.py"), cli_entry=str(work / "cli_entry.py"), root=str(ROOT),
         assets=str(ROOT / "tracker4agents" / "assets"), icon=str(icon_path) if has_icon else None,
         extra_binaries=extra_binaries, extra_datas=extra_datas,
+        web_datas=[(str(ROOT / "tracker4agents" / "web" / name), "tracker4agents/web") for name in WEB_FILES],
     ), encoding="utf-8")
     pyinstaller.run([str(spec), "--noconfirm", "--clean", "--distpath", str(build_root), "--workpath", str(work / "pyinstaller")])
     folder = build_root / APP_NAME
-    for name in ("ChipLoom.exe", "chiploom-cli.exe"):
+    for name in ("ChipLoom.exe", "chiploom-cli.exe", *(f"_internal/tracker4agents/web/{name}" for name in WEB_FILES)):
         if not (folder / name).is_file():
             raise SystemExit(f"Build failed: {folder / name} is missing.")
     return folder
