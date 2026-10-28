@@ -343,13 +343,16 @@ class MatchLevelTests(unittest.TestCase):
     def test_a_loud_sample_gets_a_lower_volume_and_keeps_its_pcm(self):
         module = song()
         module.samples[0] = Sample("Loud", (127, -128) * 24, 64, 0, 0, 48)
-        result = apply_ops(module, [{"op": "sample_match_level", "slot": 1, "role": "bass"}])[0]
+        result = apply_ops(module, [{"op": "sample_match_level", "slot": 1, "role": "bass", "match": "defaults"}])[0]
         self.assertEqual(module.samples[0].pcm, (127, -128) * 24)
         self.assertLess(module.samples[0].volume, 64)
         self.assertLess(abs(result["deviation_db"]), 0.6)
         self.assertEqual(result["method"], "volume")
         self.assertEqual(result["target_db"], loudness.target_db("bass"))
-        self.assertNotIn("sample_sources", module.metadata)  # PCM untouched: nothing to record
+        self.assertEqual((result["reference"], result["reference_path"]), ("defaults", None))
+        # PCM untouched: no edit is recorded, only the role used.
+        self.assertEqual(module.metadata["sample_sources"]["1"], {"role": "bass"})
+        self.assertEqual((result["role"], result["role_source"]), ("bass", "op"))
 
     def test_a_quiet_sample_gets_clean_gain(self):
         module = song()
@@ -359,6 +362,7 @@ class MatchLevelTests(unittest.TestCase):
         self.assertGreater(result["gain_db"], 20)
         self.assertLessEqual(max(map(abs, module.samples[1].pcm)), 128)
         self.assertEqual(module.metadata["sample_sources"]["2"]["edits"][0]["op"], "sample_match_level")
+        self.assertEqual(module.metadata["sample_sources"]["2"]["role"], "snare")
         self.assertLess(abs(result["deviation_db"]), 1.5)
         validate(module)
 
@@ -377,9 +381,63 @@ class MatchLevelTests(unittest.TestCase):
         self.assertEqual(result["method"], "recipe")
         self.assertIsNotNone(sample.recipe)
         self.assertEqual(project.from_dict(project.to_dict(module)).samples[2].pcm, sample.pcm)
+        self.assertEqual((result["volume_before"], result["gain_db"]), (55, 0.0))
+        self.assertEqual(module.metadata["sample_sources"]["3"],
+                         {"origin": "synthesized", "recipe_type": "kick", "role": "kick"})
         # ... which also makes it fine in a synthesized project.
         module = song("synthesized")
         apply_ops(module, [{"op": "sample_match_level", "slot": 3}])
+
+    def test_recorded_role_keeps_the_other_provenance_fields(self):
+        module = song()
+        module.metadata["sample_sources"] = {"1": {"library_id": "SMP-0009", "origin": "module-extracted"},
+                                             "3": {"origin": "synthesized", "recipe_type": "kick", "role": "kick"}}
+        apply_ops(module, [{"op": "sample_match_level", "slot": 1, "role": "bass", "match": "defaults"},
+                           {"op": "sample_match_level", "slot": 3, "role": "snare", "match": "defaults"}])
+        self.assertEqual(module.metadata["sample_sources"]["1"],
+                         {"library_id": "SMP-0009", "origin": "module-extracted", "role": "bass"})
+        self.assertEqual(module.metadata["sample_sources"]["3"]["role"], "snare")
+        # A recorded group name (from the bank or the heuristic) is accepted on the next run.
+        module.metadata["sample_sources"]["2"] = {"role": "percussion"}
+        result = apply_ops(module, [{"op": "sample_match_level", "slot": 2, "match": "defaults"}])[0]
+        self.assertEqual((result["role"], result["role_source"], result["group"]), ("percussion", "recorded", "percussion"))
+
+    def test_reference_follows_the_automatic_rule(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as folder:
+            bank = Path(folder) / "bank"
+            source = Path(folder) / "source.mod"
+            source.write_bytes(mod.encode(song()))
+            from tracker4agents.sample_library import SampleLibrary
+            SampleLibrary(bank).extract(source)
+            missing = Path(folder) / "missing"
+            with mock.patch("tracker4agents.sample_library.DEFAULT_LIBRARY", missing):
+                result = apply_ops(song(), [{"op": "sample_match_level", "slot": 1, "role": "bass"}])[0]
+                self.assertEqual((result["reference"], result["reference_selection"]), ("defaults", "automatic"))
+                self.assertIn("no sample bank", result["reference_reason"])
+                self.assertEqual(code_of(self, [{"op": "sample_match_level", "slot": 1, "match": "library"}]),
+                                 "SAMPLE_LIBRARY")
+            with mock.patch("tracker4agents.sample_library.DEFAULT_LIBRARY", bank):
+                result = apply_ops(song(), [{"op": "sample_match_level", "slot": 1, "role": "bass"}])[0]
+                self.assertEqual((result["reference"], result["reference_path"], result["reference_selection"]),
+                                 ("library", str(bank.resolve()), "automatic"))
+                recipe = apply_ops(song(), [{"op": "sample_match_level", "slot": 3}])[0]
+                self.assertEqual(recipe["reference"], "library")
+                forced = apply_ops(song(), [{"op": "sample_match_level", "slot": 1, "match": "defaults"}])[0]
+                self.assertEqual(forced["reference"], "defaults")
+                # A library_id without a role takes the bank's category, from the automatic bank too.
+                module = song()
+                module.metadata["sample_sources"] = {"2": {"library_id": "SMP-0002", "origin": "module-extracted"}}
+                module.samples[1] = Sample("Looped", CYCLE, 40, 0, 0, len(CYCLE))  # the heuristic would say lead
+                result = apply_ops(module, [{"op": "sample_match_level", "slot": 2}])[0]
+                category = SampleLibrary(bank).get("SMP-0002")
+                self.assertEqual((result["role"], result["role_source"]), (loudness.library_group(category), "library"))
+                self.assertEqual(module.metadata["sample_sources"]["2"]["role"], result["role"])
+            explicit = apply_ops(song(), [{"op": "sample_match_level", "slot": 1, "library": str(bank)}])[0]
+            self.assertEqual(explicit["reference_selection"], "explicit")
+        self.assertEqual(code_of(self, [{"op": "sample_match_level", "slot": 1, "match": "loud"}]), "PATCH_FIELD")
+        self.assertEqual(code_of(self, [{"op": "sample_match_level", "slot": 1, "match": "defaults",
+                                         "library": "x"}]), "PATCH_FIELD")
 
     def test_role_and_bank_errors(self):
         self.assertEqual(code_of(self, [{"op": "sample_match_level", "slot": 1, "role": "tuba"}]), "RECIPE_INVALID")

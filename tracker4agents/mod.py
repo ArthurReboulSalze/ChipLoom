@@ -44,7 +44,11 @@ def parse_signature(signature: str) -> int:
     if signature in ("CD61", "CD81", "OCTA") or re.fullmatch(r"TDZ[1-9]", signature):
         raise ValidationError(f"{signature} is an Octalyser/TakeTracker variant whose flow and effect rules differ "
                               "from ProTracker's; it is not supported.", "MOD_VARIANT")
-    raise ValidationError("Seuls les MOD M.K. à 4 voies sont acceptés dans ce prototype.", "MOD_FORMAT")
+    shown = "".join(character if " " <= character <= "~" else "?" for character in signature)
+    raise ValidationError(f"Not a supported MOD: the signature at offset 1080 is {shown!r}. Accepted signatures: "
+                          "M.K., M!K!, FLT4 and 4CHN (four channels), 2CHN to 9CHN and 10CH to 32CH. An XM file "
+                          "(\"Extended Module: \" header) is read by the XM reader; a .json project is loaded "
+                          "as a project, not as a module file.", "MOD_FORMAT")
 
 
 def sanitize_text(raw: bytes) -> str:

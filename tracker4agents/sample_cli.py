@@ -9,7 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
-from . import loudness, mod, project, sample_tools
+from . import formats, loudness, project, sample_tools
 from .document import Document
 from .model import Module, ValidationError, playback_plan
 from .patch import summarize
@@ -17,7 +17,8 @@ from .synth_tools import parse_recipe
 
 
 def load_source(path: Path) -> Module:
-    return project.load(path) if path.suffix.lower() == ".json" else mod.read(path)
+    """A `.json` project, or a module file (MOD or XM, detected by `formats.read`)."""
+    return project.load(path) if path.suffix.lower() == ".json" else formats.read(path)
 
 
 def new_json(output: Path, source: Path | None = None) -> Path:
@@ -87,7 +88,8 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     edit.add_argument("--match-level", action="store_true",
                       help="Set the volume (and gain if needed) to the role's reference level.")
     edit.add_argument("--role", choices=sorted(loudness.ROLES), help="Role for --match-level.")
-    edit.add_argument("--library", type=Path, help="Sample bank whose levels --match-level uses (default: fixed levels).")
+    edit.add_argument("--library", type=Path, help="Sample bank whose levels --match-level uses (default: exports/sample_library "
+                           "when it exists, else fixed levels).")
     edit.add_argument("--adjust-loop", action="store_true", help="Let --trim cut into the loop and keep what is left.")
     edit.add_argument("--adapt", action="store_true",
                       help="Prepend two zero bytes when a sample without a loop would not start with them.")
@@ -159,6 +161,11 @@ def run(args: argparse.Namespace) -> dict:
                       "peak": args.peak}
             op = {"op": "recipe_sample", "name": args.name, "recipe": recipe, "slot": args.slot,
                   "replace": args.replace}
+            if args.volume is None:  # the same reference as synth add: the default bank when it exists
+                from .sample_library import DEFAULT_LIBRARY
+                from .synth_tools import library_exists
+                if library_exists(DEFAULT_LIBRARY):
+                    op.update(match="library", library=str(DEFAULT_LIBRARY))
             for key, value in (("volume", args.volume), ("finetune", args.finetune)):
                 if value is not None:
                     op[key] = value
@@ -185,8 +192,11 @@ def run(args: argparse.Namespace) -> dict:
         if not sample.pcm:
             raise ValidationError("That sample slot is empty.", "SAMPLE_SLOT")
         buckets = sample_tools.waveform_summary(sample.pcm, args.buckets)
-        return {"ok": True, **where, "bytes": len(sample.pcm), "loop_start": sample.loop_start,
+        bits = sample.bits
+        return {"ok": True, **where, "bytes": len(sample.pcm) * bits // 8, "loop_start": sample.loop_start,
                 "loop_length": sample.loop_length, "bucket_count": len(buckets),
                 "buckets": [list(item) for item in buckets],
-                "note": "Each bucket is [min, max] of the signed 8-bit PCM (-128..127) over an equal share of the sample."}
+                **({"bits": 16} if bits == 16 else {}),
+                "note": f"Each bucket is [min, max] of the signed {bits}-bit PCM "
+                        f"({'-32768..32767' if bits == 16 else '-128..127'}) over an equal share of the sample."}
     raise ValidationError(f"Unknown sample command {action!r}.", "INVALID_VALUE")

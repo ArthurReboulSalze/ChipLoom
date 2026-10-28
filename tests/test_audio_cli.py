@@ -44,6 +44,32 @@ class CliTests(unittest.TestCase):
             self.assertFalse(json.loads(result.stderr)["ok"])
             self.assertEqual(output.read_bytes(), b"original")
 
+    def test_export_refuses_an_extension_that_is_not_a_module(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "score.json"
+            project.write_json(source, project.to_dict(demo.create()))
+            for name in ("err.wav", "err.json", "noextension"):
+                result = self.invoke("export", str(source), "--output", str(Path(directory) / name))
+                with self.subTest(name=name):
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(json.loads(result.stderr)["code"], "OUTPUT_PATH")
+                    self.assertFalse((Path(directory) / name).exists())
+            result = self.invoke("export", str(source), "--output", str(Path(directory) / "song.xm"),
+                                 "--format", "mod")
+            self.assertEqual(json.loads(result.stderr)["code"], "OUTPUT_PATH")
+            result = self.invoke("export", str(source), "--output", str(Path(directory) / "song.MOD"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_sample_waveform_reads_an_xm_file(self):
+        from tracker4agents import convert, xm
+        with tempfile.TemporaryDirectory() as directory:
+            converted, _ = convert.convert(demo.create(), "xm")
+            source = Path(directory) / "song.xm"
+            source.write_bytes(xm.encode(converted))
+            result = self.invoke("sample", "waveform", str(source), "--slot", "1", "--buckets", "4")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["bucket_count"], 4)
+
     def test_demo_can_build_without_external_audio_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
             result = self.invoke("demo", "--output", directory, "--no-audio")
@@ -85,6 +111,46 @@ class NativeAudioTests(unittest.TestCase):
         verify = subprocess.run([shutil.which("ffmpeg"), "-hide_banner", "-v", "error", "-i", str(mp3),
                                  "-f", "null", "-"], capture_output=True, text=True, timeout=20)
         self.assertEqual(verify.returncode, 0, verify.stderr)
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg indisponible")
+    def test_render_accepts_a_project_and_reports_loudness(self):
+        source = self.directory / "song.project.json"
+        project.write_json(source, project.to_dict(self.module))
+        result = audio.render(source, self.directory / "project.wav", seconds=0.96)
+        self.assertEqual(result["audio"]["frames"], 46080)
+        self.assertEqual((result["source_kind"], result["module_format"]), ("project", "mod"))
+        self.assertEqual(result["source_sha256"], audio.sha256(source))
+        self.assertEqual(result["module_sha256"], audio.sha256(self.source))  # same bytes as the exported MOD
+        loudness = result["loudness"]
+        self.assertEqual(set(loudness), {"integrated_lufs", "true_peak_dbtp", "lra_lu", "method"})
+        self.assertLess(loudness["integrated_lufs"], 0)
+        self.assertLess(loudness["true_peak_dbtp"], 0.5)
+        self.assertIn("ebur128", loudness["method"])
+        self.assertFalse(result["ended_before_requested"])
+        self.assertNotIn("warnings", result)
+        self.assertEqual(list(self.directory.glob("chiploom-render-*")), [])
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg indisponible")
+    def test_render_past_the_end_says_the_module_ended(self):
+        short = Module("Short", self.module.samples, [Pattern(cells={(0, 0): cell("C-2", 1)})], [0])
+        source = self.directory / "short.mod"
+        source.write_bytes(mod.encode(short))
+        length = playback_plan(short)["duration_seconds"]
+        result = audio.render(source, self.directory / "short.wav", seconds=length + 2)
+        self.assertTrue(result["ended_before_requested"])
+        self.assertAlmostEqual(result["module_seconds"], length, places=3)
+        self.assertIn("ends after", result["warnings"][0])
+
+    def test_loudness_without_ffmpeg_says_why(self):
+        from unittest.mock import patch
+        with patch.object(audio.shutil, "which", return_value=None):
+            loudness = audio.measure_loudness(self.directory / "missing.wav")
+        self.assertIsNone(loudness["integrated_lufs"])
+        self.assertIsNone(loudness["method"])
+        self.assertIn("FFmpeg", loudness["reason"])
+        self.assertEqual(audio.duration_shortfall(10, 12, 10), [])
+        self.assertEqual(audio.duration_shortfall(20, 12, 20), [])  # libxmp keeps playing: no shortfall
+        self.assertEqual(len(audio.duration_shortfall(20, 12, 12.1)), 1)
 
     def test_xmp_replays_two_cycles_with_expected_order_timing(self):
         try:

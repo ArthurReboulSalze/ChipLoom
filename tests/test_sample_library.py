@@ -159,6 +159,27 @@ class SampleLibraryTests(unittest.TestCase):
             document.insert_library_sample(self.bank, "SMP-0001", slot=1)
         self.assertEqual(fingerprint(document.module), changed)
 
+    def test_library_errors_carry_codes_directly_and_through_patch(self):
+        from tracker4agents.model import ValidationError
+        from tracker4agents.patch import apply_ops
+        self.extract()
+        with self.assertRaises(ValidationError) as caught:
+            self.bank.get("SMP-9999")
+        self.assertEqual(caught.exception.code, "SAMPLE_LIBRARY")
+        modified, _ = self.bank.insert(Module("Test", [Sample("empty", ())], [Pattern()], [0]), "SMP-0001")
+        with self.assertRaises(ValidationError) as caught:
+            self.bank.insert(modified, "SMP-0001", slot=1)
+        self.assertEqual(caught.exception.code, "SAMPLE_SLOT")
+        self.assertIn("replace (CLI: --replace)", str(caught.exception))
+        with self.assertRaises(ValidationError) as caught:
+            self.bank.insert(modified, "SMP-0001", slot=5)
+        self.assertEqual(caught.exception.code, "SAMPLE_SLOT")
+        op = {"op": "library_sample", "id": "SMP-9999", "library": str(self.bank.path)}
+        with self.assertRaises(ValidationError) as caught:
+            apply_ops(copy.deepcopy(modified), [op])
+        self.assertEqual(caught.exception.code, "SAMPLE_LIBRARY")
+        self.assertTrue(str(caught.exception).startswith("ops[0] (library_sample): "))
+
     def test_full_bank_slots_and_referenced_empty_slots_are_respected(self):
         self.extract()
         sample, _ = self.bank.sample("SMP-0001")

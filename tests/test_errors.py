@@ -7,10 +7,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tracker4agents import demo, mod, project
 from tracker4agents.errors import diagnostic_payload, english_message, error_code, error_payload
-from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell, validate
+from tracker4agents.model import Cell, Module, Pattern, Sample, ValidationError, cell, validate
 
 ROOT = Path(__file__).resolve().parents[1]
 FRENCH_MARKERS = ("é", "è", "à", "ê", "ç", " le ", " la ", " des ", "attendu", "voie")
@@ -136,6 +137,118 @@ class PayloadTests(unittest.TestCase):
             message = error_payload(caught.exception)["message"]
             with self.subTest(message=message):
                 self.assertFalse(any(marker in message.lower() for marker in FRENCH_MARKERS), message)
+
+
+class RenderSynthAndPatchMessageTests(unittest.TestCase):
+    """Render, synth, MOD and patch diagnostics reach agents in English with a specific code."""
+
+    def failure(self, call) -> dict:
+        with self.assertRaises((ValueError, RuntimeError)) as caught:
+            call()
+        return error_payload(caught.exception)
+
+    def assert_english(self, payload: dict, code: str):
+        self.assertEqual(payload["code"], code, payload)
+        message = payload["message"].lower()
+        self.assertFalse(any(marker in message for marker in FRENCH_MARKERS), payload["message"])
+
+    def test_render_messages_are_english_with_codes(self):
+        from tracker4agents import audio
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / "song.mod"
+            source.write_bytes(mod.encode(demo.create()))
+            wav = directory / "out.wav"
+            same = directory / "module.wav"
+            same.write_bytes(source.read_bytes())
+
+            def missing_xmp():
+                with patch.object(audio, "ROOT", directory):
+                    audio.default_xmp_library()
+
+            cases = [
+                (lambda: audio.render(source, wav, seconds=0), "RENDER_LIMIT"),
+                (lambda: audio.render(source, wav, seconds=121), "RENDER_LIMIT"),
+                (lambda: audio.render(source, wav, seconds=1, sample_rate=100), "RENDER_LIMIT"),
+                (lambda: audio.render(source, directory / "out.mp3", seconds=1), "OUTPUT_PATH"),
+                (lambda: audio.render(same, same, seconds=1), "OUTPUT_PATH"),
+                (lambda: audio.render(source, wav, "nope", seconds=1), "INVALID_VALUE"),
+                (lambda: audio.export_mp3(wav, directory / "copy.wav"), "OUTPUT_PATH"),
+                (missing_xmp, "XMP_MISSING"),
+            ]
+            for call, code in cases:
+                payload = self.failure(call)
+                with self.subTest(message=payload["message"]):
+                    self.assert_english(payload, code)
+                    self.assertIn("message_fr", payload)
+        texts = {
+            "Cet ordre n'est pas atteint pendant le premier cycle de lecture.": "RENDER_LIMIT",
+            "Le début de l'extrait dépasse la limite de prélecture de 600 secondes.": "RENDER_LIMIT",
+            "La copie MP3 est limitée à 120 secondes dans le prototype.": "RENDER_LIMIT",
+            "L'export MP3 a dépassé sa limite de temps.": "RENDER_TIMEOUT",
+            "La sortie doit être distincte du fichier source.": "OUTPUT_PATH",
+        }
+        for text, code in texts.items():
+            with self.subTest(text=text):
+                self.assert_english(error_payload(ValidationError(text)), code)
+        for text in ("Le lecteur a produit un fichier audio vide.", "Le moteur a produit trop peu de données audio."):
+            with self.subTest(text=text):
+                self.assert_english(error_payload(audio.RenderError(text, "RENDER_FAILED")), "RENDER_FAILED")
+        preroll = english_message(ValidationError("Le début de l'extrait dépasse la limite de prélecture de 600 secondes."))
+        self.assertIn("600-second preroll", preroll)
+
+    def test_synth_messages_are_english_with_recipe_code(self):
+        from tracker4agents.synth import from_recipe
+        for recipe in ({"type": "fm"}, {"type": "kick", "foo": 1}, {"type": "draw", "points": [0, 1]}, [],
+                       {"type": "kick", "peak": 5}):
+            payload = self.failure(lambda: from_recipe("x", recipe))
+            with self.subTest(recipe=recipe):
+                self.assert_english(payload, "RECIPE_INVALID")
+                self.assertNotIn("message_fr", payload)
+        self.assertIn("'fm'", self.failure(lambda: from_recipe("x", {"type": "fm"}))["message"])
+
+    def test_unknown_mod_signature_names_it_and_what_is_accepted(self):
+        payload = bytearray(mod.encode(demo.create()))
+        payload[1080:1084] = b"ABCD"
+        result = self.failure(lambda: mod.decode(bytes(payload)))
+        self.assert_english(result, "MOD_FORMAT")
+        for fragment in ("'ABCD'", "M.K.", "M!K!", "FLT4", "4CHN", "2CHN", "32CH", "XM"):
+            self.assertIn(fragment, result["message"])
+
+    def test_note_and_channel_are_kept_in_english_validation_text(self):
+        message = self.failure(lambda: cell("H-9"))["message"]
+        self.assertIn("'H-9'", message)
+        self.assertIn("Unknown note", message)
+        module = demo.create()
+        module.patterns[0].cells[(1, 0)] = Cell(5, 0, 0, 0)
+        result = self.failure(lambda: validate(module))
+        self.assertIn("row 1, channel 0", result["message"])
+        self.assertNotIn("track", result["message"])
+
+    def test_patch_keeps_the_code_of_the_failing_operation(self):
+        from tracker4agents.patch import apply_ops
+        module = demo.create()
+        cases = [
+            ({"op": "recipe_sample", "name": "x", "recipe": {"type": "fm"}}, "RECIPE_INVALID"),
+            ({"op": "recipe_sample", "name": "x", "recipe": {"type": "kick"}, "slot": 1}, "SAMPLE_SLOT"),
+            ({"op": "nope"}, "PATCH_OP"),
+        ]
+        for op, code in cases:
+            with self.subTest(op=op), self.assertRaises(ValidationError) as caught:
+                apply_ops(copy.deepcopy(module), [op])
+            self.assertEqual(caught.exception.code, code, str(caught.exception))
+        with self.assertRaises(ValidationError) as caught:
+            apply_ops(copy.deepcopy(module), [{"op": "set", "pattern": 0, "row": 0, "channel": 0,
+                                               "cell": "G#-3 01 ..."}])
+        self.assertEqual(caught.exception.code, "PATCH_CELL")
+        self.assertIn("C#2", str(caught.exception))
+        self.assertIn("'G#-3' is malformed", str(caught.exception))
+
+    def test_convert_refusal_ends_with_a_single_period(self):
+        from tracker4agents.convert import ConversionRefused
+        refused = ConversionRefused([{"code": "TOO_MANY_PATTERNS", "message": "The XM has 120 patterns."}])
+        self.assertTrue(str(refused).endswith("patterns."))
+        self.assertFalse(str(refused).endswith(".."))
 
 
 class CliErrorTests(unittest.TestCase):

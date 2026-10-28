@@ -346,7 +346,7 @@ class SampleBrowser(QWidget):
         ready = selected and bool(document) and (not occupied or self.replace.isChecked())
         explanation = ""
         xm = bool(document) and document.module.format == "xm"
-        if xm:   # the core refuses library samples on an XM module
+        if xm:   # the window does not offer XM insertion yet (the core and CLI accept it)
             ready, explanation = False, XM_REFUSED_TIP
         if ready and incompatible:
             ready = self.adapt.isChecked()

@@ -36,16 +36,18 @@ A block is `row` (default 0), `rows`, `channel` (default 0), `channels`.
 | `clear` | `pattern`, block | Defaults to one cell |
 | `copy`, `move` | `pattern`, block, `to_pattern`, `to_row`, `to_channel` | Destination defaults to the same place; `move` empties the source |
 | `transpose` | `pattern`, `semitones`, block | Notes only; block runs to the end of the pattern on one channel by default; leaving `C-1`-`B-3` fails |
-| `add_pattern` | `copy_of`, `name`, `insert_order` | Appended to the pattern list and, by default, to the order list; max 64 patterns |
+| `add_pattern` | `copy_of`, `name`, `insert_order`, `length` (XM only, 1-256) | Appended to the pattern list and, by default, to the order list; max 100 patterns in a MOD, 256 in an XM |
 | `remove_pattern` | `pattern` | Only if no order uses it; later indices shift down |
 | `rename_pattern` | `pattern`, `name` | At most 64 characters |
 | `set_orders` | `orders` | Whole list; the last stored pattern must appear in it |
 | `insert_order`, `remove_order`, `move_order` | `pattern`+`at`; `at`; `at`+`to` | Change the playing order |
 | `title` | `title` | ASCII, length-limited |
-| `timing` | `bpm`, `speed` | Writes `Fxx` on the first played row; needs two free effect columns or existing `Fxx`, else `TIMING` |
-| `sample` | `slot`, `volume`, `finetune`, `name` | Settings and name only; PCM is never changed |
-| `library_sample` | `id`, `library`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM); `library` defaults to `exports/sample_library`; fills the first empty slot unless `slot` is given; refused in a project declared `synthesized` |
-| `recipe_sample` | `name`, `recipe`, `slot`, `volume`, `finetune`, `replace`, `role`, `match`, `library` | Created sample for the owner-requested created-samples mode; occupied slots need `replace`; volume matched to the role's level unless `volume` is given; refused in a project declared `library` |
+| `timing` | `bpm` and/or `speed` | Writes `Fxx` on the first played row (the one left out keeps its value); needs two free effect columns or existing `Fxx`, else `TIMING` |
+| `sample` | `slot`, `volume`, `finetune`, `name`; XM also `panning`, `relative_note`, `loop_mode` | Settings and name only; PCM is never changed. Finetune -8..7 in a MOD, -128..127 in an XM |
+| `library_sample` | `id`, `library`, `slot`, `replace`, `adapt` | Same rules as `samples add` (exact library PCM); `library` defaults to `exports/sample_library`; fills the first empty slot unless `slot` is given; refused in a project declared `synthesized`; in an XM the sample is converted as `convert` does (finetune 16 x MOD finetune - 20) |
+| `recipe_sample` | `name`, `recipe`, `slot`, `volume`, `finetune`, `replace`, `role`, `match`, `library` | Created sample for the owner-requested created-samples mode; occupied slots need `replace`; volume matched to the role's level unless `volume` is given; refused in a project declared `library`; in an XM converted as `convert` does, recipe kept |
+| `pattern_length` | `pattern`, `rows` (1-256), `truncate` | XM only: resize a pattern; cutting rows with notes needs `truncate: true` (`PATTERN_TRUNCATE`) |
+| `xm_header` | `restart_position`, `default_speed`, `default_bpm`, `frequency_table` | XM only: the header in `metadata.xm`; omitted fields keep their value |
 
 Examples:
 
@@ -58,16 +60,24 @@ Examples:
 ```
 
 A song with more than four channels starts from `chiploom new --channels N` (MCP
-`new_project`); the operations then accept channels 0 to N-1 and `lines` hold N cells.
+`new_project`); the operations then accept channels 0 to N-1 and `lines` hold N cells. An XM starts from
+`chiploom new --format xm --channels N --rows R` (or `synth palette --format xm`); its cells read
+`NOTE II VV EEE` with XM notes (`C-4` is a MOD `C-2`). `pattern_length`, `xm_header` and the XM `sample`
+fields are refused on a MOD (`MOD_OP_UNSUPPORTED`, `MOD_XM_FIELD`); the PCM-editing operations on an XM
+(`XM_OP_UNSUPPORTED`).
 
 ## Habits
 
-- One patch, one musical intent, one `--label`. Write each revision to a new file.
-- Check `duration_seconds` after any order, `timing` or `Fxx` change.
+- One patch, one musical intent, one `--label`. Write each revision to a new file (`patch` refuses an existing
+  output unless `--overwrite`).
+- Check `duration_seconds` and `warnings` after any order, `timing`, `xm_header`, `pattern_length` or `Fxx` change:
+  a loop back at another speed/BPM or an XM `Dxx` past the next pattern's end is flagged there. A `write` with `lines` over row 0 replaces
+  the initial `Fxx`; the result then warns that flow or timing effects were removed.
 - Do not use patches to change the stored PCM of a library sample; insert another library
   entry instead. Create samples (`recipe_sample`) only when the owner asks for a song made with created samples.
 - Common failures: `NOTE_UNKNOWN` (use `C-1`..`B-3`, `G#3` not `G#-3`), `PATCH_CELL`
-  (bad cell text), `PATCH_BOUNDS` (past row 63 or the last channel, 3 in a four-channel song), `ORDERS` (a pattern is
+  (bad cell text), `INTEGER_RANGE` (an index out of range; the message gives the range), `PATCH_BOUNDS` (a block or write running past the
+  last row or channel), `ORDERS` (a pattern is
   still used, or the last pattern is not in the order list), `TIMING`.
 - Full field list and error codes: `docs/CLI.md` (sections Patch and Error contract).
 

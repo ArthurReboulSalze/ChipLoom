@@ -377,7 +377,7 @@ class SampleLibrary:
     def get(self, sample_id: str) -> dict:
         entry = next((item for item in self._manifest()["samples"] if item["id"] == sample_id), None)
         if entry is None:
-            raise ValidationError(f"Unknown library sample: {sample_id}.")
+            raise ValidationError(f"Unknown library sample: {sample_id}.", "SAMPLE_LIBRARY")
         result = copy.deepcopy(entry)
         result["compatibility"] = _compatibility(entry, self._pcm(entry))
         return result
@@ -501,7 +501,7 @@ class SampleLibrary:
             manifest = self._manifest()
             entry = next((item for item in manifest["samples"] if item["id"] == sample_id), None)
             if entry is None:
-                raise ValidationError(f"Unknown library sample: {sample_id}.")
+                raise ValidationError(f"Unknown library sample: {sample_id}.", "SAMPLE_LIBRARY")
             if name is not None:
                 ascii_field(name, 22, "Sample name")
                 if not name.strip():
@@ -528,7 +528,9 @@ class SampleLibrary:
         entry = self.get(sample_id)
         return _sample(entry, self._pcm(entry))
 
-    def sample(self, sample_id: str, adapt: bool = False) -> tuple[Sample, list[str]]:
+    def sample(self, sample_id: str, adapt: bool = False, fmt: str = "mod") -> tuple[Sample, list[str]]:
+        """The library sample ready for a module of format `fmt`. For an XM it is converted exactly like
+        `convert` converts a MOD sample (see `convert.mod_sample_to_xm`); the XM checks run on insertion."""
         sample = self.read_sample(sample_id)
         changes = []
         if adapt and not sample.loop_length:
@@ -538,6 +540,9 @@ class SampleLibrary:
             if any(sample.pcm[:2]):
                 sample.pcm = (0, 0) + sample.pcm
                 changes.append("prepend-two-zero-bytes")
+        if fmt == "xm":
+            from .convert import mod_sample_to_xm
+            return mod_sample_to_xm(sample), changes
         try:
             validate_sample(sample)
         except ValueError as exc:
@@ -548,18 +553,20 @@ class SampleLibrary:
                replace: bool = False, adapt: bool = False) -> tuple[Module, dict]:
         validate(module)
         sample_source.guard_insert(module, "library")
-        sample, changes = self.sample(sample_id, adapt)
+        xm = module.format == "xm"
+        sample, changes = self.sample(sample_id, adapt, module.format)
         result = copy.deepcopy(module)
         used = {value.sample for pattern in result.patterns for value in pattern.cells.values() if value.sample}
         if slot is None:
             slot = next((index for index, item in enumerate(result.samples, 1)
                          if not item.pcm and index not in used), len(result.samples) + 1)
-        require_int(slot, "slot", 1, 31)
+        require_int(slot, "slot", 1, 128 if xm else 31, "SAMPLE_SLOT")
         if slot > len(result.samples) + 1:
-            raise ValidationError("Choose an existing slot or the next slot; gaps are not inserted.")
+            raise ValidationError("Choose an existing slot or the next slot; gaps are not inserted.", "SAMPLE_SLOT")
         if slot <= len(result.samples):
             if result.samples[slot - 1].pcm and not replace:
-                raise ValidationError("Sample slot is occupied; --replace is required.")
+                raise ValidationError(f"Sample slot {slot} is occupied; pass replace (CLI: --replace) to overwrite it.",
+                                      "SAMPLE_SLOT")
             result.samples[slot - 1] = sample
         else:
             result.samples.append(sample)
@@ -569,11 +576,18 @@ class SampleLibrary:
             raise ValidationError("Project metadata.sample_sources must be an object.")
         sources[str(slot)] = info
         validate(result)
+        if xm:  # what the conversion did, for the caller (not stored: the library ID is the provenance)
+            return result, {"slot": slot, **info, "xm": {
+                "finetune": sample.finetune, "relative_note": sample.relative_note,
+                "note": "Converted like `convert` converts a MOD sample: finetune 16 x MOD finetune - 20, "
+                        "8-bit, forward loop, centred. Play it at XM C-4 for the MOD's C-2."}}
         return result, {"slot": slot, **info}
 
     def audition(self, sample_id: str, output: Path, note: str = "C-2", seconds: float = 1.0) -> dict:
         """Raw sample audition: no tracker effects; not a claimed original pitch."""
         from .audio import audition_sample
+        from .synth_tools import check_preview_note
+        check_preview_note(note)
         if note not in NOTE_TO_PERIOD or not math.isfinite(seconds) or not .05 <= seconds <= 5:
             raise ValidationError("Audition requires a tracker note C-1..B-3 and 0.05–5 seconds.")
         output = Path(output).resolve()

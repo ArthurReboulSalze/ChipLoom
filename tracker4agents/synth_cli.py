@@ -53,6 +53,9 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     starter.add_argument("--output", type=Path, required=True, help="New .json project; must not exist.")
     starter.add_argument("--title", default="Synth Palette")
     starter.add_argument("--style", choices=synth_tools.STYLES, default="default")
+    starter.add_argument("--channels", type=int, default=4, help="Channel count, 2 to 32 (default 4).")
+    starter.add_argument("--format", choices=("mod", "xm"), default="mod",
+                         help="mod (default) or xm: an XM with the same recipes, converted like `convert` does.")
     _match_options(starter)
     return synth
 
@@ -103,7 +106,15 @@ def run(args: argparse.Namespace) -> dict:
             if value is not None:
                 op[key] = value
         document = Document(project.load(args.project))
-        applied = document.patch([op], "Add created sample")
+        try:
+            applied = document.patch([op], "Add created sample")
+        except ValidationError as exc:
+            # The command runs one internal patch operation; its "ops[0] (recipe_sample): " prefix
+            # would point at a patch the user never wrote.
+            prefix = "ops[0] (recipe_sample): "
+            if str(exc).startswith(prefix):
+                exc.args = (str(exc)[len(prefix):],)
+            raise
         document.save_project(output)
         info = {key: value for key, value in applied["results"][0].items() if key != "op"}
         plan = playback_plan(document.module)
@@ -116,12 +127,15 @@ def run(args: argparse.Namespace) -> dict:
             raise ValidationError(f"{output} already exists; the palette writes a new project.", "OUTPUT_PATH")
         mode, library = _reference(args)
         reference = None if mode == "none" else synth_tools.resolve_reference(mode, library)
-        module, info = synth_tools.palette(args.title, args.style, reference)
+        module, info = synth_tools.palette(args.title, args.style, reference, args.channels, args.format)
         project.write_json(output, project.to_dict(module))
-        return {"ok": True, "output": str(output), "title": module.title, "sample_source": "synthesized",
+        return {"ok": True, "output": str(output), "title": module.title, "format": module.format,
+                "channels": module.channels, "sample_source": "synthesized",
                 "reference": "none (hand-set volumes)" if reference is None else reference["source"],
                 **info,
                 "next": ["Compose with patch ops on this project (write/set cells with the slot numbers above).",
                          "Audition a timbre: chiploom synth preview --recipe @file.json --output x.wav --note C-2.",
-                         "Check: chiploom validate OUT --sample-source synthesized, then export."]}
+                         "Check: chiploom validate OUT --sample-source synthesized, then export."],
+                **({"notation": "XM note labels sit two octaves above MOD ones: where a slot's use says C-2 "
+                                "(MOD), write C-4 in this XM; octaves 1-2 become 3-4."} if module.format == "xm" else {})}
     raise ValidationError(f"Unknown synth command {action!r}.", "INVALID_VALUE")

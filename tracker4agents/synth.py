@@ -8,9 +8,13 @@ import random
 from .model import SAMPLE_RATE, Sample, ValidationError, require_int
 
 
+RECIPE_TYPES = ("wave", "draw", "kick", "snare", "hat", "kick_hat", "snare_hat", "pluck")
+
+
 def number(value: object, name: str, minimum: float, maximum: float) -> float:
     if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
-        raise ValidationError(f"{name}: nombre fini attendu dans [{minimum}, {maximum}].", "RECIPE_INVALID")
+        raise ValidationError(f"{name}: expected a finite number in [{minimum}, {maximum}], got {value!r}.",
+                              "RECIPE_INVALID")
     return float(value)
 
 
@@ -19,7 +23,7 @@ def quantize(values: list[float], peak: float, looped: bool) -> tuple[int, ...]:
     centered = [value - mean for value in values]
     maximum = max(abs(value) for value in centered)
     if maximum < 1e-12:
-        raise ValidationError("La recette produit un sample silencieux.")
+        raise ValidationError("The recipe produces a silent sample.", "RECIPE_INVALID")
     if not looped:
         # The two zero bytes also provide the harmless ProTracker no-loop word.
         for index in range(min(16, len(centered) // 2)):
@@ -43,14 +47,15 @@ def _drive(values: list[float], amount: float) -> list[float]:
 
 def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) -> Sample:
     if not isinstance(recipe, dict):
-        raise ValidationError("Une recette de sample doit être un objet JSON.", "RECIPE_INVALID")
+        raise ValidationError("A sample recipe must be a JSON object such as {\"type\": \"kick\"}.", "RECIPE_INVALID")
     kind = recipe.get("type")
     if kind == "wave":
         return _wave_sample(name, recipe, volume, finetune)
     allowed = {"type", "seed", "peak", "duration", "frequency", "cycles", "points", "duty", "drive"}
     extra = set(recipe) - allowed
     if extra:
-        raise ValidationError(f"Paramètres de synthèse inconnus : {sorted(extra)}.")
+        raise ValidationError(f"Unknown recipe parameters {sorted(extra)} for type {kind!r}; allowed: {sorted(allowed)}.",
+                              "RECIPE_INVALID")
     peak = number(recipe.get("peak", 0.88), "peak", 0.01, 1)
     seed = require_int(recipe.get("seed", 0), "seed", 0, 2**32 - 1)
     rng = random.Random(seed)
@@ -60,13 +65,14 @@ def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) ->
             raise ValidationError("drive only applies to one-shot recipes (drums and pluck).", "RECIPE_INVALID")
         points = recipe.get("points")
         if not isinstance(points, list) or not 4 <= len(points) <= 256:
-            raise ValidationError("Une onde dessinée attend de 4 à 256 points.")
+            raise ValidationError("A drawn wave needs a list of 4 to 256 points.", "RECIPE_INVALID")
         points = [number(value, "point", -1, 1) for value in points]
         cycles = require_int(recipe.get("cycles", 16), "cycles", 1, 64)
         frequency = number(recipe.get("frequency", 261.625565), "frequency", 30, 2000)
         frames = round(SAMPLE_RATE * cycles / frequency / 2) * 2
         if not 4 <= frames <= 65_534:
-            raise ValidationError("L'onde dessinée dépasse la longueur autorisée.")
+            raise ValidationError("The drawn wave would be longer than 65534 bytes; use fewer cycles or a higher "
+                                  "frequency.", "RECIPE_INVALID")
         values = []
         for index in range(frames):
             position = (index * cycles / frames % 1) * len(points)
@@ -118,7 +124,7 @@ def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) ->
         if "drive" in recipe:
             values = _drive(values, number(recipe["drive"], "drive", 0, 1))
     else:
-        raise ValidationError(f"Type de sample inconnu : {kind!r}.")
+        raise ValidationError(f"Unknown recipe type {kind!r}; use one of {list(RECIPE_TYPES)}.", "RECIPE_INVALID")
     pcm = quantize(values, peak, looped)
     return Sample(name, pcm, volume, finetune, 0, len(pcm) if looped else 0, dict(recipe))
 

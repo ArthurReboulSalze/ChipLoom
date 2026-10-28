@@ -14,6 +14,41 @@ Feedback from an agent that composed an eight-channel library-mode song through 
 - Channel numbers are zero-based in every result an agent reads, as in the operations: `changes` lines (`ch0` is the first channel), `inspect --grid` and `live score` headers, and `report`. The window and the browser studio still show tracks from 1.
 - The MCP server instructions, the skill and the patch reference describe MOD with 4 to 32 channels instead of four only.
 
+A test run of ten songs composed by agents (library and created samples, MOD with 4, 6 and 8 channels, XM with 6 to 16 channels, one song driven only through the MCP adapter) found the following, now fixed.
+
+**XM songs**
+
+- MOD→XM conversion keeps sample recipes (XM→MOD too), so a synthesized project stays synthesized after `convert`. Before, every recipe was dropped while the conversion still claimed `lossless`. `convert` writes recipes into `.json` outputs, and a `.json` output without `--to` gets the other format.
+- `samples add`, `library_sample`, `synth add` and `recipe_sample` work on XM projects (instruments 1–128) and convert the sample exactly as `convert` does (finetune `16×f−20`, 8-bit, forward loop, centred), keeping its library ID or recipe. Before, `samples add` copied the raw MOD finetune into an XM and mistuned the sample.
+- `new --format xm` (`--rows`, header speed and BPM) and the MCP `new_project` `format`/`rows` parameters start a blank XM; `synth palette --channels N --format mod|xm` (MCP `channels`, `format`) starts a synthesized song of any width.
+- New patch operations `pattern_length` (XM; `truncate` to drop notes, `PATTERN_TRUNCATE`) and `xm_header` (`restart_position`, `default_speed`, `default_bpm`, `frequency_table`), refused on a MOD with `MOD_OP_UNSUPPORTED`. On an XM, `timing` also sets the header defaults.
+- MOD→XM sets the XM header's default speed and BPM from the `Fxx` on the first played row (the `Fxx` stay); MOD→XM→MOD stays byte-identical.
+- Playback plans, `validate`, `inspect` and `patch` warn about an XM `Dxx` past the end of the next pattern and about a loop that comes back at a different speed or BPM.
+- `estimate` accepts up to 256 rows and 256 orders; previews explain XM note labels (XM `C-4` is MOD `C-2`). `compare` writes and reports `x.xm`/`y.xm` for XM versions.
+
+**Patch**
+
+- `patch` refuses to replace an existing output file other than the source unless `--overwrite` is given (MCP `overwrite`), so a typo no longer clobbers an earlier revision.
+- `timing` takes `bpm`, `speed` or both; the one left out keeps its value. Its result gives the values written.
+- `changes` says which sample fields changed (`sample 04 changed: volume, finetune`) and reports renamed patterns, pattern lengths and XM header changes. A warning names cells where an existing `Bxx`/`Dxx`/`Fxx` was removed (typically a `write` over row 0 that erased the initial tempo).
+- A failing operation keeps its real code (`RECIPE_INVALID`, `SAMPLE_SLOT`, `SAMPLE_LIBRARY`, ...); `PATCH_OP` only means an unknown or missing operation. A JSON object that is not an operation gives `PATCH_FORMAT`; a missing `--ops` file gives `IO_ERROR` with its absolute path. Malformed notes in cells get a spelling hint (`C#2` in a MOD, `C#4` in an XM).
+- The MCP `patch` description lists the cell formats and every operation, and links to the right section of the CLI reference.
+
+**Report and loudness**
+
+- The key estimate leaves out note starts that play percussion slots (role from `sample_sources`, the recipe, the bank category or the loop heuristic) and lists them in `key_estimate.percussion_excluded`. Every test song had been reported as "C major, high" because drums written at `C-2` dominated the count. Confidence is no longer "high" when the runner-up is the relative key by less than 0.20.
+- Slots used only by mid-note sample switching (pulse-width movement) count as played (`sample_changes`) and are no longer flagged `sample_never_played`.
+- `report` and `sample_match_level` choose the loudness reference by the same rule as `synth add` and `synth palette`: an explicit bank, else `exports/sample_library` when it exists, else the fixed levels; both say which and why. `sample_match_level` saves the role it used, so `report` compares the sample with the same target, and takes `match` (`auto`, `library`, `defaults`). `sample draw --as-recipe` matches loudness like `synth add`.
+- `report` samples list `library_id`, `role`, `role_source`, `reachable_db` and `limited_by_peak`; the level warning says when a target is out of reach.
+- `compare` writes the answer key to `answer_key.json` and prints it only with `--show-answer`, so running it no longer spoils the blind test.
+
+**Render, export and errors**
+
+- `render` accepts a `.json` project (rendered from a temporary MOD or XM) and reports integrated loudness, true peak and loudness range (FFmpeg `ebur128`) in a `loudness` field. A `--seconds` longer than the song says so (`ended_before_requested`, `module_seconds`, a warning).
+- `export` refuses an output that is not `.mod` or `.xm` unless `--format` is given (`OUTPUT_PATH`).
+- Render, MP3, synth-recipe and libxmp errors reach agents in English with specific codes (`RENDER_LIMIT`, `OUTPUT_PATH`, `RECIPE_INVALID`, new `XMP_MISSING`); the French original stays in `message_fr`. Unknown-note messages keep the note, validation messages say "channel" instead of "track", and an unknown MOD signature names the signature found instead of the old four-channel message. `sample waveform` reads XM files.
+- The CLI reference documents the missing codes (`CHANNELS`, `CONVERT_REFUSED`, the `XM_*` import codes, `MOD_FLT8`, `MOD_VARIANT`, ...), the N-channel bounds (`INTEGER_RANGE` for an index, `PATCH_BOUNDS` for a block), and how to apply instruments from the last note to the first. The agent guide no longer says that sample synthesis is deferred, and the sample-bank reference starts its test song with `new`.
+
 ## 0.8.2 — 2026-10-28
 
 - Fix `chiploom-cli mcp` in the standalone builds: its tools started the CLI with `-m tracker4agents`, which a frozen program does not accept, so every tool call failed. Installs from a checkout or a wheel were not affected. The release workflow now makes one MCP tool call through each archive.

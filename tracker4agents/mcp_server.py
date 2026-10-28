@@ -28,7 +28,14 @@ B = {"type": "boolean"}
 OPS = {"type": "array", "items": {"type": "object"},
        "description": "Patch operations, e.g. {\"op\": \"write\", \"pattern\": 0, \"channel\": 1, \"row\": 0, "
                       "\"cells\": [\"C-2 01 ...\", \"\", \"E-2 01 C20\"]}. Channels, rows, patterns and orders "
-                      "count from 0, sample slots from 1. Give ops or ops_file. See docs/CLI.md#patch-operations."}
+                      "count from 0, sample slots from 1. A MOD cell is 'NOTE SS EEE' (notes C-1..B-3, sharps C#2, "
+                      "sample in hex, effect as 3 hex digits, '...' for none); an XM cell is 'NOTE II VV EEE' (C-0..B-7, "
+                      "volume-column byte VV). Cell ops: set, write (cells down a channel, or lines across all channels), "
+                      "clear, copy, move, transpose. Structure: add_pattern, remove_pattern, rename_pattern, set_orders, "
+                      "insert_order, remove_order, move_order, title, timing (bpm and/or speed). Samples: sample, "
+                      "library_sample, recipe_sample, apply_instrument, sample_loop/trim/gain/fade/set_pcm/match_level. "
+                      "An unknown field or op is refused with the list of valid ones. Give ops or ops_file. "
+                      "Fields: docs/CLI.md#operations."}
 OPS_FILE = {"type": "string", "description": "Path to a JSON file holding the operations list (instead of ops), "
                                             "for large generated patches; relative to the server's root."}
 RECIPE = {"type": "object", "description": "Sample recipe, e.g. {\"type\": \"wave\", \"shape\": \"pulse\", "
@@ -75,7 +82,8 @@ def _ops_json(arguments: dict) -> list[str]:
 
 
 TOOLS = [
-    _tool("estimate", "Plan a song's duration before writing it (constant speed/BPM).",
+    _tool("estimate", "Plan a song's duration before writing it (constant speed/BPM). rows is the rows played per "
+          "order: 64 in a MOD, 1-256 in an XM.",
           {"orders": I, "rows": I, "speed": I, "bpm": I}, ["orders"],
           lambda a: ["estimate", *_flags(a, {"orders": "--orders", "rows": "--rows", "speed": "--speed", "bpm": "--bpm"})], True),
     _tool("validate", "Validate a JSON project or MOD; with report=true, list every independent problem with codes.",
@@ -84,9 +92,13 @@ TOOLS = [
     _tool("inspect", "Summarize a project or MOD. With pattern (and grid=true), show that pattern as tracker grid text.",
           {"source": S, "pattern": I, "grid": B, "row": I, "rows": I}, ["source"],
           lambda a: ["inspect", a["source"], *_flags(a, {"pattern": "--pattern", "grid": "--grid", "row": "--row", "rows": "--rows"})], True),
-    _tool("patch", "Apply patch operations to a project as one validated transaction and write the result.",
-          {"source": S, "output": S, "ops": OPS, "ops_file": OPS_FILE, "label": S}, ["source", "output"],
-          lambda a: ["patch", a["source"], "--output", a["output"], *_ops_json(a), *_flags(a, {"label": "--label"})]),
+    _tool("patch", "Apply patch operations to a project as one validated transaction and write the result to a new file. "
+          "Read duration_seconds and warnings in the result.",
+          {"source": S, "output": S, "ops": OPS, "ops_file": OPS_FILE, "label": S,
+           "overwrite": {"type": "boolean", "description": "Allow output to replace an existing file (never the source)."}},
+          ["source", "output"],
+          lambda a: ["patch", a["source"], "--output", a["output"], *_ops_json(a),
+                     *_flags(a, {"label": "--label", "overwrite": "--overwrite"})]),
     _tool("export", "Export a validated project to a real MOD file.", {"source": S, "output": S}, ["source", "output"],
           lambda a: ["export", a["source"], "--output", a["output"]]),
     _tool("render", "Render a MOD or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 copy.",
@@ -98,11 +110,14 @@ TOOLS = [
           {"source": S, "output": S, "mp3": B, "language": _enum("en", "fr")}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),
     _tool("report", "Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, "
-          "sample sources and loudness against the reference levels (a library-mode project uses "
-          "exports/sample_library when it exists, unless library is given). Channels count from 0.",
+          "sample sources and loudness against the reference levels (exports/sample_library when it exists, "
+          "unless library is given; else fixed levels). The key estimate leaves out percussion slots. "
+          "Channels count from 0.",
           {"source": S, "library": LIBRARY}, ["source"],
           lambda a: ["report", a["source"], *_flags(a, {"library": "--library"})], True),
-    _tool("compare", "Build a blind A/B listening page comparing two versions in a new directory.",
+    _tool("compare", "Build a blind A/B listening page comparing two versions in a new directory. The X/Y answer "
+          "is written to answer_key.json (path in answer_key_file), not returned; do not read it before the "
+          "owner has listened.",
           {"first": S, "second": S, "output": S, "mp3": B, "language": _enum("en", "fr"), "seed": I, "seconds": N},
           ["first", "second", "output"],
           lambda a: ["compare", a["first"], a["second"], "--output", a["output"], *_flags(a, {
@@ -154,11 +169,14 @@ TOOLS = [
               "volume": "--volume", "finetune": "--finetune", "role": "--role", "match_library": "--match-library",
               "no_match": "--no-match"})]),
     _tool("synth_palette", "Write a new project holding a starter palette of created samples "
-          "(sample_source 'synthesized') with loudness-matched volumes.",
-          {"output": S, "title": S, "style": _enum("default"), "match_library": LIBRARY, "no_match": B},
+          "(sample_source 'synthesized') with loudness-matched volumes. channels is 2-32 (default 4); "
+          "format xm writes an XM whose instruments keep their recipes.",
+          {"output": S, "title": S, "style": _enum("default"), "match_library": LIBRARY, "no_match": B,
+           "channels": I, "format": _enum("mod", "xm")},
           ["output"],
           lambda a: ["synth", "palette", *_flags(a, {"output": "--output", "title": "--title", "style": "--style",
-                                                    "match_library": "--match-library", "no_match": "--no-match"})]),
+                                                    "match_library": "--match-library", "no_match": "--no-match",
+                                                    "channels": "--channels", "format": "--format"})]),
     # Live session with the open ChipLoom window (or a headless `chiploom live serve`).
     _tool("live_sessions", "List running live sessions (open ChipLoom windows or headless servers).", {}, (),
           lambda a: ["live", "sessions"], True),
@@ -269,8 +287,9 @@ TOOLS = [
               "label": "--label"})]),
     # Multi-channel MOD and XM (appended: existing tools keep their order and schemas).
     _tool("convert", "Convert between MOD and XM: a MOD to XM keeps its notes, effects and PCM (the report lists what an XM "
-          "plays differently); an XM to MOD only when it fits, otherwise refused with a list of reasons. The output "
-          "extension (.mod, .xm or .json) or `to` picks the target.",
+          "plays differently) and its sample recipes; an XM to MOD only when it fits, otherwise refused with a list "
+          "of reasons. The output extension (.mod or .xm) or `to` picks the target; a .json output without `to` "
+          "gets the other format than the source's.",
           {"source": S, "output": S, "to": _enum("mod", "xm")}, ["source", "output"],
           lambda a: ["convert", a["source"], "--output", a["output"], *_flags(a, {"to": "--to"})]),
     _tool("export_format", "Export a project as a MOD or an XM file (a project of the other format is converted first). "
@@ -280,12 +299,13 @@ TOOLS = [
     _tool("new_project", "Write a blank project to start a song: empty patterns in order, one empty sample slot, "
           "initial speed/BPM and the channel count (4 by default; 2-32, other counts than 4 use the "
           "protracker-nch-pal-v1 profile). sample_source defaults to library (fill slots with samples_add or "
-          "library_sample); use synth_palette instead for a synthesized-only song.",
-          {"output": S, "title": S, "channels": I, "patterns": I, "speed": I, "bpm": I,
-           "sample_source": _enum("library", "synthesized", "mixed", "none")}, ["output"],
+          "library_sample); use synth_palette instead for a synthesized-only song. format xm writes an XM: "
+          "patterns of rows rows (1-256, default 64) and speed/BPM in its header.",
+          {"output": S, "title": S, "format": _enum("mod", "xm"), "channels": I, "patterns": I, "rows": I,
+           "speed": I, "bpm": I, "sample_source": _enum("library", "synthesized", "mixed", "none")}, ["output"],
           lambda a: ["new", "--output", a["output"], *_flags(a, {
-              "title": "--title", "channels": "--channels", "patterns": "--patterns", "speed": "--speed",
-              "bpm": "--bpm", "sample_source": "--sample-source"})]),
+              "title": "--title", "format": "--format", "channels": "--channels", "patterns": "--patterns",
+              "rows": "--rows", "speed": "--speed", "bpm": "--bpm", "sample_source": "--sample-source"})]),
 ]
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 

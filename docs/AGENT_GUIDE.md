@@ -14,7 +14,7 @@ The command workflow is exercised by this project's tests and by Codex during de
 
 ## A complete composition loop
 
-1. Establish duration, approximate tempo, mood and target MOD profile. The current owner-approved workflow uses the local sample library exclusively; new sample synthesis and waveform drawing are deferred until the owner resumes them.
+1. Establish duration, approximate tempo, mood and target format (MOD with 4 or more channels, or XM). By default, use the owner's local sample library; use created samples only when the owner asks for a song made with them ([below](#songs-made-only-with-created-samples)), and edit sample PCM only when the owner asks for it.
 2. Inspect an included project and, when useful, read the reference study. Use a reference's construction ideas without assuming its samples or melody should be copied.
 3. Create a **new** schema v2 project JSON with embedded library PCM, patterns and order list: `new --output exports/my-song/project.json [--channels N] [--patterns N] [--bpm B]` writes a blank library-mode project to fill with `samples add` or `library_sample` operations. Record the library IDs and select a coherent palette before writing the arrangement. Avoid replacing the included examples. Write patterns as grid `rows` (see [Project data and samples](#project-data-and-samples)), or build the first version with `patch` operations on a copy.
 4. Read what you wrote back with `inspect --pattern N --grid` and validate. Fix any rejected note range, sample loop or unsupported effect before exporting. `validate --report` lists every independent problem with a stable `code` and a `path`.
@@ -109,7 +109,7 @@ with `lead-up.ops.json`:
 ]
 ```
 
-The result lists `changes` (one line per changed cell, such as `P01 r00 ch1: C-2 04 C38 → C-3 04 C38`; channels count from 0 there as in the operations, `report` and `inspect`), the new `duration_seconds` and any `warnings`. Read `changes` to confirm that the edit touched what you meant. The operations are `set`, `write`, `clear`, `copy`, `move`, `transpose`, `add_pattern`, `remove_pattern`, `rename_pattern`, `set_orders`, `insert_order`, `remove_order`, `move_order`, `title`, `timing`, `sample` and `library_sample`; every field is in the [operations table](CLI.md#operations).
+The result lists `changes` (one line per changed cell, such as `P01 r00 ch1: C-2 04 C38 → C-3 04 C38`; channels count from 0 there as in the operations, `report` and `inspect`), the new `duration_seconds` and any `warnings` (for example when an existing `Bxx`/`Dxx`/`Fxx` was removed, often by a `write` over row 0 that erased the initial tempo). Read `changes` to confirm that the edit touched what you meant. The operations are `set`, `write`, `clear`, `copy`, `move`, `transpose`, `add_pattern`, `remove_pattern`, `rename_pattern`, `set_orders`, `insert_order`, `remove_order`, `move_order`, `title`, `timing`, `sample`, `library_sample`, `recipe_sample`, the `sample_*` edits and `apply_instrument`; every field is in the [operations table](CLI.md#operations). `patch` refuses to replace an existing output file other than the source unless `--overwrite` is given.
 
 Habits that work well:
 
@@ -117,7 +117,7 @@ Habits that work well:
 - Use `write` with `lines` for a whole bar and `cells` with `step` for a line of notes on one channel; use `copy` and `move` for repeating or shifting phrases; use `transpose` for key changes.
 - Keep one patch to one musical intent and label it. Several small patches give a clearer history than one large rewrite.
 - An empty string in `cells` clears that cell; `"--- -- ..."` is an explicit empty cell.
-- `library_sample` inserts library audio by ID with the same exact-PCM rules as `samples add`; `library` defaults to `exports/sample_library`. New sample synthesis stays deferred.
+- `library_sample` inserts library audio by ID with the same exact-PCM rules as `samples add`; `library` defaults to `exports/sample_library`. `recipe_sample` inserts a created sample in a synthesized-only song; the `sample_*` edits and `apply_instrument` are described in [the sound workshop](CLI.md#sound-workshop-sample-editing-and-instruments).
 
 ## Project data and samples
 
@@ -277,7 +277,7 @@ Etiquette that follows from the mechanics: without `--base` no conflict check ru
 
 **Blind comparison.** Once you have two versions, `compare` builds a page where the owner hears them as X and Y in random order, picks a preference, optionally rates melody, groove, sound palette and arrangement, and then sees which was which, with measured peak and RMS. Use `--seconds` for a bounded excerpt (required when a cycle is over 120 seconds), `--labels` for readable version names and `--mp3` for easy playback. Keep in mind:
 
-- It is a casual blind test. The answer key is in `comparison.json` and, encoded, in the page. Do not read it before the owner has listened.
+- It is a casual blind test. The command does not print the X/Y mapping (only the path of `answer_key.json`, unless `--show-answer`); the key is in `answer_key.json`, `comparison.json` and, encoded, in the page. Do not read it before the owner has listened.
 - Loudness is not equalized, and a louder version tends to win. If the versions differ in level, say so when you present the result.
 - One listener, one session: the result is one person's preference on one day.
 
@@ -309,6 +309,12 @@ Check `inspect` first: `channels`, `profile` and, for an XM, `format: "xm"` tell
 
 - **More channels** (MOD `6CHN`, `8CHN` ... up to 32): start the song with `chiploom new --output P.json --channels 8` (MCP `new_project`); same effects and flow rules as four channels; a patch bounds-checks the extra channels. Reference modules with two channels are editable too.
 - **XM** gives you 16-bit samples, ping-pong loops, per-sample panning, a volume column and patterns of any length from 1 to 256 rows. Remember that one XM instrument is exactly one sample, that note labels differ (`C-4` is middle C; a MOD's `C-2` is an XM `C-4`), and that the volume column is a raw hexadecimal byte (`40` sets volume 64, `C8` sets panning 8).
-- **Sample tools**: `library_sample`, `recipe_sample`, `sample_loop|trim|gain|fade|set_pcm|match_level` and `apply_instrument` edit 8-bit MOD samples and are refused on an XM (`XM_OP_UNSUPPORTED`); `sample` can set `volume`, `finetune`, `panning`, `relative_note` and `loop_mode`. Load a MOD sample into an XM with `convert`, then keep composing.
+- **Sample tools**: `samples add`, `library_sample`, `synth add` and `recipe_sample` work on an XM (instruments 1–128): the sample is converted exactly like `convert` converts a MOD sample (finetune `16 × MOD finetune − 20`, 8-bit, forward loop, centred) and keeps its library ID or recipe. `sample_loop|trim|gain|fade|set_pcm|match_level` and `apply_instrument` edit 8-bit MOD samples and are refused on an XM (`XM_OP_UNSUPPORTED`); `sample` can set `volume`, `finetune`, `panning`, `relative_note` and `loop_mode`.
+- **An XM workflow**:
+  1. Start with `chiploom new --format xm --channels 8 --rows 128 --speed 4 --bpm 140 --output P.json` (MCP `new_project` with `format`, `rows`): the speed and BPM go in the header, the song has one empty instrument and records `sample_source` like a MOD. For a synthesized-only XM use `synth palette --format xm --channels N`; a finished MOD can also be converted (`convert`, recipes and library IDs kept).
+  2. Add samples with `samples add` / `library_sample` (library mode) or `synth add` / `recipe_sample` (created samples).
+  3. Write the score with `patch`; `pattern_length` resizes a pattern (`truncate: true` to cut rows that hold notes) and `add_pattern` takes a `length`.
+  4. Set the header with `xm_header` (`restart_position`, `default_speed`, `default_bpm`, `frequency_table`). If the song changes tempo, restate it with `Fxx` on the row the song loops back to; `warnings` flags a loop that comes back at another tempo and an XM `Dxx` past the next pattern's end.
+  5. `validate` (with `--sample-source` when the mode is declared), `export --output song.xm`, `render`.
 - **Convert deliberately**: `chiploom convert song.mod --output song.xm` keeps the music and reports what an XM plays differently; going back with `convert song.xm --output song.mod` works only when the XM stayed inside the MOD profile, and otherwise returns every reason.
 - **Listening**: `render` plays an XM with libopenmpt (default) or libxmp, `preview` and `compare` accept `.xm`, and the real-time engine in the window plays it with libxmp's FastTracker II personality. Durations of looping songs can differ between libopenmpt and the plan; the plan is checked against libxmp.

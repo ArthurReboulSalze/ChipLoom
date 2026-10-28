@@ -31,14 +31,17 @@ KEY_MIN_NOTES = 6
 KEY_MIN_PITCH_CLASSES = 3
 KEY_CAVEAT = (
     "Estimate, not a fact. Tracker note names are period labels: sample tuning is unknown, so the "
-    "sounding pitch can be offset from the written note. Every note start is counted, including "
-    "percussion samples triggered at fixed pitches, and a major key and its relative minor often "
-    "correlate almost equally (see margin)."
+    "sounding pitch can be offset from the written note. The report leaves out note starts that play a "
+    "percussion sample (see percussion_excluded: a slot's role is recorded or inferred, so check that list), "
+    "and a major key and its relative minor often correlate almost equally (see margin)."
 )
+RELATIVE_HIGH_MARGIN = 0.20
 KEY_CONFIDENCE_RULE = (
     "Heuristic thresholds chosen for this tool, not perceptual data: margin >= 0.10 high, "
     ">= 0.03 medium, otherwise low. The margin is the correlation gap between the best and "
-    "second-best of the 24 candidate keys."
+    "second-best of the 24 candidate keys. When the second-best is the relative major or minor "
+    f"(the same scale), high needs margin >= {RELATIVE_HIGH_MARGIN:.2f}: a loop such as Am-F-C-G counts "
+    "almost the same pitch classes in both keys."
 )
 SCOPE = (
     "Measurements of the symbolic score along its playback timeline (first replay cycle, including "
@@ -81,6 +84,10 @@ def estimate_key(histogram: list[int] | tuple[int, ...]) -> dict:
     best, second = candidates[0], candidates[1]
     margin = second[0] - best[0]
     confidence = "high" if margin >= 0.10 else "medium" if margin >= 0.03 else "low"
+    # The relative key of a major tonic t is the minor on t + 9 (and the other way round).
+    relative = second[2] != best[2] and second[1] == (best[1] + (9 if best[2] == "major" else 3)) % 12
+    if relative and confidence == "high" and margin < RELATIVE_HIGH_MARGIN:
+        confidence = "medium"
 
     def entry(item: tuple[float, int, str]) -> dict:
         return {"key": f"{PITCH_CLASS_NAMES[item[1]]} {item[2]}", "tonic": PITCH_CLASS_NAMES[item[1]],
@@ -88,7 +95,8 @@ def estimate_key(histogram: list[int] | tuple[int, ...]) -> dict:
 
     return {"available": True, "is_estimate": True, **entry(best), "margin": _round(margin),
             "confidence": confidence, "confidence_rule": KEY_CONFIDENCE_RULE,
-            "runner_up": entry(second), "top_candidates": [entry(item) for item in candidates[:3]],
+            "runner_up": entry(second), "runner_up_is_relative": relative,
+            "top_candidates": [entry(item) for item in candidates[:3]],
             "notes_counted": total, "method": "Krumhansl-Kessler profiles, Pearson correlation, 24 keys",
             "caveat": KEY_CAVEAT}
 
@@ -136,28 +144,19 @@ def library_mode(module: Module) -> str | None:
 def loudness_reference(module: Module, library: Path | None = None, default: Path | None = None) -> dict:
     """The loudness reference for `analyze`, with `path` and `reason` saying which one and why.
 
-    An explicit `library` always wins. A library-mode project (see `library_mode`) uses the default bank
-    (`sample_library.DEFAULT_LIBRARY`, relative to the working directory) when it exists. Otherwise the
-    fixed defaults in `loudness.DEFAULT_REFERENCE_DB` are used.
+    The same rule as `sample_match_level`, `synth add` and `synth palette` (see
+    `synth_tools.automatic_reference`): an explicit `library` wins; else the default bank
+    (`sample_library.DEFAULT_LIBRARY`, relative to the working directory, or `default`) when it exists, for
+    library and synthesized projects alike; else the fixed defaults in `loudness.DEFAULT_REFERENCE_DB`.
+    `module` only adds context to the reason.
     """
-    from .sample_library import DEFAULT_LIBRARY
-    from .synth_tools import library_exists, resolve_reference
+    from .synth_tools import automatic_reference
+    reference = automatic_reference(library, default)
     if library is not None:
-        reference = resolve_reference("library", library)
-        return {**reference, "path": str(Path(library).resolve()), "selection": "explicit",
-                "reason": "--library was given."}
-    default = Path(DEFAULT_LIBRARY if default is None else default)
-    why = library_mode(module)
-    if why is None:
-        return {**resolve_reference("defaults"), "path": None, "selection": "automatic",
-                "reason": "Not a library-mode project (no metadata.sample_source 'library' and no library IDs); "
-                          "fixed reference levels."}
-    if not library_exists(default):
-        return {**resolve_reference("defaults"), "path": None, "selection": "automatic",
-                "reason": f"Library-mode project ({why}) but no sample bank at {default.resolve()}; "
-                          "fixed reference levels. Pass --library to use another bank."}
-    return {**resolve_reference("library", default), "path": str(default.resolve()), "selection": "automatic",
-            "reason": f"Library-mode project ({why}); the default sample bank was found."}
+        reference["reason"] = "--library was given."
+    elif reference["source"] == "defaults" and library_mode(module):
+        reference["reason"] += " Pass --library to compare with another bank."
+    return reference
 
 
 def analyze(module: Module, reference: dict | None = None) -> dict:
@@ -170,7 +169,10 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     if reference is None:
         reference_info = {"source": "defaults", "path": None, "selection": "default",
                           "reason": "No reference was given; fixed reference levels."}
+        bank = {}
     else:
+        from .synth_tools import bank_entries
+        bank = bank_entries(reference)  # library IDs without a recorded role use the bank's category
         reference_info = {"source": reference.get("source", "library"), "path": reference.get("path"),
                           "selection": reference.get("selection", "explicit"),
                           "reason": reference.get("reason", "Reference passed by the caller.")}
@@ -198,6 +200,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     channel_extended: list[dict[str, int]] = [{} for _ in range(count)]
     portamento_targets = [0] * count
     current_sample = [0] * count
+    note_slots: list[tuple[int, int]] = []  # (slot, note number) of each note start, for the key histogram
+    sample_changes: dict[int, int] = {}  # cells that select a slot without starting a note (sample switching)
     notes_without_sample = [0] * count
     sample_channels: dict[int, set[int]] = {}
     for index, item in enumerate(timeline):
@@ -214,14 +218,20 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                 if value.command == 14:
                     extended = f"E{value.param >> 4:X}"
                     channel_extended[channel][extended] = channel_extended[channel].get(extended, 0) + 1
-            if not value.period or value.period == XM_KEY_OFF and xm:
-                continue
-            if value.command in (3, 5) or (xm and value.volume >= 0xF0):
+            starts_note = bool(value.period) and not (xm and value.period == XM_KEY_OFF)
+            if starts_note and (value.command in (3, 5) or (xm and value.volume >= 0xF0)):
                 portamento_targets[channel] += 1
+                starts_note = False
+            if not starts_note:
+                if value.sample:
+                    sample_changes[value.sample] = sample_changes.get(value.sample, 0) + 1
+                    sample_channels.setdefault(value.sample, set()).add(channel)
                 continue
             note_flags[channel][index] = True
-            channel_notes[channel].append(value.period - 1 if xm else NOTES.index(value.note))
+            number = value.period - 1 if xm else NOTES.index(value.note)
+            channel_notes[channel].append(number)
             slot = current_sample[channel]
+            note_slots.append((slot, number))
             if slot:
                 channel_samples[channel][slot] = channel_samples[channel].get(slot, 0) + 1
                 sample_channels.setdefault(slot, set()).add(channel)
@@ -239,7 +249,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             "lowest_note": note_names[min(notes)] if notes else None,
             "highest_note": note_names[max(notes)] if notes else None,
             "range_semitones": max(notes) - min(notes) if notes else None,
-            "samples_used": sorted(channel_samples[channel]),
+            "samples_used": sorted(set(channel_samples[channel])
+                                   | {slot for slot, used in sample_channels.items() if channel in used}),
             "effects": dict(sorted(channel_effects[channel].items())),
             "extended_effects": dict(sorted(channel_extended[channel].items())),
             "portamento_targets": portamento_targets[channel],
@@ -255,6 +266,36 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         for number in notes:
             histogram[number % 12] += 1
     total_notes = sum(histogram)
+
+    # The role of every slot (recorded, recipe, bank category or loop heuristic), shared by the key
+    # estimate (percussion is left out) and the loudness comparison below.
+    sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
+    sources = sources if isinstance(sources, dict) else {}
+    roles: dict[int, tuple[str, str]] = {}
+    for slot, sample in enumerate(module.samples, 1):
+        if sample.pcm:
+            roles[slot] = loudness.slot_role(sample, sources.get(str(slot)), bank)
+    percussion = {slot for slot, (role, _) in roles.items() if loudness.is_percussion(role)}
+    key_histogram = [0] * 12
+    excluded_counts: dict[int, int] = {}
+    for slot, number in note_slots:
+        if slot in percussion:
+            excluded_counts[slot] = excluded_counts.get(slot, 0) + 1
+        else:
+            key_histogram[number % 12] += 1
+    key_estimate = estimate_key(key_histogram)
+    key_estimate["percussion_excluded"] = {
+        "note_starts": sum(excluded_counts.values()),
+        "slots": [{"slot": slot, "name": module.samples[slot - 1].name, "role": roles[slot][0],
+                   "role_source": roles[slot][1], "note_starts": excluded_counts[slot]}
+                  for slot in sorted(excluded_counts)],
+        "rule": "Note starts that play a slot whose role is percussion (kick, snare, hat or the percussion "
+                "group) are not counted. Role order: metadata.sample_sources[slot].role, the recipe, the bank "
+                "category of the slot's library_id (when a bank is the loudness reference), the loop heuristic "
+                "(a one-shot PCM sample counts as percussion).",
+    }
+    key_estimate["pitch_classes_counted"] = {name: key_histogram[number]
+                                             for number, name in enumerate(PITCH_CLASS_NAMES)}
 
     # Timing: state after each row's commands; the replay starts at speed 6, BPM 125.
     events = []
@@ -320,7 +361,6 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     }
 
     # Sample usage over the whole song.
-    sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
     samples = []
     never_played = []
     empty_slots = []
@@ -329,18 +369,25 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             empty_slots.append(slot)
             continue
         count_played = sum(channel_samples[channel].get(slot, 0) for channel in range(count))
-        recorded = sources.get(str(slot)) if isinstance(sources, dict) else None
-        key = loudness.sample_role(sample, recorded.get("role") if isinstance(recorded, dict) else None)
+        changes = sample_changes.get(slot, 0)
+        recorded = sources.get(str(slot))
+        recorded = recorded if isinstance(recorded, dict) else {}
+        key, role_source = roles[slot]
         group = loudness.ROLES.get(key, key)
-        level = loudness.measure(sample)["loudness_db"]
+        facts = loudness.measure(sample)
+        level = facts["loudness_db"]
         wanted = loudness.target_db(key, reference)
+        reachable = loudness.reachable_db(sample)
         samples.append({"slot": slot, "name": sample.name, "bytes": len(sample.pcm), "looped": bool(sample.loop_length),
-                        "volume": sample.volume, "note_ons": count_played,
+                        "volume": sample.volume, "note_ons": count_played, "sample_changes": changes,
                         "channels": sorted(sample_channels.get(slot, ())),
                         "source": "recipe" if sample.recipe is not None else "embedded_pcm",
-                        "loudness_db": level, "peak_db": loudness.measure(sample)["peak_db"], "group": group,
-                        "reference_db": wanted, "deviation_db": round(level - wanted, 2)})
-        if not count_played:
+                        "library_id": recorded.get("library_id") if isinstance(recorded.get("library_id"), str) else None,
+                        "role": key, "role_source": role_source,
+                        "loudness_db": level, "peak_db": facts["peak_db"], "group": group,
+                        "reference_db": wanted, "deviation_db": round(level - wanted, 2),
+                        "reachable_db": reachable, "limited_by_peak": wanted > reachable + 0.05})
+        if not count_played and not changes:
             never_played.append(slot)
     found = sample_source.counts(module)
     sample_usage = {"slots_with_audio": len(samples), "empty_slots": empty_slots,
@@ -349,7 +396,12 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                 "declared": module.metadata.get("sample_source")},
                     "loudness_note": "loudness_db: RMS of the audible PCM x volume / 64, dB re full scale, at the "
                                      "sample's default volume (Cxx and arpeggios are not applied). reference_db: "
-                                     "the level of its group in the loudness_reference (median; kick p75, hat p25).",
+                                     "the level of its group in the loudness_reference (median; kick p75, hat p25). "
+                                     "reachable_db: the level at volume 64 with the peak at full scale; "
+                                     "limited_by_peak: the reference is above it.",
+                    "usage_note": "note_ons: note starts that play the slot. sample_changes: cells that select the "
+                                  "slot without starting a note (sample switching mid-note, a key-off or a "
+                                  "tone-portamento target). A slot is never played when neither happens.",
                     "loudness_reference": reference_info,
                     "slots": samples}
 
@@ -365,14 +417,20 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                         "before any sample number was set on it."})
     for slot in never_played:
         warnings.append({"code": "sample_never_played", "slot": slot,
-                         "message": f"Sample slot {slot} ({module.samples[slot - 1].name!r}) holds audio but no note plays it."})
+                         "message": f"Sample slot {slot} ({module.samples[slot - 1].name!r}) holds audio but no cell of "
+                                    "the played timeline selects it."})
     for entry in samples:
-        if abs(entry["deviation_db"]) > LEVEL_WARNING_DB and entry["note_ons"]:
-            warnings.append({"code": "sample_level_off_reference", "slot": entry["slot"],
-                             "deviation_db": entry["deviation_db"],
-                             "message": f"Sample slot {entry['slot']} ({entry['name']!r}) is {abs(entry['deviation_db']):.1f} dB "
-                                        f"{'above' if entry['deviation_db'] > 0 else 'below'} the {entry['group']} "
-                                        f"reference ({entry['reference_db']} dB); more than {LEVEL_WARNING_DB:.0f} dB apart."})
+        if abs(entry["deviation_db"]) > LEVEL_WARNING_DB and (entry["note_ons"] or entry["sample_changes"]):
+            below = entry["deviation_db"] < 0
+            message = (f"Sample slot {entry['slot']} ({entry['name']!r}) is {abs(entry['deviation_db']):.1f} dB "
+                       f"{'below' if below else 'above'} the {entry['group']} "
+                       f"reference ({entry['reference_db']} dB); more than {LEVEL_WARNING_DB:.0f} dB apart.")
+            item = {"code": "sample_level_off_reference", "slot": entry["slot"], "deviation_db": entry["deviation_db"]}
+            if below and entry["limited_by_peak"]:
+                message += (f" The reference is out of reach (limited by peak): at volume 64 with its peak at full "
+                            f"scale it would measure {entry['reachable_db']} dB.")
+                item["limited_by_peak"] = True
+            warnings.append({**item, "message": message})
     if no_note["seconds"] > LONG_SILENCE_SECONDS:
         warnings.append({"code": "long_stretch_without_note", "seconds": no_note["seconds"],
                          "message": f"No channel starts a note for {no_note['seconds']:.2f} s "
@@ -396,9 +454,10 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             "rows_with_note_start": sum(any_note),
             "rows_without_note_start": {"total_rows": rows - sum(any_note), "longest": no_note},
             "pitch_classes": {name: histogram[number] for number, name in enumerate(PITCH_CLASS_NAMES)},
-            "pitch_class_note": "Counts of note starts per pitch class of the written note name "
-                                f"({'C-0' if xm else 'C-1'} = lowest).",
-            "key_estimate": estimate_key(histogram),
+            "pitch_class_note": "Counts of every note start (percussion included) per pitch class of the written "
+                                f"note name ({'C-0' if xm else 'C-1'} = lowest). The key estimate counts only the "
+                                "note starts in key_estimate.pitch_classes_counted.",
+            "key_estimate": key_estimate,
         },
         "repetition": repetition,
         "samples": sample_usage,

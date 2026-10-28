@@ -64,7 +64,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
 
     def checked(code: int, operation: str) -> None:
         if code < 0:
-            raise RuntimeError(f"libxmp {operation}: erreur {code}.")
+            raise RuntimeError(f"libxmp {operation}: error {code}.")
 
     data = source.read_bytes()
     buffer = C.create_string_buffer(data)
@@ -72,7 +72,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
     checked(dll.xmp_test_module_from_memory(buffer, len(data), C.byref(info)), "test")
     ctx = dll.xmp_create_context()
     if not ctx:
-        raise RuntimeError("Impossible de créer le lecteur libxmp.")
+        raise RuntimeError("Cannot create the libxmp player.")
     loaded = started = False
     frames_written = 0
     target_frames = round(seconds * sample_rate)
@@ -108,9 +108,9 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
                 checked(code, "frame")
                 dll.xmp_get_frame_info(ctx, C.byref(frame))
                 if not frame.buffer or not 0 < frame.buffer_size <= sample_rate * 4:
-                    raise RuntimeError("Taille de frame native invalide.")
+                    raise RuntimeError("Invalid native frame size.")
                 if frame.buffer_size % 4:
-                    raise RuntimeError("Frame PCM stéréo non alignée.")
+                    raise RuntimeError("Misaligned stereo PCM frame.")
                 native_count = frame.buffer_size // 4
                 offset = min(native_count, max(0, skip_frames - frames_decoded))
                 frames_decoded += native_count
@@ -132,7 +132,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
                 audio.writeframesraw(pcm)
                 frames_written += count
             else:
-                raise RuntimeError("Nombre de frames natives dépassé.")
+                raise RuntimeError("Native frame count exceeded.")
         return {
             "engine": "libxmp", "version": C.c_char_p.in_dll(dll, "xmp_version").value.decode("ascii"),
             "detected_title": info.name.decode("ascii", "replace"),

@@ -417,6 +417,10 @@ def playback_plan(module: Module) -> dict:
     header's default speed and tempo, the end of the order list returns to the header's restart
     position, patterns have their own row count, and for files that claim FastTracker II an
     E60 also sets the row the next order change starts on (the "E60 bug" libxmp reproduces).
+
+    `warnings` lists flow that plays but is probably not meant: an XM break (Dxx) to a row past the end
+    of the target pattern (players start it at row 0), and a loop back to an order (end of the order
+    list, restart position, backward Bxx) at another speed/BPM than on its first pass.
     """
     validate(module)
     xm = module.format == "xm"
@@ -433,6 +437,11 @@ def playback_plan(module: Module) -> dict:
     visited: dict[tuple, int] = {}
     timeline = []
     elapsed = 0.0
+    # Warnings (strings) about flow that plays but probably not as meant; the plan itself is unchanged.
+    warnings: list[str] = []
+    warned: set[tuple] = set()
+    first_tempo: dict[tuple[int, int], tuple[int, int]] = {}  # (order, row) -> (speed, bpm) on its first visit
+    looped_back = False  # the last order change went back to this order or an earlier one
 
     seen_orders: set[int] = set()
 
@@ -475,6 +484,13 @@ def playback_plan(module: Module) -> dict:
                         loop_row = start
             elif value.command == 14 and value.param >> 4 == 14:
                 delay = value.param & 15
+        first = first_tempo.setdefault((order, row), (speed, bpm))
+        if looped_back and first != (speed, bpm) and ("tempo", order, row) not in warned:
+            warned.add(("tempo", order, row))
+            warnings.append(f"The song loops back to order {order} (pattern {pattern_index}) row {row} at speed "
+                            f"{speed} / {bpm} BPM, but first played it at speed {first[0]} / {first[1]} BPM: "
+                            "restate the speed and BPM there with Fxx so every pass keeps the same tempo.")
+        looped_back = False
         # A row that explicitly sets timing has the same replay state regardless
         # of the speed/tempo inherited before entering that row.
         state = (order, row, speed, bpm, loops, jumpline)
@@ -483,7 +499,7 @@ def playback_plan(module: Module) -> dict:
             return {
                 "duration_seconds": round(elapsed, 9),
                 "loop_start_seconds": timeline[loop_at]["seconds"],
-                "rows": len(timeline), "timeline": timeline,
+                "rows": len(timeline), "timeline": timeline, "warnings": warnings,
             }
         visited[state] = len(timeline)
         entry = {
@@ -496,8 +512,15 @@ def playback_plan(module: Module) -> dict:
         elapsed += speed * 2.5 / bpm * (1 + delay)
         loops = tuple(new_loops)
         jumpline = line
+        before, moved = order, True
         if broken:
-            order, row = enter(jump if jump is not None else following(order), line)
+            target = jump if jump is not None else following(order)
+            length = module.patterns[module.orders[target]].rows
+            if xm and line >= length and ("break", pattern_index, row) not in warned:
+                warned.add(("break", pattern_index, row))
+                warnings.append(f"Pattern {pattern_index} row {row} breaks to row {line} of order {target}, but its "
+                                f"pattern {module.orders[target]} has {length} rows: players start it at row 0.")
+            order, row = enter(target, line)
             jumpline = 0
             if delay and not xm:
                 row += 1
@@ -505,12 +528,15 @@ def playback_plan(module: Module) -> dict:
                     order, row = following(order), 0
         elif loop_row is not None:
             row = loop_row
-            if row >= pattern.rows:  # a stale loop start past the end of this pattern ends it
+            moved = row >= pattern.rows
+            if moved:  # a stale loop start past the end of this pattern ends it
                 order, row = enter(following(order), jumpline)
                 jumpline = 0
         else:
             row += 1
-            if row >= pattern.rows:
+            moved = row >= pattern.rows
+            if moved:
                 order, row = enter(following(order), jumpline)
                 jumpline = 0
+        looped_back = moved and order <= before
     raise ValidationError("Déroulement trop long pour le prototype (250000 lignes maximum).", "RENDER_LIMIT")

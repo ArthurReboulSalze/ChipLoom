@@ -475,7 +475,7 @@ class CreatePanel(QWidget):
         self.measures.style().polish(self.measures)
 
     def update_format(self):
-        """An XM module takes no recipe or drawn sample (the core refuses them): auditioning still works."""
+        """The window does not add recipes or drawn samples to an XM yet (the CLI can add recipes); auditioning works."""
         xm = self.window.module_format == "xm"
         self.add_button.setEnabled(not xm)
         self.add_button.setToolTip(self.window.t(XM_REFUSED_TIP) if xm else "")

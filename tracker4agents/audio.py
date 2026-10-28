@@ -9,15 +9,15 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import wave
 
-from . import formats
+from . import formats, project
 from .model import NOTE_TO_PERIOD, PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
-from .project import atomic_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_RENDER_SECONDS = 120
@@ -33,7 +33,11 @@ def duration_warnings(seconds: float) -> list[str]:
 
 
 class RenderError(RuntimeError):
-    pass
+    """A renderer failure. `code` is a stable identifier for agents (see errors.py)."""
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def sha256(path: Path) -> str:
@@ -46,7 +50,7 @@ def analyze_wav(path: Path) -> dict:
     quiet_run = longest_quiet = windows = 0
     with wave.open(str(path), "rb") as audio:
         if audio.getsampwidth() != 2 or audio.getcomptype() != "NONE":
-            raise RenderError("L'analyse attend du PCM signé 16 bits.")
+            raise RenderError("L'analyse attend du PCM signé 16 bits.", "RENDER_FAILED")
         channels, rate, frames = audio.getnchannels(), audio.getframerate(), audio.getnframes()
         while payload := audio.readframes(max(1, rate // 10)):
             values = array("h", payload)
@@ -65,7 +69,7 @@ def analyze_wav(path: Path) -> dict:
             longest_quiet = max(longest_quiet, quiet_run)
             windows += 1
     if not total:
-        raise RenderError("Le lecteur a produit un fichier audio vide.")
+        raise RenderError("Le lecteur a produit un fichier audio vide.", "RENDER_FAILED")
     rms = math.sqrt(square_sum / total) / 32768
     return {
         "sample_rate": rate, "channels": channels, "frames": frames,
@@ -88,43 +92,66 @@ def default_xmp_library() -> Path:
         library = Path(data["library"])
         if library.is_file() and sha256(library) == data["library_sha256"]:
             return library
-    raise RenderError("libxmp n'est pas prêt. Exécute python tools/setup_reference.py, ou indique --xmp-library.")
+    raise RenderError("libxmp n'est pas prêt. Exécute python tools/setup_reference.py, ou indique --xmp-library.",
+                      "XMP_MISSING")
 
 
 def render(source: Path, output: Path, engine: str = "openmpt", seconds: float | None = None,
            sample_rate: int = 48000, ffmpeg: str | None = None, xmp_library: Path | None = None,
            from_order: int | None = None) -> dict:
-    module = formats.read(source)
+    """Render a module file (MOD or XM) or a `.json` project to a 16-bit stereo WAV.
+
+    A project is encoded to a temporary module file of its own format, rendered, then removed;
+    `source_sha256` is then the project file's hash and `module_sha256` the encoded module's."""
+    source, output = Path(source).resolve(), Path(output).resolve()
+    if output.suffix.lower() != ".wav":
+        raise ValidationError("Le rendu principal doit avoir une extension .wav ; utilise l'option MP3 pour une "
+                              "copie d'écoute.", "OUTPUT_PATH")
+    if source == output:
+        raise ValidationError("Le rendu audio doit avoir un chemin distinct du module source.", "OUTPUT_PATH")
+    if source.suffix.lower() != ".json":
+        return _render_module(formats.read(source), source, output, engine, seconds, sample_rate, ffmpeg,
+                              xmp_library, from_order)
+    module = project.load(source)
+    with tempfile.TemporaryDirectory(prefix="chiploom-render-") as directory:
+        module_file = Path(directory) / f"project{formats.extension(module)}"
+        module_file.write_bytes(formats.encode(module))
+        details = _render_module(module, module_file, output, engine, seconds, sample_rate, ffmpeg,
+                                 xmp_library, from_order)
+    details.update(module_sha256=details["source_sha256"], source_sha256=sha256(source), source_kind="project",
+                   module_format=module.format)
+    return details
+
+
+def _render_module(module, source: Path, output: Path, engine: str, seconds: float | None, sample_rate: int,
+                   ffmpeg: str | None, xmp_library: Path | None, from_order: int | None) -> dict:
     plan = playback_plan(module)
     start_seconds = 0.0
     if from_order is not None:
         require_int(from_order, "from_order", 0, len(module.orders) - 1)
         entry = next((row for row in plan["timeline"] if row["order"] == from_order), None)
         if entry is None:
-            raise ValidationError("Cet ordre n'est pas atteint pendant le premier cycle de lecture.")
+            raise ValidationError("Cet ordre n'est pas atteint pendant le premier cycle de lecture.", "RENDER_LIMIT")
         start_seconds = entry["seconds"]
         if start_seconds > MAX_PREROLL_SECONDS:
-            raise ValidationError(f"Le début de l'extrait dépasse la limite de prélecture de {MAX_PREROLL_SECONDS} secondes.")
+            raise ValidationError(f"Le début de l'extrait dépasse la limite de prélecture de {MAX_PREROLL_SECONDS} "
+                                  "secondes.", "RENDER_LIMIT")
+    available = plan["duration_seconds"] - start_seconds
     if seconds is None:
-        seconds = plan["duration_seconds"] - start_seconds
+        seconds = available
     if not math.isfinite(seconds) or not 0 < seconds <= MAX_RENDER_SECONDS:
-        raise ValidationError("Un rendu doit durer plus de zéro et au maximum 120 secondes.")
+        raise ValidationError("Un rendu doit durer plus de zéro et au maximum 120 secondes.", "RENDER_LIMIT")
     if type(sample_rate) is not int or not 8000 <= sample_rate <= 96000:
-        raise ValidationError("La fréquence de rendu doit être comprise entre 8000 et 96000 Hz.")
-    source, output = source.resolve(), output.resolve()
-    if output.suffix.lower() != ".wav":
-        raise ValidationError("Le rendu principal doit avoir une extension .wav ; utilise l'option MP3 pour une copie d'écoute.")
-    if source == output:
-        raise ValidationError("Le rendu audio doit avoir un chemin distinct du module source.")
+        raise ValidationError("La fréquence de rendu doit être comprise entre 8000 et 96000 Hz.", "RENDER_LIMIT")
     output.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.stem}.", suffix=".wav", dir=output.parent)
     os.close(descriptor)
     temporary = Path(temporary_name)
+    executable = ffmpeg or shutil.which("ffmpeg")
     try:
         if engine == "openmpt":
-            executable = ffmpeg or shutil.which("ffmpeg")
             if not executable:
-                raise RenderError("FFmpeg avec libopenmpt est requis pour ce moteur de rendu.")
+                raise RenderError("FFmpeg avec libopenmpt est requis pour ce moteur de rendu.", "FFMPEG_MISSING")
             version_result = subprocess.run(
                 [executable, "-hide_banner", "-version"], capture_output=True, text=True, timeout=10,
                 **SUBPROCESS_OPTIONS,
@@ -139,7 +166,7 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
                 **SUBPROCESS_OPTIONS,
             )
             if result.returncode:
-                raise RenderError(f"FFmpeg/libopenmpt : {result.stderr.strip()[-2000:]}")
+                raise RenderError(f"FFmpeg/libopenmpt : {result.stderr.strip()[-2000:]}", "RENDER_FAILED")
             details = {"engine": "libopenmpt via FFmpeg", "version": version_result.stdout.splitlines()[0],
                        "stderr": result.stderr.strip(), "trace": None}
         elif engine == "xmp":
@@ -158,23 +185,74 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
             finally:
                 replay.unlink(missing_ok=True)
             if result.returncode:
-                raise RenderError(f"Processus libxmp (code {result.returncode}) : {result.stderr.strip()[-2000:]}")
+                raise RenderError(f"Processus libxmp (code {result.returncode}) : {result.stderr.strip()[-2000:]}",
+                                  "RENDER_FAILED")
             details = json.loads(result.stdout)
             details["library_sha256"] = sha256(library)
         else:
-            raise ValidationError(f"Moteur audio inconnu : {engine}.")
+            raise ValidationError(f"Moteur audio inconnu : {engine}.", "INVALID_VALUE")
         metrics = analyze_wav(temporary)
         if metrics["frames"] < min(256, round(seconds * sample_rate)):
-            raise RenderError("Le moteur a produit trop peu de données audio.")
+            raise RenderError("Le moteur a produit trop peu de données audio.", "RENDER_FAILED")
         os.replace(temporary, output)
         details.update(source_sha256=sha256(source), requested_seconds=seconds,
                        from_order=from_order, start_seconds=start_seconds,
                        output=str(output), audio=metrics)
+        details["loudness"] = measure_loudness(output, executable)
+        warnings = duration_shortfall(seconds, available, metrics["duration_seconds"])
+        details["ended_before_requested"] = bool(warnings)
+        if warnings:
+            details["module_seconds"] = round(available, 6)
+            details["warnings"] = warnings
         return details
     except subprocess.TimeoutExpired as exc:
-        raise RenderError("Le rendu a dépassé sa limite de temps et a été interrompu.") from exc
+        raise RenderError("Le rendu a dépassé sa limite de temps et a été interrompu.", "RENDER_TIMEOUT") from exc
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def duration_shortfall(requested: float, available: float, rendered: float) -> list[str]:
+    """A warning when the module ends (one playback cycle) before the requested length."""
+    if requested <= available + 0.05 or rendered >= requested - 0.05:
+        return []
+    return [f"The module ends after {available:.2f} s of playback from the start point (one cycle), so the "
+            f"render is {rendered:.2f} s instead of the requested {requested:.2f} s. Renders do not loop the song."]
+
+
+_EBUR128 = {
+    "integrated_lufs": re.compile(r"Integrated loudness:\s*I:\s*(-?inf|-?[\d.]+)\s*LUFS"),
+    "lra_lu": re.compile(r"Loudness range:\s*LRA:\s*(-?inf|-?[\d.]+)\s*LU"),
+    "true_peak_dbtp": re.compile(r"True peak:\s*Peak:\s*(-?inf|-?[\d.]+)\s*dBFS"),
+}
+LOUDNESS_METHOD = "FFmpeg ebur128 filter (EBU R 128 / ITU-R BS.1770; true peak by oversampling)"
+
+
+def measure_loudness(wav: Path, ffmpeg: str | None = None) -> dict:
+    """EBU R 128 integrated loudness, loudness range and true peak of a WAV, measured by FFmpeg.
+
+    Without FFmpeg (the libxmp engine renders without it) nothing is measured and `reason`
+    says why. Values FFmpeg reports as -inf (silence) are null."""
+    empty = {"integrated_lufs": None, "true_peak_dbtp": None, "lra_lu": None, "method": None}
+    executable = ffmpeg or shutil.which("ffmpeg")
+    if not executable:
+        return {**empty, "reason": "FFmpeg was not found, so loudness was not measured."}
+    try:
+        result = subprocess.run(
+            [executable, "-hide_banner", "-nostats", "-nostdin", "-i", str(wav),
+             "-af", "ebur128=peak=true", "-f", "null", "-"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, **SUBPROCESS_OPTIONS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {**empty, "reason": f"The FFmpeg loudness measurement failed: {exc}"}
+    position = result.stderr.rfind("Summary:")
+    if result.returncode or position < 0:
+        return {**empty, "reason": "FFmpeg did not report an EBU R 128 summary: " + result.stderr.strip()[-300:]}
+    summary = result.stderr[position:]
+    values = {}
+    for key, pattern in _EBUR128.items():
+        match = pattern.search(summary)
+        values[key] = None if match is None or "inf" in match.group(1) else float(match.group(1))
+    return {**values, "method": LOUDNESS_METHOD}
 
 
 def sample_preview(sample: Sample, output: Path, fmt: str = "mod") -> None:
@@ -205,13 +283,13 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dic
     """Optional listening copy, always encoded from a rendered WAV."""
     source_wav, output = source_wav.resolve(), output.resolve()
     if output.suffix.lower() != ".mp3" or source_wav == output:
-        raise ValidationError("La copie d'écoute doit avoir un chemin .mp3 distinct du WAV.")
+        raise ValidationError("La copie d'écoute doit avoir un chemin .mp3 distinct du WAV.", "OUTPUT_PATH")
     metrics = analyze_wav(source_wav)
     if metrics["duration_seconds"] > 120:
-        raise ValidationError("La copie MP3 est limitée à 120 secondes dans le prototype.")
+        raise ValidationError("La copie MP3 est limitée à 120 secondes dans le prototype.", "RENDER_LIMIT")
     executable = ffmpeg or shutil.which("ffmpeg")
     if not executable:
-        raise RenderError("FFmpeg est requis pour la copie MP3 optionnelle.")
+        raise RenderError("FFmpeg est requis pour la copie MP3 optionnelle.", "FFMPEG_MISSING")
     output.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.stem}.", suffix=".mp3", dir=output.parent)
     os.close(descriptor)
@@ -225,13 +303,13 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dic
             **SUBPROCESS_OPTIONS,
         )
         if result.returncode or temporary.stat().st_size < 256:
-            raise RenderError(f"Export MP3 : {result.stderr.strip()[-2000:]}")
+            raise RenderError(f"Export MP3 : {result.stderr.strip()[-2000:]}", "RENDER_FAILED")
         os.replace(temporary, output)
         return {"output": str(output), "codec": "MP3 / libmp3lame VBR quality 2",
                 "source_wav_sha256": metrics["sha256"], "sha256": sha256(output),
                 "bytes": output.stat().st_size}
     except subprocess.TimeoutExpired as exc:
-        raise RenderError("L'export MP3 a dépassé sa limite de temps.") from exc
+        raise RenderError("L'export MP3 a dépassé sa limite de temps.", "RENDER_TIMEOUT") from exc
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -262,7 +340,7 @@ def audition_sample(sample: Sample, output: Path, note: str = "C-2", seconds: fl
     with wave.open(buffer, "wb") as writer:
         writer.setparams((1, 2, 44100, frame_count, "NONE", "not compressed"))
         writer.writeframes(pcm.tobytes())
-    atomic_bytes(Path(output), buffer.getvalue())
+    project.atomic_bytes(Path(output), buffer.getvalue())
     return {"output": str(Path(output)), "note": note, "seconds": seconds, "sample_rate": 44100,
             "playback_rate": rate,
             "description": "Raw sample with original volume, fine tune and loop; no pattern effects."}

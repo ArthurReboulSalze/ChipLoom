@@ -11,6 +11,8 @@ MOD included) and reports what an XM cannot hold or plays differently:
   samples are centred (the fixed left-right-right-left Paula placement is not carried).
 * E5x is remapped to the XM range; the playback plan of both modules is compared and a difference is
   reported.
+* Sample recipes and `metadata.sample_sources` (library IDs) are kept, so a synthesized project stays
+  synthesized. The header's default speed and BPM follow the Fxx of the first played row (the Fxx stay).
 
 XM to MOD succeeds only when the XM is exactly what a MOD can say (this is the way back for a module
 that came from `mod_to_xm`); otherwise it is refused with every reason listed.
@@ -37,8 +39,8 @@ class ConversionRefused(ValidationError):
     def __init__(self, reasons: list[dict]):
         listing = "; ".join(f"{item['code']}: {item['message']}" for item in reasons[:12])
         more = f" (and {len(reasons) - 12} more)" if len(reasons) > 12 else ""
-        super().__init__(f"This XM does not fit the MOD profile ({len(reasons)} reason(s)): {listing}{more}.",
-                         "CONVERT_REFUSED")
+        text = f"This XM does not fit the MOD profile ({len(reasons)} reason(s)): {listing}{more}"
+        super().__init__(text if text.endswith(".") else text + ".", "CONVERT_REFUSED")
         self.reasons = reasons
 
 
@@ -58,19 +60,48 @@ def _same_timeline(before: Module, after: Module) -> int | None:
 
 # --- MOD to XM -----------------------------------------------------------------------------------------
 
+def mod_sample_to_xm(sample: Sample) -> Sample:
+    """One MOD sample as an XM instrument sample: same PCM, loop and recipe, 8-bit, forward loop, centred,
+    finetune `16 * MOD finetune - 20` (one relative-note step down when that leaves -128..127).
+
+    Used by `mod_to_xm` and by every insertion of a MOD-style sample (library sample, recipe) into an XM."""
+    if not sample.pcm:  # instruments without audio carry no volume in an XM; keep the model's own default
+        return Sample(sample.name, sample.pcm, 64, 0, sample.loop_start, sample.loop_length,
+                      copy.deepcopy(sample.recipe))
+    tune = sample.finetune * FINETUNE_STEP + PAL_TUNING
+    relative = 0
+    if tune < -128:
+        relative, tune = -1, tune + 128
+    return Sample(sample.name, sample.pcm, sample.volume, tune, sample.loop_start, sample.loop_length,
+                  copy.deepcopy(sample.recipe), 8, "forward", 128, relative)
+
+
+def xm_sample_tuning(sample: Sample) -> int | None:
+    """The MOD finetune (-8..7) an XM sample's finetune and relative note stand for, or None if none fits."""
+    total = sample.finetune + 128 * sample.relative_note - PAL_TUNING
+    if total % FINETUNE_STEP or not -8 <= total // FINETUNE_STEP <= 7:
+        return None
+    return total // FINETUNE_STEP
+
+
+def first_row_timing(module: Module) -> dict:
+    """Speed and BPM set by Fxx on the first played row (order 0, row 0): {"speed"?: n, "bpm"?: n}."""
+    found: dict = {}
+    if not module.orders:
+        return found
+    pattern = module.patterns[module.orders[0]]
+    for channel in range(module.channels):
+        value = pattern.get(0, channel)
+        if value.command == 15 and value.param:
+            found["speed" if value.param < 32 else "bpm"] = value.param
+    return found
+
+
 def mod_to_xm(module: Module) -> tuple[Module, dict]:
     from .xm import TRACKER_NAME
     validate(module)
     notes: list[dict] = []
-    samples = []
-    for sample in module.samples:
-        tune = sample.finetune * FINETUNE_STEP + PAL_TUNING
-        relative = 0
-        if tune < -128:
-            relative, tune = -1, tune + 128
-        # Instruments without audio carry no volume in an XM; keep the model's own default.
-        samples.append(Sample(sample.name, sample.pcm, sample.volume if sample.pcm else 64, tune if sample.pcm else 0,
-                              sample.loop_start, sample.loop_length, None, 8, "forward", 128, relative if sample.pcm else 0))
+    samples = [mod_sample_to_xm(sample) for sample in module.samples]
     filter_cells = remapped = 0
     patterns = []
     for pattern in module.patterns:
@@ -87,8 +118,11 @@ def mod_to_xm(module: Module) -> tuple[Module, dict]:
                 remapped += 1
             converted.put(row, channel, Cell(number, value.sample, command, param))
         patterns.append(converted)
+    # The header defaults follow the Fxx of the first played row (kept in the pattern too), so a player or
+    # tool that reads only the header starts at the song's tempo; the timeline is the same either way.
+    timing = first_row_timing(module)
     block = {"tracker_name": TRACKER_NAME, "frequency_table": "amiga", "restart_position": 0,
-             "default_speed": 6, "default_bpm": 125}
+             "default_speed": timing.get("speed", 6), "default_bpm": timing.get("bpm", 125)}
     _note(notes, "NOTES_TRANSPOSED", "preserved",
           "MOD notes C-1..B-3 became XM C-3..B-5 (ProTracker C-2 is XM C-4); the sound is the same.")
     _note(notes, "PITCH_TUNING", "preserved",
@@ -99,6 +133,14 @@ def mod_to_xm(module: Module) -> tuple[Module, dict]:
     _note(notes, "PANNING_NOT_CARRIED", "preserved",
           "A MOD file stores no panning: players place its channels left-right-right-left. An XM has no fixed "
           "per-channel panning, so every sample is centred; no data was lost, the stereo image differs.")
+    recipes = sum(sample.recipe is not None for sample in module.samples)
+    if recipes:
+        _note(notes, "RECIPES_KEPT", "preserved",
+              f"{recipes} sample(s) keep their ChipLoom recipe; the rebuilt PCM is the same.")
+    if timing:
+        _note(notes, "HEADER_TIMING", "preserved",
+              f"The XM header starts at speed {block['default_speed']} / {block['default_bpm']} BPM, as the Fxx on "
+              "the first played row set it (those Fxx are kept).")
     if filter_cells:
         _note(notes, "FILTER_EFFECT_DROPPED", "converted",
               f"{filter_cells} E0x (Amiga LED filter) effect(s) were removed; an XM has no such filter.",
@@ -146,8 +188,12 @@ def xm_to_mod(module: Module) -> tuple[Module, dict]:
     if info.get("frequency_table", "linear") != "amiga":
         refuse("FREQUENCY_TABLE", "The linear frequency table slides pitch differently from a MOD; only the Amiga "
                "table converts.")
-    if info.get("default_speed", 6) != 6 or info.get("default_bpm", 125) != 125:
-        refuse("DEFAULT_TIMING", "The song does not start at speed 6 / 125 BPM, which is all a MOD can assume.")
+    # A MOD starts at speed 6 / 125 BPM; other header defaults fit only when the first played row restates them.
+    timing = first_row_timing(module)
+    if (info.get("default_speed", 6) != 6 and "speed" not in timing) or (
+            info.get("default_bpm", 125) != 125 and "bpm" not in timing):
+        refuse("DEFAULT_TIMING", "The song does not start at speed 6 / 125 BPM, which is all a MOD can assume, "
+               "and its first played row does not set the header's speed and BPM with Fxx.")
     if info.get("restart_position", 0) != 0:
         refuse("RESTART_POSITION", "A restart position other than 0 has no MOD equivalent.")
     tunings = []
@@ -164,11 +210,11 @@ def xm_to_mod(module: Module) -> tuple[Module, dict]:
             refuse("PINGPONG_LOOP", "A MOD loop only runs forward.", instrument=slot)
         if sample.panning != 128:
             refuse("SAMPLE_PANNING", "A MOD sample has no panning.", instrument=slot)
-        total = sample.finetune + 128 * sample.relative_note - PAL_TUNING
-        if total % FINETUNE_STEP or not -8 <= total // FINETUNE_STEP <= 7:
+        tune = xm_sample_tuning(sample)
+        if tune is None:
             refuse("SAMPLE_TUNING", "Finetune and relative note do not map to a MOD finetune (-8..7) exactly.",
                    instrument=slot)
-        tunings.append(total // FINETUNE_STEP if total % FINETUNE_STEP == 0 else 0)
+        tunings.append(tune or 0)
         if len(sample.pcm) % 2 or len(sample.pcm) < 4 or len(sample.pcm) > 65534:
             refuse("SAMPLE_LENGTH", "A MOD sample has an even length of 4 to 65534 bytes.", instrument=slot)
         if sample.loop_length and (sample.loop_start % 2 or sample.loop_length % 2 or sample.loop_length < 4):
@@ -197,7 +243,7 @@ def xm_to_mod(module: Module) -> tuple[Module, dict]:
     samples = []
     for sample, tune in zip(module.samples, tunings):
         samples.append(Sample(sample.name, sample.pcm, sample.volume if sample.pcm else 0, tune, sample.loop_start,
-                              sample.loop_length))
+                              sample.loop_length, copy.deepcopy(sample.recipe)))
     patterns = []
     for pattern in module.patterns:
         converted = Pattern(pattern.name)

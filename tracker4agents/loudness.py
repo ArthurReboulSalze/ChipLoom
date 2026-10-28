@@ -103,7 +103,7 @@ def library_group(entry: dict) -> str:
 
 def sample_role(sample: Sample, role: str | None = None) -> str:
     """Role (or, for plain PCM, a group name) used when reporting on a sample in a song."""
-    if role in ROLES:
+    if role in ROLES or role in GROUPS:
         return role
     if sample.recipe is not None:
         return role_for_recipe(sample.recipe)
@@ -115,6 +115,37 @@ def sample_role(sample: Sample, role: str | None = None) -> str:
 def sample_group(sample: Sample, role: str | None = None) -> str:
     key = sample_role(sample, role)
     return ROLES.get(key, key)
+
+
+def slot_role(sample: Sample, recorded: dict | None = None, bank: dict | None = None) -> tuple[str, str]:
+    """(role or group, where it came from) for a sample slot of a song.
+
+    In order: the role recorded in `metadata.sample_sources[slot]` ("recorded"), the recipe ("recipe"), the
+    bank category of the slot's `library_id` when `bank` (id -> manifest entry) holds it ("library"), else
+    the loop-length heuristic of `sample_role` ("heuristic").
+    """
+    recorded = recorded if isinstance(recorded, dict) else {}
+    role = recorded.get("role")
+    if role in ROLES or role in GROUPS:
+        return role, "recorded"
+    if sample.recipe is not None:
+        return role_for_recipe(sample.recipe), "recipe"
+    entry = bank.get(recorded.get("library_id")) if bank and isinstance(recorded.get("library_id"), str) else None
+    if isinstance(entry, dict):
+        return library_group(entry), "library"
+    return sample_role(sample), "heuristic"
+
+
+def is_percussion(role: str) -> bool:
+    return ROLES.get(role, role) == "percussion"
+
+
+def reachable_db(sample: Sample) -> float:
+    """The loudest level the sample can reach without clipping: volume 64 and its peak at full scale."""
+    facts = measure(sample, 64)
+    if facts["peak"] <= 0:
+        return FLOOR_DB
+    return round(facts["loudness_db"] - _db(facts["peak"]), 2)
 
 
 def _quantile(values: list[float], fraction: float) -> float:

@@ -471,7 +471,7 @@ class PatchTests(unittest.TestCase):
         self.assertTrue(grid[0].startswith("00 | C-0 04 -- E5F"))
         for op in ({"op": "set", "pattern": 1, "row": 7, "channel": 0, "cell": "C-4 01 ..."},
                    {"op": "set", "pattern": 0, "row": 0, "channel": 6, "cell": "C-4 01 ..."},
-                   {"op": "library_sample", "library": "x", "id": "SMP-0001"},
+                   {"op": "sample_gain", "slot": 1, "db": 1},
                    {"op": "add_pattern", "length": 300}):
             with self.subTest(op=op), self.assertRaises(ValidationError):
                 apply_ops(copy.deepcopy(module), [op])

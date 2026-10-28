@@ -120,11 +120,11 @@ and requires a new output directory. Neither the catalog nor the bank is publish
 
 ## Make a small original MOD to test reuse
 
-Create a blank project with `Module("Bank test", [Sample("empty", ())], [Pattern()], [0])`
-and `project.write_json(path, project.to_dict(module))`. Select compatible samples
-from this bank, then use `SampleLibrary.insert` or repeated `samples add` calls:
+Create a blank project with `new`, select compatible samples from this bank, then use
+repeated `samples add` calls (or `library_sample` patch operations):
 
 ```sh
+python -m tracker4agents new --output exports/bank-test/blank.project.json --title "Bank test"
 python -m tracker4agents samples add SMP-0001 --library exports/sample_library --project exports/bank-test/blank.project.json --output exports/bank-test/project.json
 python -m tracker4agents validate exports/bank-test/project.json --report
 ```

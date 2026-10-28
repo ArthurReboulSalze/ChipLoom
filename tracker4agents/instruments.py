@@ -440,7 +440,7 @@ def apply_instrument(module: Module, op: dict) -> dict:
         if slot <= len(module.samples):
             if module.samples[slot - 1].pcm and not replace:
                 raise ValidationError(f"Sample slot {slot} is occupied by {module.samples[slot - 1].name!r}; "
-                                      "set replace to true to overwrite it.", "SAMPLE_SLOT")
+                                      "pass replace (CLI: --replace) to overwrite it.", "SAMPLE_SLOT")
             module.samples[slot - 1] = sample
         else:
             module.samples.append(sample)

@@ -59,6 +59,42 @@ class CliCommandTests(unittest.TestCase):
         self.assertEqual(status, 0, result)
         self.assertEqual(project.load(self.source).title, "Edited")
 
+    def test_patch_guards_revisions_and_reports_what_changed(self):
+        first = self.directory / "v2.json"
+        status, result = run("patch", self.source, "--output", first,
+                             "--op", '[{"op": "sample", "slot": 1, "volume": 30, "name": "Kick 2"},'
+                                     ' {"op": "rename_pattern", "pattern": 0, "name": "Opening"}]')
+        self.assertEqual(status, 0, result)
+        self.assertIn("sample 01 changed: name, volume", result["changes"])
+        self.assertIn("pattern 00 renamed", result["changes"])
+        status, result = run("patch", self.source, "--output", first, "--op", '{"op": "title", "title": "x"}')
+        self.assertEqual((status, result["code"]), (2, "OUTPUT_PATH"))  # an earlier revision is never clobbered
+        self.assertEqual(project.load(first).title, project.load(self.source).title)
+        status, result = run("patch", self.source, "--output", first, "--overwrite", "--op", '{"op": "title", "title": "x"}')
+        self.assertEqual(status, 0, result)
+        status, result = run("patch", self.source, "--output", self.directory / "v3.json", "--ops", self.directory / "none.json")
+        self.assertEqual((status, result["code"]), (2, "IO_ERROR"))
+        self.assertIn(str((self.directory / "none.json").resolve()), result["message"])
+        (self.directory / "object.json").write_text('{"title": "x"}', encoding="utf-8")
+        status, result = run("patch", self.source, "--output", self.directory / "v3.json", "--ops", self.directory / "object.json")
+        self.assertEqual((status, result["code"]), (2, "PATCH_FORMAT"))
+        status, result = run("patch", self.source, "--output", self.directory / "v3.json", "--op", '{"title": "x"}')
+        self.assertEqual((status, result["code"]), (2, "PATCH_OP"))
+        self.assertIn('missing "op"', result["message"])
+
+    def test_timing_takes_bpm_or_speed_and_flow_losses_are_warned(self):
+        status, result = run("patch", self.source, "--output", self.directory / "fast.json",
+                             "--op", '{"op": "timing", "bpm": 150}')
+        self.assertEqual(status, 0, result)
+        self.assertEqual(result["results"][0], {"op": "timing", "bpm": 150, "speed": 6})
+        self.assertEqual(result["warnings"], [])
+        before = project.load(self.source)
+        speed_cell = next(channel for channel in range(4) if before.patterns[before.orders[0]].get(0, channel).command == 15)
+        status, result = run("patch", self.source, "--output", self.directory / "lost.json",
+                             "--op", json.dumps({"op": "clear", "pattern": before.orders[0], "channel": speed_cell}))
+        self.assertEqual(status, 0, result)
+        self.assertTrue(any("Bxx/Dxx/Fxx" in warning for warning in result["warnings"]), result["warnings"])
+
     def test_inspect_grid_rows(self):
         status, result = run("inspect", self.source, "--pattern", 0, "--grid", "--row", 4, "--rows", 2)
         self.assertEqual(status, 0, result)

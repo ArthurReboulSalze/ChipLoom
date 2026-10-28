@@ -59,6 +59,37 @@ def resolve_reference(mode: str, library: Path | str | None = None) -> dict:
     return {"source": "library", **reference}
 
 
+def automatic_reference(library: Path | str | None = None, default: Path | str | None = None) -> dict:
+    """The loudness reference used when no match mode is forced, with `path`, `selection` and `reason`.
+
+    One rule for `report`, `sample_match_level`, `synth add` and `synth palette`: an explicit `library`
+    wins (it must exist); else the default bank (`sample_library.DEFAULT_LIBRARY`, relative to the working
+    directory, or `default`) when it exists, for library and synthesized projects alike; else the fixed
+    defaults in `loudness.DEFAULT_REFERENCE_DB`.
+    """
+    from . import sample_library
+    if library is not None:
+        return {**resolve_reference("library", library), "path": str(Path(library).resolve()),
+                "selection": "explicit", "reason": "A sample bank was given explicitly."}
+    folder = Path(sample_library.DEFAULT_LIBRARY if default is None else default)
+    if library_exists(folder):
+        return {**resolve_reference("library", folder), "path": str(folder.resolve()), "selection": "automatic",
+                "reason": f"No bank was given; the default sample bank exists at {folder.resolve()}."}
+    return {**resolve_reference("defaults"), "path": None, "selection": "automatic",
+            "reason": f"No bank was given and there is no sample bank at {folder.resolve()}; fixed reference levels."}
+
+
+def bank_entries(reference: dict | None) -> dict:
+    """Manifest entries (id -> entry) of the bank behind a library `reference`, or {} for other references."""
+    if not reference or reference.get("source") != "library" or not reference.get("path"):
+        return {}
+    from .sample_library import SampleLibrary
+    try:
+        return {entry["id"]: entry for entry in SampleLibrary(Path(reference["path"]))._manifest()["samples"]}
+    except (OSError, ValueError, KeyError, ValidationError):
+        return {}
+
+
 def build(name: str, recipe: dict, finetune: int, role: str, reference: dict,
           volume: int | None = None) -> tuple[Sample, dict]:
     """Build the sample, set its MOD volume (and the recipe peak if needed) and describe the result."""
@@ -98,6 +129,9 @@ def insert_recipe(module: Module, name: str, recipe: object, slot: int | None = 
 
     `volume` given: used as is. Otherwise the volume is set from `reference` (see `resolve_reference`);
     without a reference it stays at the score default. Occupied slots need `replace`.
+
+    In an XM the sample is converted like `convert` converts a MOD sample (`finetune` is still the MOD
+    finetune -8..7, stored as 16 x finetune - 20) and keeps its recipe; instruments go up to 128.
     """
     sample_source.guard_insert(module, "recipe")
     ascii_field(name, 22, "Sample name")
@@ -110,13 +144,17 @@ def insert_recipe(module: Module, name: str, recipe: object, slot: int | None = 
         raise ValidationError("replace must be true or false.", "PATCH_FIELD")
     role = loudness.role_for_recipe(recipe) if role is None else loudness.check_role(role)
     sample, record = build(name, recipe, finetune, role, reference or {"source": "none"}, volume)
+    limit = 31
+    if module.format == "xm":
+        from .convert import mod_sample_to_xm
+        sample, limit = mod_sample_to_xm(sample), 128
     used = {value.sample for pattern in module.patterns for value in pattern.cells.values() if value.sample}
     if slot is None:
         slot = next((index for index, item in enumerate(module.samples, 1)
                      if not item.pcm and index not in used), len(module.samples) + 1)
-        if slot > 31:
-            raise ValidationError("All 31 sample slots are in use; choose a slot with replace.", "SAMPLE_SLOT")
-    require_int(slot, "slot", 1, 31, "SAMPLE_SLOT")
+        if slot > limit:
+            raise ValidationError(f"All {limit} sample slots are in use; choose a slot with replace.", "SAMPLE_SLOT")
+    require_int(slot, "slot", 1, limit, "SAMPLE_SLOT")
     if slot > len(module.samples) + 1:
         raise ValidationError(f"Choose an existing slot or the next free one ({len(module.samples) + 1}); "
                               "gaps are not inserted.", "SAMPLE_SLOT")
@@ -124,7 +162,7 @@ def insert_recipe(module: Module, name: str, recipe: object, slot: int | None = 
         existing = module.samples[slot - 1]
         if existing.pcm and not replace:
             raise ValidationError(f"Sample slot {slot} is occupied by {existing.name!r}; "
-                                  "set replace to true to overwrite it.", "SAMPLE_SLOT")
+                                  "pass replace (CLI: --replace) to overwrite it.", "SAMPLE_SLOT")
         module.samples[slot - 1] = sample
     else:
         module.samples.append(sample)
@@ -177,20 +215,30 @@ PALETTE = (
 )
 
 
-def palette(title: str = "Synth Palette", style: str = "default", reference: dict | None = None) -> tuple[Module, dict]:
+def palette(title: str = "Synth Palette", style: str = "default", reference: dict | None = None,
+            channels: int = 4, fmt: str = "mod") -> tuple[Module, dict]:
     """A new empty-song project holding the starter palette, plus a report of every slot.
 
     With a `reference` (see `resolve_reference`) each slot's volume is matched to its role's level;
-    with `reference=None` the hand-set Pixel Rush volumes are kept.
+    with `reference=None` the hand-set Pixel Rush volumes are kept. `channels` is 2-32; with `fmt="xm"`
+    the project is an XM (see `xm.blank`) whose instruments are converted like `convert` does.
     """
     if style not in STYLES:
         raise ValidationError(f"style must be one of {list(STYLES)}, got {style!r}.", "PATCH_FIELD")
-    ascii_field(title, 20, "Titre MOD")
-    module = Module(title, [copy.deepcopy(EMPTY_SLOT)], [Pattern("Pattern 00")], [0], {
+    if fmt not in ("mod", "xm"):
+        raise ValidationError(f"format must be mod or xm, got {fmt!r}.", "FORMAT")
+    require_int(channels, "channels", 2, 32, "CHANNELS")
+    ascii_field(title, 20, "Song title")
+    metadata = {
         "sample_source": "synthesized",
         "description": "Songs made only with created samples. Every sample is a ChipLoom recipe.",
         "palette": {"style": style, "reference": (reference or {"source": "none"})["source"]},
-    })
+    }
+    if fmt == "xm":
+        from .xm import blank
+        module = blank(title, channels, metadata=metadata)
+    else:
+        module = Module(title, [copy.deepcopy(EMPTY_SLOT)], [Pattern("Pattern 00")], [0], metadata, channels)
     slots = []
     for name, role, hand_volume, recipe, use in PALETTE:
         if reference is None:
@@ -208,10 +256,26 @@ def palette(title: str = "Synth Palette", style: str = "default", reference: dic
     module.metadata["palette"]["roles"] = {str(entry["slot"]): f"{entry['role']}: {entry['name']}"
                                            for entry in slots}
     validate(module)
-    return module, {"slots": slots, "free_slots": f"{len(slots) + 1}-31"}
+    return module, {"slots": slots, "free_slots": f"{len(slots) + 1}-{128 if fmt == 'xm' else 31}"}
 
 
 # --- audition -------------------------------------------------------------------------------
+
+def check_preview_note(note: object) -> None:
+    """Previews take MOD note labels (C-1..B-3). Explain the XM labels, which sit two octaves higher."""
+    from .model import NOTE_TO_PERIOD, NOTES, XM_NOTE_TO_NUMBER
+    if note in NOTE_TO_PERIOD:
+        return
+    hint = ""
+    if isinstance(note, str) and note in XM_NOTE_TO_NUMBER:
+        index = XM_NOTE_TO_NUMBER[note] - 37  # XM C-4 (number 49) is MOD C-2 (index 12), as in `convert`
+        if 0 <= index < len(NOTES):
+            hint = f" {note} (XM) is {NOTES[index]} (MOD): XM labels sit two octaves above MOD ones."
+        else:
+            hint = f" {note} (XM) is outside the MOD range C-3..B-5 (XM) that previews cover."
+    raise ValidationError(f"Previews use MOD note labels C-1..B-3 (C-2 is the sample's base note), got {note!r}."
+                          f"{hint}", "NOTE_UNKNOWN")
+
 
 def preview(recipe: dict, name: str, output: Path, note: str = "C-2", seconds: float = 1.0,
             volume: int = 64, finetune: int = 0, role: str | None = None) -> dict:
@@ -223,6 +287,7 @@ def preview(recipe: dict, name: str, output: Path, note: str = "C-2", seconds: f
     require_int(volume, "volume", 0, 64)
     require_int(finetune, "finetune", -8, 7)
     ascii_field(name, 22, "Sample name")
+    check_preview_note(note)
     sample = from_recipe(name, recipe, volume, finetune)
     result = audio.audition_sample(sample, output, note, seconds)
     role = loudness.role_for_recipe(recipe) if role is None else loudness.check_role(role)

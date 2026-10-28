@@ -47,6 +47,22 @@ _VOLUME_NAMES = {0x1: "set", 0x2: "set", 0x3: "set", 0x4: "set", 0x5: "set", 0x6
                  0xD: "pan slide left", 0xE: "pan slide right", 0xF: "tone portamento"}
 
 
+def blank(title: str = "", channels: int = 4, patterns: int = 1, rows: int = 64, speed: int = 6, bpm: int = 125,
+          metadata: dict | None = None) -> Module:
+    """A new empty XM: `patterns` empty patterns of `rows` rows played in order, one empty instrument, the
+    header starting at `speed`/`bpm`, the linear frequency table (FastTracker II's default)."""
+    require_int(channels, "channels", 2, 32, "CHANNELS")
+    require_int(patterns, "patterns", 1, MAX_PATTERNS_XM, "PATTERNS")
+    require_int(rows, "rows", 1, 256, "PATTERNS")
+    require_int(speed, "speed", 1, 31, "TIMING")
+    require_int(bpm, "bpm", 32, 255, "TIMING")
+    ascii_field(title, 20, "XM title")
+    block = {"tracker_name": TRACKER_NAME, "frequency_table": "linear", "restart_position": 0,
+             "default_speed": speed, "default_bpm": bpm}
+    return Module(title, [Sample("", (), 64)], [Pattern(f"Pattern {index:02X}", {}, rows) for index in range(patterns)],
+                  list(range(patterns)), {**(metadata or {}), "xm": block}, channels, "xm")
+
+
 def import_notes(module: Module) -> list[dict]:
     """Import report: [{code, kind, message, slots?, details?}], `kind` "preserved" or "converted"."""
     return list(xm_profile(module).get("import_notes", []))

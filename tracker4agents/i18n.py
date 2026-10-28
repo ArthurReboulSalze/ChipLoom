@@ -1,5 +1,7 @@
 """Desktop strings. English is the source language; the musical data is never translated."""
 
+import re
+
 LANGUAGES = ("en", "fr")
 
 FR = {
@@ -409,7 +411,6 @@ ERRORS_EN = {
         "Playback is limited to 120-second cycles in this version; the module can still be viewed and edited.",
     "Un effet doit contenir trois chiffres hexadécimaux, par exemple 037 ou C20.":
         "An effect must contain three hexadecimal digits, for example 037 or C20.",
-    "Seuls les MOD M.K. à 4 voies sont acceptés dans ce prototype.": "This prototype accepts only four-channel M.K. MOD files.",
     "Longueur de liste d'ordres MOD invalide.": "Invalid MOD order list length.",
     "Ce MOD utilise un octet restart/tempo hors du profil ProTracker v1.": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
     "Ordres inactifs non nuls : variante MOD non prise en charge sans perte.": "Nonzero inactive orders: this MOD variant cannot be imported without loss.",
@@ -423,7 +424,48 @@ ERRORS_EN = {
     "Projet JSON trop grand pour le prototype.": "JSON project too large for this prototype.",
     "Une recette définit son PCM et sa boucle ; ne les duplique pas.": "A recipe defines its PCM and loop; do not specify them twice.",
     "Déroulement trop long pour le prototype (250000 lignes maximum).": "Playback plan too long for this prototype (250000 rows maximum).",
+    # Rendering (audio.py) and the CLI around it.
+    "Un rendu doit durer plus de zéro et au maximum 120 secondes.":
+        "A render must last more than 0 and at most 120 seconds; render a section with --seconds "
+        "(and optionally --from-order).",
+    "Cet ordre n'est pas atteint pendant le premier cycle de lecture.":
+        "This order is not reached during the first playback cycle.",
+    "La fréquence de rendu doit être comprise entre 8000 et 96000 Hz.":
+        "The render sample rate must be between 8000 and 96000 Hz.",
+    "Le rendu principal doit avoir une extension .wav ; utilise l'option MP3 pour une copie d'écoute.":
+        "The main render must have a .wav extension; use the MP3 option for a listening copy.",
+    "Le rendu audio doit avoir un chemin distinct du module source.":
+        "The audio render must have a path distinct from the source module.",
+    "libxmp n'est pas prêt. Exécute python tools/setup_reference.py, ou indique --xmp-library.":
+        "libxmp is not ready. Run python tools/setup_reference.py, or pass --xmp-library.",
+    "L'analyse attend du PCM signé 16 bits.": "The analysis expects signed 16-bit PCM.",
+    "Le lecteur a produit un fichier audio vide.": "The player produced an empty audio file.",
+    "Le moteur a produit trop peu de données audio.": "The engine produced too little audio data.",
+    "La copie d'écoute doit avoir un chemin .mp3 distinct du WAV.":
+        "The listening copy must have a .mp3 path distinct from the WAV.",
+    "La copie MP3 est limitée à 120 secondes dans le prototype.": "The MP3 copy is limited to 120 seconds.",
+    "L'export MP3 a dépassé sa limite de temps.": "The MP3 export timed out.",
+    "La sortie doit être distincte du fichier source.": "The output must differ from the source file.",
+    "--mp3 et --with-xmp nécessitent les rendus audio ; retire --no-audio.":
+        "--mp3 and --with-xmp need the audio renders; remove --no-audio.",
+    "L'interface demande PySide6. Exécute python -m pip install -e '.[desktop]' dans un environnement virtuel.":
+        "The window needs PySide6. Run python -m pip install -e '.[desktop]' in a virtual environment.",
 }
+
+# Messages with a value in the middle: (regular expression, English replacement), applied anywhere in the text.
+ERROR_PATTERNS_EN = (
+    (re.compile(r"Note inconnue (.+?); utilise C-1 à B-3, dièses sans tiret \(exemples : C-3, G#3, A#2 ; "
+                r"notation ProTracker\)\."),
+     r"Unknown note \1; use C-1 to B-3, sharps without a dash (examples: C-3, G#3, A#2; ProTracker notation)."),
+    (re.compile(r"Note inconnue (\S+)"), r"Unknown note \1"),
+    (re.compile(r"Le début de l'extrait dépasse la limite de prélecture de (\d+) secondes\."),
+     r"The excerpt starts after the \1-second preroll limit; choose an earlier --from-order."),
+    (re.compile(r"Moteur audio inconnu : (.+?)\.$"), r"Unknown audio engine: \1."),
+    (re.compile(r"^Processus libxmp \(code (-?\d+)\) : "), r"libxmp process (code \1): "),
+    (re.compile(r"^FFmpeg/libopenmpt : "), "FFmpeg/libopenmpt: "),
+    (re.compile(r"^Export MP3 : "), "MP3 export: "),
+    (re.compile(r"Un contrôle a échoué : consulte (.+)\.$"), r"A check failed: see \1."),
+)
 
 ERROR_FRAGMENTS_EN = {
     "Titre MOD": "MOD title", "En-tête du sample ": "Sample header ",
@@ -452,7 +494,8 @@ ERROR_FRAGMENTS_EN = {
     " tableau attendu.": " expected an array.", " liste PCM manquante ou trop longue.": " missing or oversized PCM list.",
     " liste d'événements invalide (256 maximum).": " invalid event list (256 maximum).",
     " nom textuel attendu.": " expected a text name.", " cellule ": " cell ", " définie deux fois.": " defined twice.",
-    ", ligne ": ", row ", ", voie ": ", track ", ": période ": ": period ", ": effet ": ": effect ",
+    ", ligne ": ", row ", ", voie ": ", channel ", ": période ": ": period ", ": effet ": ": effect ",
+    " période:": " period:", " paramètre:": " parameter:",
 }
 
 
@@ -460,11 +503,11 @@ def error_text(language: str, error: object) -> str:
     text = str(error)
     if language == "fr":
         return text
-    if text.startswith("Note inconnue "):
-        return "Unknown note; use C-1 to B-3 (ProTracker notation)."
     if "utilise du texte ASCII imprimable" in text:
         return "Use printable ASCII characters for MOD titles and sample names."
     text = ERRORS_EN.get(text, text)
+    for pattern, replacement in ERROR_PATTERNS_EN:
+        text = pattern.sub(replacement, text)
     for source, target in ERROR_FRAGMENTS_EN.items():
         text = text.replace(source, target)
     return text

@@ -397,8 +397,14 @@ def build_page(language: str, comparison_id: str, answer_blob: str, seconds: flo
 
 def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = False, ffmpeg: str | None = None,
                       language: str = "en", seed: int | None = None,
-                      labels: tuple[str, str] | None = None, seconds: float | None = None) -> dict:
-    """Build a blind A/B bundle from two projects or MODs. Sources are only read."""
+                      labels: tuple[str, str] | None = None, seconds: float | None = None,
+                      show_answer: bool = False) -> dict:
+    """Build a blind A/B bundle from two projects, MODs or XMs. Sources are only read.
+
+    The X/Y mapping is written to `answer_key.json` (and `comparison.json`) in the bundle; the result gives
+    the file's path, not the mapping, so an agent running the command does not spoil the test. With
+    `show_answer` the mapping is returned as well.
+    """
     first, second, output = Path(first).resolve(), Path(second).resolve(), Path(output).resolve()
     if language not in LANGUAGES:
         raise ValidationError("Comparison language must be en or fr.")
@@ -497,19 +503,25 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
                     "renders are not compensated. Reports are measurements, not quality verdicts.",
         }
         project.write_json(folder / "comparison.json", key_file)
+        project.write_json(folder / "answer_key.json", {
+            "schema": COMPARISON_SCHEMA, "id": comparison_id, "x": sides["x"]["version"], "y": sides["y"]["version"],
+            "labels": {"x": sides["x"]["label"], "y": sides["y"]["label"]},
+            "note": "Read this only after the listener has submitted; reading it first spoils the blind test."})
         project.atomic_bytes(folder / "index.html", page.encode("utf-8"))
         if output.exists():
             output.rmdir()  # Verified empty above; os.rename cannot replace a directory on Windows.
         folder.rename(output)
-    return {
+    result = {
         "ok": True, "output": str(output), "page": str(output / "index.html"),
-        "comparison": str(output / "comparison.json"), "id": comparison_id, "language": language,
-        "excerpt_seconds": seconds,
-        "answer_key": {"x": sides["x"]["version"], "y": sides["y"]["version"],
-                       "labels": {"x": sides["x"]["label"], "y": sides["y"]["label"]}},
-        "x": {"mod": str(output / "x.mod"), "wav": str(output / "x.wav"),
-              "mp3": str(output / "x.mp3") if mp3 else None},
-        "y": {"mod": str(output / "y.mod"), "wav": str(output / "y.wav"),
-              "mp3": str(output / "y.mp3") if mp3 else None},
-        "scope": "Casual blind test: the answer key is in comparison.json and base64 in index.html.",
+        "comparison": str(output / "comparison.json"), "answer_key_file": str(output / "answer_key.json"),
+        "id": comparison_id, "language": language, "excerpt_seconds": seconds,
+        **{side: {"mod": str(output / sides[side]["files"]["mod"]), "wav": str(output / f"{side}.wav"),
+                  "mp3": str(output / f"{side}.mp3") if mp3 else None} for side in ("x", "y")},
+        "scope": "Casual blind test: the answer key is in answer_key.json and comparison.json, and base64 in "
+                 "index.html. It is not printed unless asked (show_answer), so reading those files before the "
+                 "listener submits spoils the test.",
     }
+    if show_answer:
+        result["answer_key"] = {"x": sides["x"]["version"], "y": sides["y"]["version"],
+                                "labels": {"x": sides["x"]["label"], "y": sides["y"]["label"]}}
+    return result

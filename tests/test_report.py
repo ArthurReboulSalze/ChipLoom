@@ -9,9 +9,11 @@ import sys
 import tempfile
 import unittest
 
-from tracker4agents import mod, project
+from tracker4agents import mod, project, synth
 from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell, playback_plan
-from tracker4agents.report import KK_MAJOR, KK_MINOR, add_feedback, analyze, estimate_key, loudness_reference
+from tracker4agents.report import (
+    KK_MAJOR, KK_MINOR, PITCH_CLASS_NAMES, add_feedback, analyze, estimate_key, loudness_reference,
+)
 from tracker4agents.sample_library import SampleLibrary
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -194,6 +196,20 @@ class KeyEstimateTests(unittest.TestCase):
                     self.assertTrue(key["is_estimate"])
                     self.assertIn("period labels", key["caveat"])
 
+    def test_relative_key_runner_up_caps_confidence(self):
+        # Am-F-C-G as equal note counts: C major and A minor are nearly tied, so high is not claimed.
+        histogram = [0] * 12
+        for chord in ((9, 0, 4), (5, 9, 0), (0, 4, 7), (7, 11, 2)):
+            for pitch in chord:
+                histogram[pitch] += 4
+        histogram[9] += 3
+        key = estimate_key(histogram)
+        self.assertTrue(key["runner_up_is_relative"])
+        self.assertEqual({key["key"], key["runner_up"]["key"]}, {"C major", "A minor"})
+        self.assertLess(key["margin"], 0.20)
+        self.assertNotEqual(key["confidence"], "high")
+        self.assertIn("relative", key["confidence_rule"])
+
     def test_flat_histogram_is_refused_not_guessed(self):
         self.assertFalse(estimate_key([5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])["available"])
 
@@ -217,8 +233,136 @@ class ExampleProjectTests(unittest.TestCase):
         self.assertIn("not judgments", report["scope"])
 
 
+KICK = Sample("Kick", (0, 0) + (90, -90, 60, -60, 30, -30) * 20, 48)
+LEAD = Sample("Lead", (0, 0) + (50, 50, -50, -50) * 8, 40, 0, 2, 32)
+MELODY = ("A-2", "C-3", "E-3", "A-2", "B-2", "C-3", "E-3", "A-2", "G-2", "A-2", "C-3", "E-3", "D-3", "C-3", "B-2", "A-2")
+
+
+def drums_and_melody(drum: Sample = KICK) -> Module:
+    """A drum slot hit at C-2 on every other row and an A minor melody on a looped lead."""
+    result = Pattern()
+    for row in range(0, 64, 2):
+        result.put(row, 0, cell("C-2", 1))
+    for index, note in enumerate(MELODY):
+        result.put(index * 4, 1, cell(note, 2))
+    return Module("Key", [drum, LEAD], [result], [0])
+
+
+class PercussionKeyTests(unittest.TestCase):
+    """Drums written at C-2 must not pull every song towards C major."""
+
+    def histogram(self, counts: dict) -> list[int]:
+        return [counts[name] for name in PITCH_CLASS_NAMES]
+
+    def test_percussion_note_starts_are_left_out_of_the_key(self):
+        report = analyze(drums_and_melody())
+        overall = report["global"]
+        key = overall["key_estimate"]
+        self.assertEqual(estimate_key(self.histogram(overall["pitch_classes"]))["key"], "C major")  # drums counted
+        self.assertEqual(key["key"], "A minor")
+        excluded = key["percussion_excluded"]
+        self.assertEqual(excluded["note_starts"], 32)
+        self.assertEqual([(item["slot"], item["role"], item["role_source"], item["note_starts"])
+                          for item in excluded["slots"]], [(1, "percussion", "heuristic", 32)])
+        self.assertEqual(sum(key["pitch_classes_counted"].values()), len(MELODY))
+        self.assertEqual(key["notes_counted"], len(MELODY))
+        self.assertEqual(sum(overall["pitch_classes"].values()), overall["note_starts"])  # full histogram kept
+        self.assertIn("percussion", key["caveat"])
+
+    def test_role_sources_in_order(self):
+        recorded = drums_and_melody(Sample("Thud", LEAD.pcm, 40, 0, 2, 32))  # looped: the heuristic says lead
+        self.assertEqual(analyze(recorded)["global"]["key_estimate"]["percussion_excluded"]["note_starts"], 0)
+        recorded.metadata["sample_sources"] = {"1": {"role": "kick"}}
+        slots = analyze(recorded)["global"]["key_estimate"]["percussion_excluded"]["slots"]
+        self.assertEqual([(item["role"], item["role_source"]) for item in slots], [("kick", "recorded")])
+        recipe = drums_and_melody(synth.from_recipe("Kick", {"type": "kick"}))
+        slots = analyze(recipe)["global"]["key_estimate"]["percussion_excluded"]["slots"]
+        self.assertEqual([(item["role"], item["role_source"]) for item in slots], [("kick", "recipe")])
+        # A recorded role wins over the one-shot heuristic: a one-shot pluck is not percussion.
+        pluck = drums_and_melody()
+        pluck.metadata["sample_sources"] = {"1": {"role": "lead"}}
+        report = analyze(pluck)
+        self.assertEqual(report["global"]["key_estimate"]["percussion_excluded"]["note_starts"], 0)
+        self.assertEqual(report["samples"]["slots"][0]["role_source"], "recorded")
+
+    def test_library_id_uses_the_bank_category_when_a_bank_is_the_reference(self):
+        import random
+        with tempfile.TemporaryDirectory(prefix="chiploom key bank ") as folder:
+            rng = random.Random(1)
+            noise = Sample("noise", (0, 0) + tuple(int(100 * (1 - i / 3000) * rng.uniform(-1, 1))
+                                                   for i in range(3000)), 40)
+            source = Path(folder) / "bank source.mod"
+            source.write_bytes(mod.encode(Module("t", [noise], [pattern((0, 0, cell("C-2", 1)))], [0])))
+            bank = Path(folder) / "bank"
+            SampleLibrary(bank).extract(source)
+            module = drums_and_melody(Sample("Looped hit", LEAD.pcm, 40, 0, 2, 32))
+            module.metadata["sample_sources"] = {"1": {"library_id": "SMP-0001", "origin": "module-extracted"}}
+            without = analyze(module)
+            self.assertEqual(without["samples"]["slots"][0]["role_source"], "heuristic")
+            self.assertEqual(without["global"]["key_estimate"]["percussion_excluded"]["note_starts"], 0)
+            report = analyze(module, loudness_reference(module, bank))
+            entry = report["samples"]["slots"][0]
+            self.assertEqual((entry["library_id"], entry["role"], entry["role_source"], entry["group"]),
+                             ("SMP-0001", "percussion", "library", "percussion"))
+            self.assertEqual(report["global"]["key_estimate"]["percussion_excluded"]["slots"][0]["role_source"],
+                             "library")
+            self.assertEqual(report["global"]["key_estimate"]["key"], "A minor")
+
+
+class SampleSwitchingTests(unittest.TestCase):
+    """A cell with a sample number and no note switches the sound mid-note: that slot is played."""
+
+    def test_sample_changes_count_and_never_played_only_for_unreferenced_slots(self):
+        module = Module("Switch", [LEAD, Sample("Lead B", LEAD.pcm, 40, 0, 2, 32), Sample("Unused", LEAD.pcm)],
+                        [pattern((0, 0, cell("C-2", 1)), (2, 0, cell(None, 2)), (4, 0, cell(None, 1)),
+                                 (6, 0, cell(None, 2)), (8, 0, cell("E-2", 0)))], [0])
+        report = analyze(module)
+        slots = {entry["slot"]: entry for entry in report["samples"]["slots"]}
+        self.assertEqual((slots[1]["note_ons"], slots[1]["sample_changes"]), (1, 1))
+        # The E-2 on row 8 has no sample number: it plays slot 2, selected on row 6.
+        self.assertEqual((slots[2]["note_ons"], slots[2]["sample_changes"]), (1, 2))
+        self.assertEqual(slots[2]["channels"], [0])
+        self.assertEqual((slots[3]["note_ons"], slots[3]["sample_changes"]), (0, 0))
+        self.assertEqual(report["samples"]["never_played_slots"], [3])
+        self.assertEqual([item["slot"] for item in report["warnings"] if item["code"] == "sample_never_played"], [3])
+        self.assertEqual(report["channels"][0]["samples_used"], [1, 2])
+
+    def test_slot_used_only_by_switching_is_not_flagged(self):
+        module = Module("Switch", [LEAD, Sample("Lead B", LEAD.pcm, 40, 0, 2, 32)],
+                        [pattern((0, 0, cell("C-2", 1)), (2, 0, cell(None, 2)), (4, 0, cell(None, 1)))], [0])
+        report = analyze(module)
+        self.assertEqual(report["samples"]["never_played_slots"], [])
+        self.assertEqual(report["samples"]["slots"][1]["note_ons"], 0)
+        self.assertEqual(report["samples"]["slots"][1]["sample_changes"], 1)
+        self.assertNotIn("sample_never_played", [item["code"] for item in report["warnings"]])
+
+
+class LevelReachTests(unittest.TestCase):
+    def test_unreachable_reference_says_limited_by_peak(self):
+        quiet = Sample("Spiky", (0, 0) + (127, 4, -128, -4) + (0, 0, 0, 0) * 7, 64, 0, 2, 32)  # full peak, low RMS
+        module = Module("Reach", [quiet], [pattern((0, 0, cell("C-2", 1)))], [0])
+        module.metadata["sample_sources"] = {"1": {"role": "texture"}}
+        report = analyze(module)
+        entry = report["samples"]["slots"][0]
+        self.assertTrue(entry["limited_by_peak"])
+        self.assertLess(entry["reachable_db"], entry["reference_db"])
+        warning = next(item for item in report["warnings"] if item["code"] == "sample_level_off_reference")
+        self.assertTrue(warning["limited_by_peak"])
+        self.assertIn("limited by peak", warning["message"])
+
+    def test_a_quiet_sample_with_room_is_not_limited(self):
+        soft = Sample("Soft lead", LEAD.pcm, 8, 0, 2, 32)
+        module = Module("Reach", [soft], [pattern((0, 0, cell("C-2", 1)))], [0])
+        module.metadata["sample_sources"] = {"1": {"role": "lead"}}
+        report = analyze(module)
+        entry = report["samples"]["slots"][0]
+        self.assertFalse(entry["limited_by_peak"])
+        warning = next(item for item in report["warnings"] if item["code"] == "sample_level_off_reference")
+        self.assertNotIn("limited_by_peak", warning)
+
+
 class LoudnessReferenceTests(unittest.TestCase):
-    """`report` picks the default sample bank for a library-mode project and says which reference it used."""
+    """`report` uses the default sample bank whenever it exists and says which reference it used."""
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="chiploom report reference ")
@@ -240,27 +384,39 @@ class LoudnessReferenceTests(unittest.TestCase):
             module.metadata["sample_sources"] = {"1": {"library_id": "SMP-0001", "origin": "module-extracted"}}
         return module
 
-    def test_library_mode_uses_the_default_bank_when_it_exists(self):
+    def test_the_default_bank_is_used_whenever_it_exists(self):
         self.build_bank(self.default)
-        for mode in ("declared", "ids"):
+        for mode in ("declared", "ids", None, "synthesized"):
             with self.subTest(mode=mode):
                 module = self.module(mode)
+                if mode == "synthesized":
+                    module.metadata["sample_source"] = "synthesized"
                 info = analyze(module, loudness_reference(module, default=self.default))["samples"]["loudness_reference"]
                 self.assertEqual((info["source"], info["selection"], info["path"]),
                                  ("library", "automatic", str(self.default.resolve())))
-                self.assertIn("Library-mode project", info["reason"])
+                self.assertIn("default sample bank exists", info["reason"])
 
-    def test_defaults_without_a_bank_or_outside_library_mode(self):
-        module = self.module("declared")
-        info = analyze(module, loudness_reference(module, default=self.default))["samples"]["loudness_reference"]
-        self.assertEqual((info["source"], info["path"]), ("defaults", None))
-        self.assertIn("no sample bank", info["reason"])
+    def test_defaults_without_a_bank(self):
+        for mode in ("declared", None):
+            module = self.module(mode)
+            info = analyze(module, loudness_reference(module, default=self.default))["samples"]["loudness_reference"]
+            self.assertEqual((info["source"], info["path"], info["selection"]), ("defaults", None, "automatic"))
+            self.assertIn("no sample bank", info["reason"])
+        self.assertEqual(analyze(self.module(None))["samples"]["loudness_reference"]["selection"], "default")
+
+    def test_same_rule_as_sample_match_level(self):
+        from unittest import mock
+        from tracker4agents.patch import apply_ops
         self.build_bank(self.default)
-        plain = self.module(None)
-        info = analyze(plain, loudness_reference(plain, default=self.default))["samples"]["loudness_reference"]
-        self.assertEqual(info["source"], "defaults")
-        self.assertIn("Not a library-mode project", info["reason"])
-        self.assertEqual(analyze(plain)["samples"]["loudness_reference"]["selection"], "default")
+        module = self.module(None)
+        module.samples[0] = Sample("Lead", LEAD.pcm, 64, 0, 2, 32)
+        with mock.patch("tracker4agents.sample_library.DEFAULT_LIBRARY", self.default):
+            result = apply_ops(module, [{"op": "sample_match_level", "slot": 1, "role": "lead"}])[0]
+            info = analyze(module, loudness_reference(module))["samples"]
+        self.assertEqual((result["reference"], result["reference_path"]), ("library", str(self.default.resolve())))
+        self.assertEqual(info["loudness_reference"]["path"], result["reference_path"])
+        self.assertEqual(info["slots"][0]["reference_db"], result["target_db"])
+        self.assertEqual((info["slots"][0]["role"], info["slots"][0]["role_source"]), ("lead", "recorded"))
 
     def test_explicit_library_overrides_and_must_exist(self):
         other = self.root / "other bank"

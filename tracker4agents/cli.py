@@ -47,7 +47,7 @@ def describe(module: Module, pattern_index: int | None = None, grid: bool = Fals
         "title": module.title, "profile": _profile_of(module), "channels": module.channels,
         "orders": module.orders, "patterns": len(module.patterns),
         "duration_seconds": plan["duration_seconds"], "loop_start_seconds": plan["loop_start_seconds"],
-        "warnings": audio.duration_warnings(plan["duration_seconds"]),
+        "warnings": audio.duration_warnings(plan["duration_seconds"]) + plan["warnings"],
         "sample_count": sum(bool(sample.pcm) for sample in module.samples),
         "samples": [{
             "index": index, "name": sample.name, "bytes": len(sample.pcm) * sample.bits // 8,
@@ -96,28 +96,44 @@ def read_ops(args: argparse.Namespace) -> object:
                 value = json.loads(text)
                 ops.extend(value if isinstance(value, list) else [value])
             return ops
+        if str(args.ops) != "-" and not args.ops.is_file():
+            raise ValidationError(f"Operations file not found: {args.ops.resolve()}", "IO_ERROR")
         return json.loads(sys.stdin.read() if str(args.ops) == "-" else args.ops.read_text(encoding="utf-8"))
+    except ValidationError:
+        raise
     except ValueError as exc:
         raise ValidationError(f"Patch operations are not valid JSON: {exc}", "PATCH_FORMAT") from exc
 
 
 def patch_project(args: argparse.Namespace) -> dict:
     output = args.output.resolve()
-    if output == args.source.resolve() and not args.in_place:
-        raise ValidationError("Writing over the source needs --in-place.", "OUTPUT_PATH")
+    if output == args.source.resolve():
+        if not args.in_place:
+            raise ValidationError("Writing over the source needs --in-place.", "OUTPUT_PATH")
+    elif output.exists() and not args.overwrite:
+        raise ValidationError(f"{output} already exists; choose a new revision path, or pass --overwrite.", "OUTPUT_PATH")
     if output.suffix.lower() != ".json":
         raise ValidationError("A patched project is written as an editable .json project.", "OUTPUT_PATH")
+    from .patch import flow_changes
     document = Document(load(args.source))
     applied = document.patch(read_ops(args), args.label)
     document.save_project(output)
     plan = playback_plan(document.module)
+    warnings = audio.duration_warnings(plan["duration_seconds"]) + plan["warnings"]
+    flow = flow_changes(applied["diff"])
+    if flow:
+        warnings.append("Existing jump, break or speed/tempo effects (Bxx/Dxx/Fxx) were removed or replaced, "
+                        "so check duration_seconds: " + "; ".join(flow[:12]) + (" …" if len(flow) > 12 else ""))
     return {"ok": True, "output": str(output), "changed": applied["changed"], "results": applied["results"],
             "changes": summarize(applied["diff"], 40), "cells_changed": len(applied["diff"]["cells"]),
-            "duration_seconds": plan["duration_seconds"], "warnings": audio.duration_warnings(plan["duration_seconds"])}
+            "duration_seconds": plan["duration_seconds"], "warnings": warnings}
 
 
 def new_project(args: argparse.Namespace) -> dict:
-    """A blank MOD project: one empty sample slot, empty patterns in order, initial speed/BPM."""
+    """A blank project: one empty sample slot, empty patterns in order, initial speed/BPM.
+
+    A MOD gets the speed/BPM as Fxx on the first row; an XM (`--format xm`) in its header, with
+    patterns of `--rows` rows (1-256)."""
     from .model import MAX_PATTERNS, MOD_MAX_CHANNELS, Pattern, Sample, ascii_field
     from .patch import set_initial_timing
     output = args.output.resolve()
@@ -125,18 +141,31 @@ def new_project(args: argparse.Namespace) -> dict:
         raise ValidationError("A new project is written as an editable .json project.", "OUTPUT_PATH")
     if output.exists():
         raise ValidationError(f"{output} already exists; choose a new path.", "OUTPUT_PATH")
-    require_int(args.channels, "channels", 2, MOD_MAX_CHANNELS, "CHANNELS")
-    require_int(args.patterns, "patterns", 1, MAX_PATTERNS)
-    ascii_field(args.title, 20, "MOD title")
+    fmt = getattr(args, "format", "mod") or "mod"
+    rows = getattr(args, "rows", None)
     metadata = {} if args.sample_source == "none" else {"sample_source": args.sample_source}
-    module = Module(args.title, [Sample("", (), 0)], [Pattern(f"Pattern {index:02d}") for index in range(args.patterns)],
-                    list(range(args.patterns)), metadata, args.channels)
-    set_initial_timing(module, args.bpm, args.speed)
+    if fmt == "xm":
+        from .xm import blank
+        module = blank(args.title, args.channels, args.patterns, 64 if rows is None else rows, args.speed, args.bpm,
+                       metadata)
+    else:
+        if rows not in (None, 64):
+            raise ValidationError("A MOD pattern always has 64 rows; --rows is for --format xm.", "PATTERNS")
+        require_int(args.channels, "channels", 2, MOD_MAX_CHANNELS, "CHANNELS")
+        require_int(args.patterns, "patterns", 1, MAX_PATTERNS)
+        ascii_field(args.title, 20, "MOD title")
+        module = Module(args.title, [Sample("", (), 0)],
+                        [Pattern(f"Pattern {index:02d}") for index in range(args.patterns)],
+                        list(range(args.patterns)), metadata, args.channels)
+        set_initial_timing(module, args.bpm, args.speed)
     validate(module)
     output.parent.mkdir(parents=True, exist_ok=True)
     project.write_json(output, project.to_dict(module))
-    return {"ok": True, "output": str(output), "speed": args.speed, "bpm": args.bpm,
-            "sample_source": metadata.get("sample_source"), **describe(module)}
+    result = {"ok": True, "output": str(output), "speed": args.speed, "bpm": args.bpm,
+              "sample_source": metadata.get("sample_source"), **describe(module)}
+    if fmt == "xm":
+        result["rows_per_pattern"] = module.patterns[0].rows
+    return result
 
 
 def record_feedback(args: argparse.Namespace) -> dict:
@@ -178,6 +207,10 @@ def module_format_name(path: Path) -> str:
 def export_module(args: argparse.Namespace) -> dict:
     """`export`: write the module file. The format comes from --format, else the output extension,
     else the project's own; a project of the other format is converted first (see `convert`)."""
+    if formats.format_of_path(args.output) is None and args.format is None:
+        raise ValidationError(f"A module export is written to a .mod or .xm file, not {args.output.name!r} "
+                              "(pass --format mod|xm to choose another extension deliberately); use render "
+                              "for a WAV.", "OUTPUT_PATH")
     module = project.load(args.source)
     target = args.format or formats.format_of_path(args.output) or module.format
     if formats.format_of_path(args.output) not in (None, target):
@@ -202,14 +235,17 @@ def convert_command(args: argparse.Namespace) -> dict:
         raise ValidationError("La sortie doit être distincte du fichier source.", "OUTPUT_PATH")
     suffix = args.output.suffix.lower()
     target = args.to or formats.format_of_path(args.output)
-    if target is None:
-        raise ValidationError("Give --to mod|xm, or an output ending in .mod or .xm.", "OUTPUT_PATH")
-    if suffix not in (".json", f".{target}"):
+    if target is None and suffix != ".json":
+        raise ValidationError("Give --to mod|xm, or an output ending in .mod, .xm or .json.", "OUTPUT_PATH")
+    if target is not None and suffix not in (".json", f".{target}"):
         raise ValidationError(f"A {target.upper()} is written to a .{target} file (or a .json project).", "OUTPUT_PATH")
     module = load(args.source)
+    # A .json output without --to converts to the other format: `convert` changes the format, while a
+    # same-format project comes from `import` (or `--to` naming the source's own format, which copies).
+    target = target or ("mod" if module.format == "xm" else "xm")
     converted, report = convert.convert(module, target)
     if suffix == ".json":
-        project.write_json(args.output, project.to_dict(converted, recipes=False))
+        project.write_json(args.output, project.to_dict(converted))
     else:
         project.atomic_bytes(args.output, formats.encode(converted))
     return {"ok": True, "output": str(args.output.resolve()), "from": module.format, "to": target,
@@ -292,7 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     estimate = commands.add_parser("estimate", help="Estimate duration before writing a score (constant timing).")
     estimate.add_argument("--orders", type=int, required=True)
-    estimate.add_argument("--rows", type=int, default=64, help="Rows played per order, default 64.")
+    estimate.add_argument("--rows", type=int, default=64, help="Rows played per order, default 64 (a MOD pattern "
+                                                               "is 64 rows; an XM pattern up to 256).")
     estimate.add_argument("--speed", type=int, default=6)
     estimate.add_argument("--bpm", type=int, default=125)
     desktop = commands.add_parser("gui", help="Ouvrir la fenêtre de tracker (option desktop requise).")
@@ -354,12 +391,18 @@ def build_parser() -> argparse.ArgumentParser:
     add_instrument_parser(commands)
     new = commands.add_parser("new", help="Write a blank project: empty patterns, one empty sample slot, speed/BPM.")
     new.add_argument("--output", type=Path, required=True, help="New .json project; must not exist yet.")
-    new.add_argument("--title", default="", help="MOD title, up to 20 ASCII characters.")
-    new.add_argument("--channels", type=int, default=4, help="Channel count, 2 to 32 (default 4; other counts "
-                                                             "use the protracker-nch-pal-v1 profile).")
-    new.add_argument("--patterns", type=int, default=1, help="Empty patterns, played in order (default 1).")
-    new.add_argument("--speed", type=int, default=6)
-    new.add_argument("--bpm", type=int, default=125)
+    new.add_argument("--format", choices=("mod", "xm"), default="mod",
+                     help="mod (default) or xm (FastTracker 2 profile fasttracker2-xm-v1).")
+    new.add_argument("--title", default="", help="Song title, up to 20 ASCII characters.")
+    new.add_argument("--channels", type=int, default=4, help="Channel count, 2 to 32 (default 4; a MOD with another "
+                                                             "count uses the protracker-nch-pal-v1 profile).")
+    new.add_argument("--patterns", type=int, default=1, help="Empty patterns, played in order (default 1; "
+                                                             "up to 100 in a MOD, 256 in an XM).")
+    new.add_argument("--rows", type=int, help="XM rows per pattern, 1 to 256 (default 64; a MOD pattern is 64 rows).")
+    new.add_argument("--speed", type=int, default=6, help="Initial speed 1-31: Fxx on the first row of a MOD, the "
+                                                          "header's default_speed in an XM.")
+    new.add_argument("--bpm", type=int, default=125, help="Initial BPM (33-255 in a MOD, 32-255 in an XM): Fxx "
+                                                          "on the first row of a MOD, the header's default_bpm in an XM.")
     new.add_argument("--sample-source", choices=("library", "synthesized", "mixed", "none"), default="library",
                      help="Recorded metadata.sample_source (default library; none records nothing).")
     migrate_parser = commands.add_parser("migrate", help="Rewrite a project (v1 or v2) or MOD as a schema v2 project.")
@@ -372,11 +415,13 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--op", action="append", help="One operation (or a list) as JSON; repeat for several.")
     patch.add_argument("--label", default="Patch", help="Label for the change history.")
     patch.add_argument("--in-place", action="store_true", help="Allow --output to be the source project.")
+    patch.add_argument("--overwrite", action="store_true", help="Allow --output to replace an existing file other than the source.")
     report = commands.add_parser("report", help="Measure a composition: density, ranges, gaps, repetition, estimated key.")
     report.add_argument("source", type=Path)
     report.add_argument("--library", type=Path, help="Sample bank whose median levels are the loudness reference "
-                                                     "(default: exports/sample_library for a library-mode project "
-                                                     "when it exists, else fixed reference levels).")
+                                                     "(default: exports/sample_library when it exists, for "
+                                                     "library and synthesized projects alike, else fixed "
+                                                     "reference levels).")
     compare = commands.add_parser("compare", help="Build a blind A/B listening page for two versions in a new directory.")
     compare.add_argument("first", type=Path)
     compare.add_argument("second", type=Path)
@@ -387,6 +432,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--seed", type=int)
     compare.add_argument("--seconds", type=float, help="Render the same excerpt length from the start of both versions.")
     compare.add_argument("--labels", nargs=2, metavar=("FIRST", "SECOND"))
+    compare.add_argument("--show-answer", action="store_true",
+                         help="Also print the X/Y answer key (by default only the path of answer_key.json).")
     feedback = commands.add_parser("feedback", help="Record listening feedback in a project's metadata.")
     feedback.add_argument("project", type=Path)
     feedback.add_argument("--text", required=True)
@@ -398,7 +445,9 @@ def build_parser() -> argparse.ArgumentParser:
         "convert", help="Convert between MOD and XM (a MOD to XM keeps notes, effects and PCM; XM to MOD only when it fits).")
     convert_parser.add_argument("source", type=Path, help="MOD, XM or project JSON.")
     convert_parser.add_argument("--output", type=Path, required=True, help="New .mod, .xm or .json file.")
-    convert_parser.add_argument("--to", choices=("mod", "xm"), help="Target format; default: the output extension.")
+    convert_parser.add_argument("--to", choices=("mod", "xm"), help="Target format; default: the output extension "
+                                                                    "(.mod or .xm), or for a .json output the other "
+                                                                    "format than the source's.")
     mcp = commands.add_parser("mcp", help="Run the Model Context Protocol adapter on stdio (for MCP clients).")
     mcp.add_argument("--root", type=Path, help="Working directory for relative paths in tool calls.")
     from .live_cli import add_parser as add_live_parser
@@ -429,7 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--sample-rate", type=int, default=48000)
             command.add_argument("--ffmpeg")
             command.add_argument("--xmp-library", type=Path)
-            command.add_argument("--mp3-output", type=Path, help="Ajouter une copie MP3 du WAV rendu.")
+            command.add_argument("--mp3-output", type=Path, help="Also write an MP3 listening copy of the rendered WAV.")
     return parser
 
 
@@ -448,8 +497,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise
             return desktop_main(args.source, args.state_dir, not args.no_restore)
         if args.command == "estimate":
-            require_int(args.orders, "orders", 1, 128)
-            require_int(args.rows, "rows", 1, 64)
+            require_int(args.orders, "orders", 1, 256)  # 128 in a MOD, 256 in an XM
+            require_int(args.rows, "rows", 1, 256)  # a MOD pattern has 64 rows, an XM pattern 1 to 256
             require_int(args.speed, "speed", 1, 31)
             require_int(args.bpm, "bpm", 33, 255)
             per_order = args.rows * args.speed * 2.5 / args.bpm
@@ -535,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
                 result.update(errors=[], error_count=0)
         elif args.command in ("export", "import"):
             if args.source.resolve() == args.output.resolve():
-                raise ValidationError("La sortie doit être distincte du fichier source.")
+                raise ValidationError("La sortie doit être distincte du fichier source.", "OUTPUT_PATH")
             if args.command == "export":
                 result = export_module(args)
             else:
@@ -557,7 +606,8 @@ def main(argv: list[str] | None = None) -> int:
             from .compare import create_comparison
             result = create_comparison(args.first, args.second, args.output, mp3=args.mp3, ffmpeg=args.ffmpeg,
                                        language=args.language, seed=args.seed, seconds=args.seconds,
-                                       labels=tuple(args.labels) if args.labels else None)
+                                       labels=tuple(args.labels) if args.labels else None,
+                                       show_answer=args.show_answer)
         elif args.command == "feedback":
             result = record_feedback(args)
         elif args.command == "mcp":

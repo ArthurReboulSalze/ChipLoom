@@ -71,9 +71,10 @@ class ComparisonFixtureCase(unittest.TestCase):
 
 
 class MockedAudioComparisonTests(ComparisonFixtureCase):
-    def build(self, name="out", **kwargs):
+    def build(self, name="out", show_answer=True, **kwargs):
         with patch("tracker4agents.compare.audio.render", side_effect=fake_render):
-            return create_comparison(self.first, self.second, self.root / name, labels=self.labels, **kwargs)
+            return create_comparison(self.first, self.second, self.root / name, labels=self.labels,
+                                     show_answer=show_answer, **kwargs)
 
     def test_bundle_layout_and_return_value(self):
         result = self.build(seed=3)
@@ -81,10 +82,52 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
         self.assertTrue(result["ok"])
         self.assertEqual(Path(result["page"]).resolve(), (out / "index.html").resolve())
         self.assertEqual(sorted(path.name for path in out.iterdir()),
-                         ["comparison.json", "index.html", "x.mod", "x.wav", "y.mod", "y.wav"])
+                         ["answer_key.json", "comparison.json", "index.html", "x.mod", "x.wav", "y.mod", "y.wav"])
         self.assertEqual(set(result["answer_key"]), {"x", "y", "labels"})
         self.assertEqual({result["answer_key"]["x"], result["answer_key"]["y"]}, {"first", "second"})
         self.assertFalse(list(self.root.glob(".chiploom-compare-*")))
+
+    def test_answer_key_is_written_to_a_file_not_returned_by_default(self):
+        result = self.build(seed=3, show_answer=False)
+        out = self.root / "out"
+        self.assertNotIn("answer_key", result)
+        for secret in ("first", "second", "Alpha draft", "Beta draft"):
+            self.assertNotIn(f'"{secret}"', json.dumps(result), secret)
+        self.assertEqual(Path(result["answer_key_file"]), out / "answer_key.json")
+        key = json.loads((out / "answer_key.json").read_text(encoding="utf-8"))
+        full = json.loads((out / "comparison.json").read_text(encoding="utf-8"))["answer_key"]
+        self.assertEqual({"x": key["x"], "y": key["y"]}, full)
+        self.assertEqual(set(key["labels"].values()), set(self.labels))
+        self.assertEqual(self.build("again", seed=3)["answer_key"]["x"], key["x"])
+
+    def test_cli_prints_the_key_only_with_show_answer(self):
+        from tracker4agents import cli
+        import contextlib
+        import io
+        for flag, name in (([], "cli-hidden"), (["--show-answer"], "cli-shown")):
+            stream = io.StringIO()
+            with patch("tracker4agents.compare.audio.render", side_effect=fake_render),                     contextlib.redirect_stdout(stream):
+                code = cli.main(["compare", str(self.first), str(self.second), "--output", str(self.root / name),
+                                 "--seed", "2", *flag])
+            self.assertEqual(code, 0)
+            result = json.loads(stream.getvalue())
+            self.assertEqual("answer_key" in result, bool(flag))
+            self.assertTrue(Path(result["answer_key_file"]).is_file())
+
+    def test_xm_inputs_keep_their_extension(self):
+        from tracker4agents import formats
+        from tracker4agents.convert import mod_to_xm
+        xm_path = self.sources / "beta.xm"
+        xm_path.write_bytes(formats.encode(mod_to_xm(self.beta)[0]))
+        with patch("tracker4agents.compare.audio.render", side_effect=fake_render):
+            result = create_comparison(self.first, xm_path, self.root / "xm", seed=1, show_answer=True)
+        out = self.root / "xm"
+        xm_side = "x" if result["answer_key"]["x"] == "second" else "y"
+        mod_side = "y" if xm_side == "x" else "x"
+        self.assertEqual(Path(result[xm_side]["mod"]), out / f"{xm_side}.xm")
+        self.assertEqual(Path(result[mod_side]["mod"]), out / f"{mod_side}.mod")
+        self.assertTrue(Path(result[xm_side]["mod"]).is_file())
+        self.assertTrue(Path(result[mod_side]["mod"]).is_file())
 
     def test_seed_makes_the_mapping_deterministic_and_both_orders_occur(self):
         keys = {}
@@ -213,7 +256,7 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
 
     def test_default_labels_come_from_file_names(self):
         with patch("tracker4agents.compare.audio.render", side_effect=fake_render):
-            result = create_comparison(self.first, self.second, self.root / "named", seed=4)
+            result = create_comparison(self.first, self.second, self.root / "named", seed=4, show_answer=True)
         self.assertEqual(set(result["answer_key"]["labels"].values()), {"alpha", "beta"})
 
     def test_cycle_longer_than_the_render_limit_is_refused_unless_an_excerpt_is_requested(self):

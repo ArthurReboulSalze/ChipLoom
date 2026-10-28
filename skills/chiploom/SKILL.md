@@ -107,8 +107,24 @@ python -m tracker4agents feedback exports/song/v2.project.json --text "..." --ra
 
 `report` gives measurements of the played score (density, ranges, gaps, repetition, an
 estimated key), never a quality verdict. `compare` builds a casual blind A/B page: do
-not read its `comparison.json` answer key before the owner listens, and say that loudness
+not pass `--show-answer` or read `answer_key.json`/`comparison.json` before the owner listens, and say that loudness
 is not equalized. Record what the owner says with `feedback`.
+
+### XM songs
+
+Use an XM when the owner wants one (or needs patterns other than 64 rows, a volume column,
+panning or ping-pong loops). XM note labels sit two octaves above MOD ones (`C-4` = MOD `C-2`)
+and a cell is `NOTE II VV EEE`.
+
+1. Start: `new --format xm --channels N --rows R --speed S --bpm B` (header timing, one empty
+   instrument), or `synth palette --format xm --channels N` for created samples, or `convert`
+   a finished MOD (recipes and library IDs are kept).
+2. Add samples: `samples add` / `library_sample` and `synth add` / `recipe_sample` work on an XM
+   (instruments 1-128); each sample is converted as `convert` converts a MOD sample.
+3. Edit with `patch` as usual; `pattern_length` resizes a pattern, `add_pattern` takes `length`.
+4. Header: `xm_header` sets `restart_position`, `default_speed`, `default_bpm`,
+   `frequency_table`. Read `warnings` for loops that come back at another tempo.
+5. Validate (with `--sample-source` for a declared mode), `export --output song.xm`, render.
 
 ## Created samples only (on the owner's request)
 

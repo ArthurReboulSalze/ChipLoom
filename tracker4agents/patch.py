@@ -11,13 +11,16 @@ volume-column byte in hexadecimal, `--` when empty). Rows hold one cell per chan
 from __future__ import annotations
 
 import copy
+import dataclasses
 import re
 from pathlib import Path
 
 from .model import (
-    EMPTY, MAX_PATTERNS, NOTE_TO_PERIOD, NOTES, XM_KEY_OFF, XM_NOTES, Cell, Module, Pattern, ValidationError, cell,
-    require_int,
+    EMPTY, MAX_PATTERNS, NOTE_TO_PERIOD, NOTES, XM_KEY_OFF, XM_NOTES, Cell, Module, Pattern, Sample, ValidationError, cell,
+    playback_plan, require_int, xm_profile,
 )
+
+XM_HEADER_KEYS = ("restart_position", "default_speed", "default_bpm", "frequency_table")
 
 EMPTY_TOKENS = {"", "---", "...", "--", "..", "000"}
 CELL_TEXT = re.compile(r"^\s*(\S{3})(?:\s+(\S{2}))?(?:\s+(\S{3}))?\s*$")
@@ -43,6 +46,21 @@ def cell_text(value: Cell, fmt: str = "mod") -> str:
     return f"{value.note or '---'} {sample} {effect}"
 
 
+NOTE_LIKE = re.compile(r"[A-Ga-g][-#b]*-?\d+")
+
+
+def _note_hint(text: str, xm: bool) -> str:
+    """Extra advice when the first token looks like a note but is not spelled with three characters."""
+    first = text.split()[0] if text.split() else ""
+    if len(first) == 3 or not NOTE_LIKE.fullmatch(first):
+        return ""
+    if xm:
+        return (f" The note {first!r} is malformed: XM notes are three characters, C-4 for a natural and C#4 "
+                "for a sharp (no dash), C-0 to B-7, or === for key off.")
+    return (f" The note {first!r} is malformed: MOD notes are three characters, C-2 for a natural and C#2 "
+            "for a sharp (no dash), C-1 to B-3.")
+
+
 def parse_cell(text: object, fmt: str = "mod") -> Cell:
     """Parse `C-2 01 C20`, `--- -- ...`, `G#2 0A`, `C-3` or an empty string.
 
@@ -59,7 +77,7 @@ def parse_cell(text: object, fmt: str = "mod") -> Cell:
     match = (XM_CELL_TEXT if xm else CELL_TEXT).match(text)
     if not match:
         raise ValidationError(f"Unreadable cell {text!r}; expected '{'NOTE II VV EEE' if xm else 'NOTE SS EEE'}', "
-                              f"e.g. '{example}'.", "PATCH_CELL")
+                              f"e.g. '{example}'.{_note_hint(text, xm)}", "PATCH_CELL")
     volume_value = 0
     if xm:
         note, sample, volume, effect = match.groups()
@@ -352,12 +370,21 @@ def set_initial_timing(module: Module, bpm: int, speed: int) -> None:
         pattern.put(0, channel, Cell(old.period, old.sample, 15, parameter, old.volume))
     if isinstance(module.metadata.get("timing"), dict):
         module.metadata["timing"].update(bpm=bpm, speed=speed)
+    if module.format == "xm" and isinstance(module.metadata.get("xm"), dict):
+        # The header defaults start the replay before row 0 is read: keep them equal to the Fxx just written.
+        module.metadata["xm"].update(default_speed=speed, default_bpm=bpm)
 
 
 def _timing(module: Module, op: dict) -> dict:
-    _fields(op, {"bpm", "speed"}, set())
+    """Set the initial BPM and/or speed; the one left out keeps its value on the first played row."""
+    _fields(op, set(), {"bpm", "speed"})
+    if "bpm" not in op and "speed" not in op:
+        raise ValidationError("give bpm, speed or both.", "PATCH_FIELD")
+    if "bpm" not in op or "speed" not in op:
+        first = playback_plan(module)["timeline"][0]
+        op = {"bpm": first["bpm"], "speed": first["speed"], **op}
     set_initial_timing(module, op["bpm"], op["speed"])
-    return {}
+    return {"bpm": op["bpm"], "speed": op["speed"]}
 
 
 def _sample(module: Module, op: dict) -> dict:
@@ -404,6 +431,57 @@ def _recipe_sample(module: Module, op: dict) -> dict:
     reference = None if op.get("volume") is not None else resolve_reference(match, op.get("library"))
     return insert_recipe(module, op["name"], op["recipe"], op.get("slot"), op.get("volume"),
                          op.get("finetune", 0), op.get("replace", False), op.get("role"), reference)
+
+
+# --- XM structure ---------------------------------------------------------------------------------------
+
+def _pattern_length(module: Module, op: dict) -> dict:
+    """Resize an XM pattern (1-256 rows). Cutting rows that hold notes or effects needs `truncate: true`."""
+    _fields(op, {"pattern", "rows"}, {"truncate"})
+    index = require_int(op["pattern"], "pattern", 0, len(module.patterns) - 1, "PATTERNS")
+    rows = require_int(op["rows"], "rows", 1, 256, "PATTERNS")
+    truncate = op.get("truncate", False)
+    if type(truncate) is not bool:
+        raise ValidationError("truncate must be true or false.", "PATCH_FIELD")
+    pattern = module.patterns[index]
+    lost = sorted(key for key in pattern.cells if key[0] >= rows)
+    if lost and not truncate:
+        first, last = lost[0][0], lost[-1][0]
+        raise ValidationError(f"Pattern {index} holds {len(lost)} non-empty cell(s) on rows {first:02X}-{last:02X}, "
+                              f"past the new length {rows}; set \"truncate\": true to drop them.", "PATTERN_TRUNCATE")
+    for key in lost:
+        del pattern.cells[key]
+    before, pattern.rows = pattern.rows, rows
+    return {"pattern": index, "rows_before": before, "rows": rows, "cells_dropped": len(lost)}
+
+
+XM_HEADER_FIELDS = ("restart_position", "default_speed", "default_bpm", "frequency_table")
+
+
+def _xm_header(module: Module, op: dict) -> dict:
+    """Edit the XM header values kept in `metadata.xm`; a field left out keeps its value."""
+    _fields(op, set(), set(XM_HEADER_FIELDS))
+    if not any(key in op for key in XM_HEADER_FIELDS):
+        raise ValidationError(f"give at least one of {list(XM_HEADER_FIELDS)}.", "PATCH_FIELD")
+    block = module.metadata.setdefault("xm", {})
+    defaults = {"restart_position": 0, "default_speed": 6, "default_bpm": 125, "frequency_table": "linear"}
+    before = {key: block.get(key, defaults[key]) for key in XM_HEADER_FIELDS}
+    if "restart_position" in op:
+        require_int(op["restart_position"], "restart_position", 0, len(module.orders) - 1, "ORDERS")
+    if "default_speed" in op:
+        require_int(op["default_speed"], "default_speed", 1, 31, "TIMING")
+    if "default_bpm" in op:
+        require_int(op["default_bpm"], "default_bpm", 32, 255, "TIMING")
+    if "frequency_table" in op and op["frequency_table"] not in ("linear", "amiga"):
+        raise ValidationError("frequency_table: 'linear' or 'amiga' expected.", "PATCH_FIELD")
+    for key in XM_HEADER_FIELDS:
+        if key in op:
+            block[key] = op[key]
+    result = {"before": before, "after": {key: block.get(key, defaults[key]) for key in XM_HEADER_FIELDS}}
+    if before["frequency_table"] != result["after"]["frequency_table"]:
+        result["note"] = ("Notes keep their pitch; portamento, vibrato and arpeggio slide by a different amount "
+                          "with the other frequency table.")
+    return result
 
 
 # --- sample editing (on copies; every edit that changes PCM or the loop is recorded) ---------------------
@@ -493,8 +571,8 @@ def _sample_set_pcm(module: Module, op: dict) -> dict:
     existing = module.samples[slot - 1] if slot <= len(module.samples) else None
     occupied = existing is not None and bool(existing.pcm)
     if occupied and not sample_tools.flag(op, "replace"):
-        raise ValidationError(f"Sample slot {slot} is occupied by {existing.name!r}; set replace to true to "
-                              "overwrite it.", "SAMPLE_SLOT")
+        raise ValidationError(f"Sample slot {slot} is occupied by {existing.name!r}; pass replace (CLI: "
+                              "--replace) to overwrite it.", "SAMPLE_SLOT")
     pcm = _pcm_from_base64(op, f"sample_set_pcm slot {slot}")
     name = op.get("name", existing.name if occupied else f"Drawn {slot:02d}")
     ascii_field(name, 22, "Sample name")
@@ -522,39 +600,66 @@ def _sample_set_pcm(module: Module, op: dict) -> dict:
 
 
 def _sample_match_level(module: Module, op: dict) -> dict:
-    """Set a sample's volume (and, only if volume 64 is not enough, clean gain) to its role's reference level."""
-    _fields(op, {"slot"}, {"role", "library"})
-    from . import loudness, sample_tools
-    from .synth_tools import build, resolve_reference
+    """Set a sample's volume (and, only if volume 64 is not enough, clean gain) to its role's reference level.
+
+    The reference follows `synth_tools.automatic_reference` (explicit `library`, else the default bank when it
+    exists, else the fixed levels); `"match": "defaults"` forces the fixed levels and `"match": "library"`
+    requires a bank. The role used is recorded in `metadata.sample_sources[slot]["role"]` (other provenance
+    fields kept), so `report` compares the sample with the same group afterwards.
+    """
+    _fields(op, {"slot"}, {"role", "library", "match"})
+    from . import loudness, sample_library, sample_tools
+    from .synth_tools import automatic_reference, bank_entries, build, resolve_reference
     slot, before = _edit_target(module, op, drops_recipe=False)
+    match = op.get("match", "auto")
+    if match not in ("auto", "library", "defaults"):
+        raise ValidationError(f"match must be one of ['auto', 'library', 'defaults'], got {match!r}.", "PATCH_FIELD")
+    if match == "defaults":
+        if op.get("library") is not None:
+            raise ValidationError("'library' is not used with \"match\": \"defaults\".", "PATCH_FIELD")
+        reference = {**resolve_reference("defaults"), "path": None, "selection": "explicit",
+                     "reason": "match 'defaults' was given; fixed reference levels."}
+    elif match == "library" and op.get("library") is None:
+        reference = {**automatic_reference(sample_library.DEFAULT_LIBRARY),
+                     "reason": "match 'library' without 'library' uses the default sample bank."}
+    else:
+        reference = automatic_reference(op.get("library"))
     sources = module.metadata.get("sample_sources") if isinstance(module.metadata, dict) else None
     recorded = sources.get(str(slot)) if isinstance(sources, dict) else None
     recorded = recorded if isinstance(recorded, dict) else {}
-    role = op.get("role", recorded.get("role"))
-    if role is not None:
-        loudness.check_role(role)
-    reference = resolve_reference("library" if op.get("library") is not None else "defaults", op.get("library"))
-    if role is None and op.get("library") is not None and recorded.get("library_id"):
-        from .sample_library import SampleLibrary
-        try:  # the bank's own category for this entry is a better hint than the loop length
-            role = loudness.library_group(SampleLibrary(Path(op["library"])).get(recorded["library_id"]))
-        except ValidationError:
-            role = None
-    role = role or loudness.sample_role(before)
+    if op.get("role") is not None:
+        role, role_source = op["role"], "op"
+        if role not in loudness.GROUPS:
+            loudness.check_role(role)
+    else:  # recorded role, recipe, the bank's category for a library_id, else the loop-length heuristic
+        role, role_source = loudness.slot_role(before, recorded, bank_entries(reference))
+    origin = {"reference": reference["source"], "reference_path": reference["path"],
+              "reference_selection": reference["selection"], "reference_reason": reference["reason"]}
     if before.recipe is not None:
         # A recipe sample stays a recipe: the volume is matched and the recipe's `peak` raised if needed.
-        role = role if role in loudness.ROLES else loudness.role_for_recipe(before.recipe)
+        if role not in loudness.ROLES:  # a group name such as "percussion"
+            role, role_source = loudness.role_for_recipe(before.recipe), "recipe"
         after, record = build(before.name, before.recipe, before.finetune, role, reference)
         module.samples[slot - 1] = after
-        return {"slot": slot, "changed": after != before, "method": "recipe", **record}
-    after, report = sample_tools.match_level(before, role, reference)
-    result = {"slot": slot, "method": "volume+gain" if report["gain_db"] else "volume", **report}
-    if after.pcm != before.pcm:
-        result.update(_commit_edit(module, slot, before, after, {"op": "sample_match_level", "role": role,
-                                                                  "gain_db": report["gain_db"]}, {}))
+        # The PCM is never scaled here (gain_db 0); a raised recipe peak is reported as peak_raised_from/peak.
+        result = {"slot": slot, "changed": after != before, "method": "recipe", "volume_before": before.volume,
+                  "gain_db": 0.0, **record, **origin}
     else:
-        module.samples[slot - 1] = after
-        result["changed"] = after.volume != before.volume
+        after, report = sample_tools.match_level(before, role, reference)
+        result = {"slot": slot, "method": "volume+gain" if report["gain_db"] else "volume", **report, **origin}
+        if after.pcm != before.pcm:
+            result.update(_commit_edit(module, slot, before, after, {"op": "sample_match_level", "role": role,
+                                                                      "gain_db": report["gain_db"]}, {}))
+        else:
+            module.samples[slot - 1] = after
+            result["changed"] = after.volume != before.volume
+    sources = sample_tools.sources_of(module)
+    entry = dict(sources[str(slot)]) if isinstance(sources.get(str(slot)), dict) else {}
+    if not entry and after.recipe is not None:
+        entry = {"origin": "synthesized", "recipe_type": after.recipe.get("type")}
+    entry["role"] = role
+    sources[str(slot)] = entry
+    result.update(role=role, role_source=role_source)
     return result
 
 
@@ -576,21 +681,27 @@ OPERATIONS = {
     "sample": _sample, "library_sample": _library_sample, "recipe_sample": _recipe_sample,
     "sample_loop": _sample_loop, "sample_trim": _sample_trim, "sample_gain": _sample_gain,
     "sample_fade": _sample_fade, "sample_set_pcm": _sample_set_pcm, "sample_match_level": _sample_match_level,
-    "apply_instrument": _apply_instrument,
+    "apply_instrument": _apply_instrument, "pattern_length": _pattern_length, "xm_header": _xm_header,
 }
 
 
-# Sample-editing operations written for the MOD sample (8-bit, even loop points, 31 slots).
+# Sample-editing operations written for the MOD sample (8-bit, even loop points, 31 slots). Inserting a
+# library sample or a recipe works in an XM: the sample is converted like `convert` converts a MOD sample.
 MOD_ONLY_OPERATIONS = frozenset({
-    "library_sample", "recipe_sample", "sample_loop", "sample_trim", "sample_gain", "sample_fade",
-    "sample_set_pcm", "sample_match_level", "apply_instrument",
+    "sample_loop", "sample_trim", "sample_gain", "sample_fade", "sample_set_pcm", "sample_match_level",
+    "apply_instrument",
 })
+# Operations on what only an XM has: patterns of 1-256 rows and the header in metadata.xm.
+XM_ONLY_OPERATIONS = frozenset({"pattern_length", "xm_header"})
 
 
 def apply_ops(module: Module, ops: object) -> list[dict]:
     """Apply operations in order to `module` in place. Callers validate afterwards."""
     if isinstance(ops, dict):
-        ops = ops.get("ops") if set(ops) <= {"ops", "base_revision", "label"} else [ops]
+        if "op" not in ops and not set(ops) <= {"ops", "base_revision", "label"}:
+            raise ValidationError("A patch is a list of operations, one operation object with \"op\", or "
+                                  f"{{\"ops\": [...]}}; got an object with keys {sorted(ops)[:8]}.", "PATCH_FORMAT")
+        ops = ops.get("ops") if "op" not in ops else [ops]
     if not isinstance(ops, list) or not ops:
         raise ValidationError("A patch is a non-empty list of operations.", "PATCH_FORMAT")
     if len(ops) > 2000:
@@ -599,17 +710,26 @@ def apply_ops(module: Module, ops: object) -> list[dict]:
     for index, op in enumerate(ops):
         try:
             if not isinstance(op, dict) or op.get("op") not in OPERATIONS:
-                raise ValidationError(f"unknown operation; use one of {sorted(OPERATIONS)}.", "PATCH_OP")
+                problem = 'missing "op"' if isinstance(op, dict) and "op" not in op else "unknown operation"
+                raise ValidationError(f"{problem}; use one of {sorted(OPERATIONS)}.", "PATCH_OP")
             if module.format == "xm" and op["op"] in MOD_ONLY_OPERATIONS:
                 raise ValidationError(f"'{op['op']}' edits MOD samples (8-bit, even loops) and is not available "
-                                      "on an XM module.", "XM_OP_UNSUPPORTED")
+                                      "on an XM module; library_sample and recipe_sample insert samples into an "
+                                      "XM, and 'sample' sets volume, finetune, panning, relative_note and "
+                                      "loop_mode.", "XM_OP_UNSUPPORTED")
+            if module.format != "xm" and op["op"] in XM_ONLY_OPERATIONS:
+                raise ValidationError(f"'{op['op']}' edits XM structure (pattern length, header) and is not "
+                                      "available on a MOD module: a MOD pattern always has 64 rows and the song "
+                                      "starts at speed 6 / 125 BPM (use 'timing').", "MOD_OP_UNSUPPORTED")
             results.append({"op": op["op"], **OPERATIONS[op["op"]](module, op)})
         except ValidationError as exc:
             message = f"ops[{index}] ({op.get('op') if isinstance(op, dict) else '?'}): {exc}"
             if getattr(exc, "violations", None) is not None:  # keep the offending slots for the agent
                 from .sample_source import SampleSourceError
                 raise SampleSourceError(message, exc.violations) from exc
-            raise ValidationError(message, exc.code or "PATCH_OP") from exc
+            # PATCH_OP is reserved for an unknown operation; classify codeless errors by their text.
+            from .errors import error_code
+            raise ValidationError(message, error_code(exc)) from exc
     return results
 
 
@@ -638,13 +758,42 @@ def diff_modules(before: Module, after: Module) -> dict:
              if before.patterns[index].name != after.patterns[index].name]
     if names:
         result["pattern_names"] = names
+    lengths = {str(index): [before.patterns[index].rows, after.patterns[index].rows]
+               for index in range(min(len(before.patterns), len(after.patterns)))
+               if before.patterns[index].rows != after.patterns[index].rows}
+    if lengths:
+        result["pattern_rows"] = lengths
+    header = {key: [xm_profile(before).get(key), xm_profile(after).get(key)] for key in XM_HEADER_KEYS
+              if xm_profile(before).get(key) != xm_profile(after).get(key)}
+    if header:
+        result["xm_header"] = header
     if samples:
         result["samples"] = samples
+        result["sample_fields"] = {str(slot): _sample_fields_changed(before, after, slot) for slot in samples}
     if before.title != after.title:
         result["title"] = {"before": before.title, "after": after.title}
     if before.metadata != after.metadata:
         result["metadata"] = True
     return result
+
+
+def _sample_fields_changed(before: Module, after: Module, slot: int) -> list[str]:
+    """Names of the sample fields that differ in one slot ("added"/"removed" when the slot itself changed)."""
+    old = before.samples[slot - 1] if slot <= len(before.samples) else None
+    new = after.samples[slot - 1] if slot <= len(after.samples) else None
+    if old is None or new is None:
+        return ["added" if old is None else "removed"]
+    return [field.name for field in dataclasses.fields(Sample) if getattr(old, field.name) != getattr(new, field.name)]
+
+
+def flow_changes(diff: dict) -> list[str]:
+    """Cells where an existing Bxx/Dxx/Fxx (jump, break, speed/tempo) was removed or replaced by another effect."""
+    found = []
+    for item in diff.get("cells", []):
+        before, after = item["before"].split()[-1], item["after"].split()[-1]
+        if before[0] in "BDF" and after[0] != before[0]:
+            found.append(f"P{item['pattern']:02X} r{item['row']:02X} ch{item['channel']}: {before} → {after}")
+    return found
 
 
 def touched(diff: dict) -> set:
@@ -669,8 +818,15 @@ def summarize(diff: dict, limit: int = 12) -> list[str]:
         lines.append(f"orders: {diff['orders']['before']} → {diff['orders']['after']}")
     if "pattern_count" in diff:
         lines.append(f"patterns: {diff['pattern_count']['before']} → {diff['pattern_count']['after']}")
+    for index in diff.get("pattern_names", []):
+        lines.append(f"pattern {index:02X} renamed")
+    for index, (old_rows, new_rows) in diff.get("pattern_rows", {}).items():
+        lines.append(f"pattern {int(index):02X} rows: {old_rows} → {new_rows}")
+    for key, (old_value, new_value) in diff.get("xm_header", {}).items():
+        lines.append(f"xm header {key}: {old_value} → {new_value}")
     for slot in diff.get("samples", []):
-        lines.append(f"sample {slot:02X} changed")
+        fields = diff.get("sample_fields", {}).get(str(slot))
+        lines.append(f"sample {slot:02X} changed" + (f": {', '.join(fields)}" if fields else ""))
     if "title" in diff:
         lines.append(f"title: {diff['title']['before']!r} → {diff['title']['after']!r}")
     return lines

@@ -60,7 +60,7 @@ _BY_MESSAGE: tuple[tuple[str, str], ...] = (
     ("liste d'événements", "PATTERNS"),
     ("liste d'ordres", "ORDERS"),
     ("orders[", "ORDERS"),
-    ("Seuls les MOD", "MOD_FORMAT"),
+    ("Not a supported MOD", "MOD_FORMAT"),
     ("restart/tempo", "MOD_FORMAT"),
     ("MOD tronqué", "MOD_FORMAT"),
     ("Taille MOD", "MOD_FORMAT"),

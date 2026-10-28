@@ -35,15 +35,15 @@ There are 46 tools.
 
 | Tool | Read-only | Required arguments | Optional arguments | Purpose |
 | --- | --- | --- | --- | --- |
-| `estimate` | yes | `orders` | `rows`, `speed`, `bpm` | Plan a song's duration before writing it (constant speed/BPM). |
+| `estimate` | yes | `orders` | `rows`, `speed`, `bpm` | Plan a song's duration before writing it (constant speed/BPM). rows is the rows played per order: 64 in a MOD, 1-256 in an XM. |
 | `validate` | yes | `source` | `report`, `sample_source` | Validate a JSON project or MOD; with report=true, list every independent problem with codes. |
 | `inspect` | yes | `source` | `pattern`, `grid`, `row`, `rows` | Summarize a project or MOD. With pattern (and grid=true), show that pattern as tracker grid text. |
-| `patch` | no | `source`, `output` | `ops`, `ops_file`, `label` | Apply patch operations to a project as one validated transaction and write the result. |
+| `patch` | no | `source`, `output` | `ops`, `ops_file`, `label`, `overwrite` | Apply patch operations to a project as one validated transaction and write the result to a new file. Read duration_seconds and warnings in the result. |
 | `export` | no | `source`, `output` | - | Export a validated project to a real MOD file. |
 | `render` | no | `source`, `output` | `seconds`, `from_order`, `engine`, `mp3_output` | Render a MOD or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 copy. |
 | `preview` | no | `source`, `output` | `mp3`, `language` | Build a portable HTML listening bundle in a new directory. |
-| `report` | yes | `source` | `library` | Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, sample sources and loudness against the reference levels (a library-mode project uses exports/sample_library when it exists, unless library is given). Channels count from 0. |
-| `compare` | no | `first`, `second`, `output` | `mp3`, `language`, `seed`, `seconds` | Build a blind A/B listening page comparing two versions in a new directory. |
+| `report` | yes | `source` | `library` | Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, sample sources and loudness against the reference levels (exports/sample_library when it exists, unless library is given; else fixed levels). The key estimate leaves out percussion slots. Channels count from 0. |
+| `compare` | no | `first`, `second`, `output` | `mp3`, `language`, `seed`, `seconds` | Build a blind A/B listening page comparing two versions in a new directory. The X/Y answer is written to answer_key.json (path in answer_key_file), not returned; do not read it before the owner has listened. |
 | `feedback` | no | `project`, `text`, `output` | `rating`, `version` | Record listening feedback in a project's metadata, written to a new project file. |
 | `migrate` | no | `source`, `output` | - | Rewrite a v1 project (or a MOD) as a compact v2 project. |
 | `samples_list` | yes | - | `library`, `query`, `tag`, `category`, `compatible`, `offset`, `limit` | Search the local sample library by text, tags, category and MOD compatibility. |
@@ -54,7 +54,7 @@ There are 46 tools.
 | `synth_levels` | yes | - | `library` | Reference loudness per role group (aggregate medians of a sample bank, or fixed defaults). |
 | `synth_preview` | no | `recipe`, `output` | `name`, `note`, `seconds`, `volume`, `finetune`, `role` | Render a recipe to a WAV at a tracker note, with measured peak, RMS and loudness. |
 | `synth_add` | no | `project`, `recipe`, `name`, `output` | `slot`, `replace`, `volume`, `finetune`, `role`, `match_library`, `no_match` | Insert a created sample (recipe) into a project and write a new project; the volume is matched to the reference level of its role unless volume is given. |
-| `synth_palette` | no | `output` | `title`, `style`, `match_library`, `no_match` | Write a new project holding a starter palette of created samples (sample_source 'synthesized') with loudness-matched volumes. |
+| `synth_palette` | no | `output` | `title`, `style`, `match_library`, `no_match`, `channels`, `format` | Write a new project holding a starter palette of created samples (sample_source 'synthesized') with loudness-matched volumes. channels is 2-32 (default 4); format xm writes an XM whose instruments keep their recipes. |
 | `live_sessions` | yes | - | - | List running live sessions (open ChipLoom windows or headless servers). |
 | `live_status` | yes | - | `session` | What the owner is doing in the window: open file, order, pattern, selection, playback. |
 | `live_score` | yes | - | `session`, `pattern`, `row`, `rows` | Read the live song: overview, or one pattern as grid text. |
@@ -78,9 +78,9 @@ There are 46 tools.
 | `instruments_save` | no | `name` | `dir`, `project`, `slot`, `recipe`, `library_id`, `phrase`, `role`, `tag`, `volume`, `finetune`, `embed`, `id`, `replace` | Save an instrument (a sample, volume, fine tune and an effect phrase) captured from a project slot, a recipe or a library ID. |
 | `instruments_delete` | no | `id` | `dir` | Delete one instrument file from the instrument folder. |
 | `instruments_apply` | no | `project`, `output`, `pattern`, `channel`, `row`, `note` | `instrument`, `inline`, `slot`, `replace`, `length`, `overwrite`, `library`, `dir`, `label` | Write an instrument's note and effect phrase into a pattern channel of a project (inserting or reusing its sample) and write a new project. |
-| `convert` | no | `source`, `output` | `to` | Convert between MOD and XM: a MOD to XM keeps its notes, effects and PCM (the report lists what an XM plays differently); an XM to MOD only when it fits, otherwise refused with a list of reasons. The output extension (.mod, .xm or .json) or `to` picks the target. |
+| `convert` | no | `source`, `output` | `to` | Convert between MOD and XM: a MOD to XM keeps its notes, effects and PCM (the report lists what an XM plays differently) and its sample recipes; an XM to MOD only when it fits, otherwise refused with a list of reasons. The output extension (.mod or .xm) or `to` picks the target; a .json output without `to` gets the other format than the source's. |
 | `export_format` | no | `source`, `output` | `format` | Export a project as a MOD or an XM file (a project of the other format is converted first). `format` defaults to the output extension. |
-| `new_project` | no | `output` | `title`, `channels`, `patterns`, `speed`, `bpm`, `sample_source` | Write a blank project to start a song: empty patterns in order, one empty sample slot, initial speed/BPM and the channel count (4 by default; 2-32, other counts than 4 use the protracker-nch-pal-v1 profile). sample_source defaults to library (fill slots with samples_add or library_sample); use synth_palette instead for a synthesized-only song. |
+| `new_project` | no | `output` | `title`, `format`, `channels`, `patterns`, `rows`, `speed`, `bpm`, `sample_source` | Write a blank project to start a song: empty patterns in order, one empty sample slot, initial speed/BPM and the channel count (4 by default; 2-32, other counts than 4 use the protracker-nch-pal-v1 profile). sample_source defaults to library (fill slots with samples_add or library_sample); use synth_palette instead for a synthesized-only song. format xm writes an XM: patterns of rows rows (1-256, default 64) and speed/BPM in its header. |
 <!-- tools:end -->
 
 Not exposed (use the CLI): `demo`, `import`, `analyze`, `gui` and `live serve`.

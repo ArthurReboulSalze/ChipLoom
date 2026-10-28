@@ -767,6 +767,8 @@ class LevelsPanel(QWidget):
         ops = [{"op": "sample_match_level", "slot": slot} for slot in slots]
         if self.reference()["source"] == "library":
             ops = [{**op, "library": str(window.sample_browser.library_path)} for op in ops]
+        else:  # the targets shown are the built-in levels: do not let the op pick a bank of its own
+            ops = [{**op, "match": "defaults"} for op in ops]
         try:
             result = window.run_patch(ops, label)
         except ValidationError as exc:
