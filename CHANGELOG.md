@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix `chiploom-cli mcp` in the standalone builds: its tools started the CLI with `-m tracker4agents`, which a frozen program does not accept, so every tool call failed. Installs from a checkout or a wheel were not affected.
+
 ## 0.8.1 — 2026-10-28
 
 - Fix a freeze of the window in rendered playback (sample auditions, and the song without libxmp), seen about one run in two in the Windows CI. `QMediaPlayer.stop()` and `setSource()` make Qt's FFmpeg backend wait for its audio thread while that thread destroys a renderer connected to the window's `QAudioOutput`; as that object is a Python wrapper, the thread needs the GIL, which the direct call holds, so both wait for ever. The window now runs these two calls through the event loop with `media_call` (PySide releases the GIL there), still synchronously. The meter also reads the rendered WAV at the playback position instead of receiving decoded buffers from the audio thread.

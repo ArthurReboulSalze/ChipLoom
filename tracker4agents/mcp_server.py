@@ -296,11 +296,16 @@ def _check(arguments: object, schema: dict) -> dict:
     return arguments
 
 
+def cli_prefix() -> list[str]:
+    """How to start the CLI: the interpreter with `-m`, or the frozen chiploom-cli itself, which takes no `-m`."""
+    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "tracker4agents"]
+
+
 def run_command(argv: list[str], cwd: Path | None = None) -> tuple[bool, dict]:
     """Run one CLI command in a child process and return (ok, JSON payload)."""
     environment = dict(os.environ, PYTHONIOENCODING="utf-8")
     try:
-        completed = subprocess.run([sys.executable, "-m", "tracker4agents", *argv], cwd=cwd, capture_output=True,
+        completed = subprocess.run([*cli_prefix(), *argv], cwd=cwd, capture_output=True,
                                    text=True, encoding="utf-8", timeout=COMMAND_TIMEOUT, env=environment,
                                    stdin=subprocess.DEVNULL,
                                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)

@@ -7,9 +7,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tracker4agents import project
-from tracker4agents.mcp_server import TOOLS, Server
+from tracker4agents.mcp_server import TOOLS, Server, cli_prefix
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,6 +43,12 @@ class McpProcess:
 
 
 class McpProtocolTests(unittest.TestCase):
+    def test_a_frozen_cli_starts_itself_without_dash_m(self):
+        # The standalone chiploom-cli has no `-m`: its MCP tools must call the program itself.
+        self.assertEqual(cli_prefix(), [sys.executable, "-m", "tracker4agents"])
+        with patch.object(sys, "frozen", True, create=True):
+            self.assertEqual(cli_prefix(), [sys.executable])
+
     def test_handshake_listing_and_tool_calls(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
