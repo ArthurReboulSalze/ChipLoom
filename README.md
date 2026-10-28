@@ -100,7 +100,7 @@ python -m venv .venv
 
 For the human window, run **Install ChipLoom.cmd**, then **Launch ChipLoom.cmd**. Or install `.[desktop]` and run `python -m tracker4agents gui examples/pixel_rush.project.json` from the configured environment.
 
-To build a standalone Windows folder instead, install `.[desktop]` and PyInstaller, then run `python tools/build_windows.py [--zip]`. It writes `build/windows/ChipLoom/ChipLoom.exe` (the window) and `chiploom-cli.exe` (the command line; named differently because Windows file names ignore case). FFmpeg is not bundled. The package is prepared for PyPI but not yet published, so install from a checkout.
+Ready-made standalone builds for Windows (`.zip`) and Linux x86-64 (`.tar.gz`) are attached to each [GitHub release](https://github.com/ArthurReboulSalze/ChipLoom/releases). To build one yourself, install `.[desktop]` and PyInstaller, then run `python tools/build_standalone.py [--archive]` on the target system. On Windows it writes `build/windows/ChipLoom/ChipLoom.exe` (the window) and `chiploom-cli.exe` (the command line; named differently because Windows file names ignore case); on Linux, `build/linux/ChipLoom/ChipLoom` and `chiploom-cli`. FFmpeg is not bundled. The package is prepared for PyPI but not yet published, so install from a checkout.
 
 </details>
 

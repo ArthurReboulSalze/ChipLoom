@@ -30,7 +30,7 @@ At constant speed, duration = rows × speed × 2.5 / BPM: eight orders of 64 row
 
 Install Python 3.12 or newer, then run **`Install ChipLoom.cmd`** and **`Launch ChipLoom.cmd`**.
 
-A standalone Windows folder can also be built with `python tools/build_windows.py` (add `--zip` for an archive) after installing `.[desktop]` and PyInstaller. The result, `build/windows/ChipLoom/`, contains `ChipLoom.exe` (the window) and `chiploom-cli.exe` (the command line, named differently because Windows ignores case in file names). FFmpeg is not included; libxmp is, if the library was built beforehand. The package is prepared for PyPI but not yet published.
+A ready-made standalone folder is attached to each [GitHub release](https://github.com/ArthurReboulSalze/ChipLoom/releases) as `ChipLoom-<version>-windows.zip`. It can also be built with `python tools/build_standalone.py` (add `--archive` for the zip) after installing `.[desktop]` and PyInstaller. The result, `build/windows/ChipLoom/`, contains `ChipLoom.exe` (the window) and `chiploom-cli.exe` (the command line, named differently because Windows ignores case in file names). FFmpeg is not included; libxmp is, if the library was built beforehand. The package is prepared for PyPI but not yet published.
 
 To start the window from a configured environment:
 
@@ -42,6 +42,8 @@ To start the window from a configured environment:
 ### Linux
 
 The code is prepared for Linux with `pathlib`, Qt data folders and the same widgets and services. Prepare an install with `python3 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[desktop]'`, and start it with `sh launch-chiploom.sh`. FFmpeg with libopenmpt and the Qt system dependencies must be present. **The core and the FFmpeg renders are verified by the Ubuntu CI; the Linux window and its physical audio output remain to be validated.** The system requirements are described in the [official Qt for Python documentation](https://doc.qt.io/qtforpython-6/gettingstarted.html).
+
+Each [GitHub release](https://github.com/ArthurReboulSalze/ChipLoom/releases) also has a standalone build, `ChipLoom-<version>-linux-x86_64.tar.gz`, that needs no Python: extract it and run `./ChipLoom` (the window) or `./chiploom-cli` (the command line). It is built on Ubuntu 22.04, so it needs glibc 2.35 or newer (Debian 12, Ubuntu 22.04 and later). FFmpeg with libopenmpt is not bundled (`sudo apt install ffmpeg`); if the window does not start, install `libxcb-cursor0`. libxmp is bundled for real-time playback. `python tools/build_standalone.py --archive` builds the same archive on a Linux machine.
 
 ### Requirements for audio
 

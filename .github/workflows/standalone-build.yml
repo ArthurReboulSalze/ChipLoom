@@ -1,0 +1,59 @@
+name: Standalone builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write  # attach the archives to the GitHub release of a pushed tag
+
+jobs:
+  build:
+    name: ChipLoom for ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            folder: windows
+            cli: chiploom-cli.exe
+            archive: ChipLoom-*-windows.zip
+          # The oldest supported Ubuntu runner, so the bundle runs on glibc 2.35 and newer.
+          - os: ubuntu-22.04
+            label: Linux
+            folder: linux
+            cli: chiploom-cli
+            archive: ChipLoom-*-linux-*.tar.gz
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install build requirements
+        run: python -m pip install -e ".[desktop]" pyinstaller
+      - name: Build pinned libxmp for real-time playback
+        run: python tools/setup_reference.py
+      - name: Build the standalone folder
+        run: python tools/build_standalone.py --archive
+      - name: Smoke-test the console tool and the bundled studio page
+        shell: bash
+        run: |
+          cli="build/${{ matrix.folder }}/ChipLoom/${{ matrix.cli }}"
+          "$cli" --version
+          "$cli" estimate --orders 8 --bpm 160
+          ls build/${{ matrix.folder }}/ChipLoom/_internal/tracker4agents/web/app.js
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ChipLoom-${{ matrix.folder }}
+          path: build/${{ matrix.folder }}/${{ matrix.archive }}
+          if-no-files-found: error
+      - name: Attach the archive to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" build/${{ matrix.folder }}/${{ matrix.archive }} --clobber --repo "${GITHUB_REPOSITORY}"

@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 28 October 2026, after the 0.8.0 release. Earlier planning notes (translated from the original French) are kept in
+Updated 28 October 2026, after the 0.8.1 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together
@@ -38,8 +38,8 @@ These are proposals. Each still needs the owner's agreement.
    brief for A/B listening; a taste profile built from feedback, A/B choices and accepted or rejected
    proposals, read by the agent before composing; arrangement templates (intro, verse, build, chorus,
    bridge) with durations and densities measured on the owner's references.
-2. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows build to
-   GitHub releases.
+2. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
+   builds to GitHub releases.
 3. **macOS.** Not tested yet: window, real-time audio and a standalone build.
 4. **Richer XM.** Multi-sample instruments, full envelopes and the rest of the XM effect set, then IT.
 5. **Local phrase model** (see the October study in the history folder), only if the agent with
