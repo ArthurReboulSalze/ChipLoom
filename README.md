@@ -2,11 +2,11 @@
   <img src="docs/assets/chiploom-logo.png" alt="ChipLoom" width="640">
 </p>
 
-<h1 align="center">Four channels. Tiny samples. Real tracker music.</h1>
+<h1 align="center">Up to 32 channels. Tiny samples. Real tracker music.</h1>
 
 <p align="center">
   A music toolkit for agents. A tracker window for humans.<br>
-  Compose with JSON and Python, export a real MOD, and share the sound.
+  Compose with JSON and Python, export a real MOD or XM, and share the sound.
 </p>
 
 <p align="center">
@@ -26,9 +26,9 @@
 
 ---
 
-## Hear what four channels can do
+## Hear what ChipLoom can do
 
-Two original compositions made with ChipLoom, using newly synthesized samples. The MP3s are listening copies of the actual exported MOD files. **Open the listening room for audio players and downloads.** GitHub strips audio players from repository READMEs.
+Two original four-channel compositions made with ChipLoom, using newly synthesized samples. The MP3s are listening copies of the actual exported MOD files. **Open the listening room for audio players and downloads.** GitHub strips audio players from repository READMEs.
 
 | | Pixel Rush | Voltage Odyssey V2 |
 | :--- | :--- | :--- |
@@ -57,13 +57,15 @@ Musical brief → Agent → JSON score + local samples → Validate → MOD
 | `report` measurements and blind A/B `compare` pages | Real-time playback when libxmp is available |
 | Python API, CLI and an optional MCP adapter; no display required | Channel mute/solo and stereo level meter |
 | Local sample banks: neutral names, search, audition and insertion | Bottom sample browser: filters, listening and undoable insertion |
+| Sample-editing and instrument patch operations | Sound workshop: loops, trims, fades, levels, recipes and instruments |
+| MOD with 2 to 32 channels and a first FastTracker 2 XM profile | Browser studio for a tablet or a second screen, on the same session |
 | Standard-library core, independent of the agent provider | Four themes; English and French UI; portable HTML bundles |
 
 <p align="center">
-  <img src="docs/assets/chiploom-desktop-library.png" alt="ChipLoom on Windows: four full-width tracker channels above the bottom sample library, with search, type and role filters, MOD compatibility, a waveform, note-based audition and Add to song controls. English UI in the Violet theme." width="1100">
+  <img src="docs/assets/chiploom-desktop-08.png" alt="The ChipLoom window on Windows in the Violet theme: an eight-channel MOD of Pixel Rush in the tracker grid, each channel with its own colour, Mute and Solo strip; below it the sound workshop with the Triangle bass sample, its waveform between loop handles, and loop, trim, gain, fade and volume controls with Preview and Apply." width="1100">
 </p>
 
-<p align="center"><em>The Windows companion with the new bottom sample browser. Search, filter, listen and add sounds while keeping the tracker wide. The screenshot uses a local bank; its samples and the displayed test song are not distributed.</em></p>
+<p align="center"><em>Version 0.8.1 on Windows: an eight-channel MOD in the tracker, with the sound workshop below it. The song is Pixel Rush, arranged on eight channels for this screenshot (channels 5 to 8 echo channels 1 to 4).</em></p>
 
 **No embedded model and no model-weight training.** Your agent provides the composition decisions; ChipLoom provides the musical tools. An optional, tested **MCP adapter** (`chiploom mcp`) wraps the command line for clients that prefer that protocol; it is driven by the official Python MCP SDK in a smoke test but has not been tried in a model-driven session with an application, and agents with a terminal can simply use the CLI. This is an independent project, unaffiliated with OpenAI or Nous Research. [Architecture and MCP status →](docs/ARCHITECTURE.md)
 
@@ -194,6 +196,12 @@ When the window is open, your agent can edit the song you are looking at. In the
 - New versions it announces with `take` appear in the same tab; **Open take** loads one.
 - It can ask the window to play, stop, seek, select a passage or open a file (opening asks you first if you have unsaved changes).
 
+<p align="center">
+  <img src="docs/assets/chiploom-agent-tab.png" alt="The ChipLoom window with the Agent tab open: a pending proposal named Answer phrase with its two cells listed in the details, previewed in violet over the grid; an agent edit highlighted in green on track 4; a take named Darker echoes; Accept, Reject, Listen to proposal, Open take and Compare with current buttons." width="1100">
+</p>
+
+<p align="center"><em>The Agent tab: a proposal previewed over the grid, the agent's last edit highlighted, and a take ready to open or compare.</em></p>
+
 Without the window, `chiploom live serve SONG.json` hosts the same session headless. The server listens on localhost only and needs a token the CLI reads for you. [Live commands →](docs/CLI.md#live-sessions) · [Collaboration guide for agents →](docs/AGENT_GUIDE.md#composing-with-the-owner-in-the-window-live)
 
 ## New in 0.8
@@ -203,6 +211,13 @@ Without the window, `chiploom live serve SONG.json` hosts the same session headl
 - **Browser studio:** a tablet or second screen edits the same live session, opened from **Agent → Open in a browser…** or by pasting the printed address, with no code to type. It stays on this computer unless you allow your local network (plain HTTP). [User guide →](docs/USER_GUIDE.md#open-in-a-browser)
 - **More formats:** MOD with 2 to 32 channels, the `E6x` and `EEx` effects, a first FastTracker 2 XM profile and `convert` between MOD and XM in the command line. [CLI reference →](docs/CLI.md#multi-channel-mod-and-xm)
 - **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 45 MCP tools. [Changelog →](CHANGELOG.md)
+- **Standalone builds:** each GitHub release has a Windows `.zip` and, since 0.8.1, a Linux x86-64 `.tar.gz`, with no Python to install.
+
+<p align="center">
+  <img src="docs/assets/chiploom-browser-studio.png" alt="The ChipLoom browser studio in the Midnight theme: the order list, an eight-track score grid, a cell editor, an agent proposal with Preview, Listen, Accept and Reject, the recent changes journal, takes, and a player bar with one coloured button per track." width="1100">
+</p>
+
+<p align="center"><em>The browser studio on the same eight-channel song, served by <code>chiploom live serve --web</code>: score, agent proposals, recent changes and takes.</em></p>
 
 ## Measure, compare, give feedback
 
@@ -215,13 +230,13 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## Two ways to listen and edit
 
-**Desktop:** open a MOD or JSON project, browse your sample bank, mute/solo tracks and watch agent changes arrive. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser and Agent tab stay below it. It also has a sound workshop, keyboard audition and the browser studio (see above). English is the default; French and four themes are available. The window is verified on Windows; Linux desktop/audio-device behavior remains to be validated.
+**Desktop:** open a MOD or JSON project, browse your sample bank, mute/solo tracks and watch agent changes arrive. Song controls, exports and the stereo meter sit above the full-width tracker; the sample browser and Agent tab stay below it. It also has a sound workshop, keyboard audition and the browser studio (see above). English is the default; French and four themes are available. The window is verified on Windows, and on Debian in an X11 session with a PipeWire output.
 
 - **Type notes:** turn on **Edit mode** (Ctrl+E) and play the piano keys. The lower row starts at the base octave and the upper row one octave higher; **F1–F3** or numpad **+/−** change the octave, and **Step** sets how many rows the cursor advances after each entry. The keyboard setting (Auto, QWERTY, AZERTY) picks the key map; Auto chooses AZERTY for French input. Hex digits fill the sample and effect columns; **Delete** clears a cell and **Backspace** clears it and moves up.
 - **Work with blocks:** **Ctrl+C / X / V** copy, cut and paste. The clipboard holds the same grid text the agent prints, so you can paste what the agent wrote. **Alt+arrows** move the block, **Ctrl+↑/↓** transpose by a semitone and **Ctrl+Shift+↑/↓** by an octave.
 - **Edit the arrangement:** the order editor offers Insert, New, Duplicate, Remove, ↑/↓ and Rename….
 - **Follow outside changes:** when the file changes on disk, the window reloads it. Without local edits that is one undoable "Agent changes" step; with unsaved edits it does a three-way merge, lists conflicts in the status bar and keeps the file's version. Changed cells flash. **F5** still reloads by hand.
-- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows build bundles libxmp when it was built.
+- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows and Linux builds bundle libxmp.
 
 **HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in a browser goes through the [browser studio](docs/USER_GUIDE.md#browser-studio) of a live session. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 
@@ -245,12 +260,12 @@ The included [reference study](references/SELECTION.md) covers 15 historical fil
 | Local sample banks, agent skill and bottom desktop browser | |
 | Compact v2 projects, `patch`, `migrate`, `convert`, stable error codes | |
 | Sound workshop (loops, trim, fades, gain, levels, created and drawn sounds, instruments), keyboard audition, browser studio | |
-| `report`, blind `compare`, `feedback` | Publishing to PyPI and a GitHub release |
-| Live sessions with the window; proposals and takes | Linux desktop validation on real hardware |
+| `report`, blind `compare`, `feedback` | Publishing to PyPI |
+| Live sessions with the window; proposals and takes | Linux window tested with a physical audio device |
 | Keyboard entry, blocks, order editor, real-time playback with libxmp in the window | |
 | MCP stdio adapter (tested with the official Python SDK as a client; no application tried) | |
 | Render up to 120 seconds per request, including excerpts | |
-| Windows desktop and standalone build; Windows/Linux CI; reported Debian agent use | |
+| Windows and Linux standalone builds on each GitHub release; Windows/Linux CI; reported Debian agent use | |
 
 Some valid historical MOD variants are deliberately rejected: `EFx`, `FLT8`, Octalyser signatures and out-of-range periods. Imports keep or report restart bytes, inactive orders and odd headers. [Format details](docs/USER_GUIDE.md#supported-formats-and-limits) · [User guide](docs/USER_GUIDE.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 

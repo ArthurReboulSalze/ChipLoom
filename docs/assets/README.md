@@ -1,6 +1,8 @@
 # ChipLoom visual assets
 
-`chiploom-desktop-library.png` is the current README screenshot, captured from the native Windows window with English controls and the Violet theme. It shows the bottom sample bank browser: search, type/role filters, compatibility, a waveform, note-based audition and insertion, below the full-width tracker. The displayed bank and Pocket Signals V2 test music remain local; neither is included as audio or project data.
+`chiploom-desktop-08.png`, `chiploom-agent-tab.png` and `chiploom-browser-studio.png` are the current README screenshots (version 0.8.1). The two window captures were rendered by Qt at 1680×1000 from the Windows window (Violet theme, English controls, Segoe UI); the browser studio was captured at 1440×900 by headless Microsoft Edge from `chiploom live serve --web`. They show Pixel Rush arranged on eight channels for the screenshots (channels 5 to 8 repeat channels 1 to 4 three rows later at volume 20), with an agent edit, a proposal and a take sent through the live API. Only the published example song appears.
+
+`chiploom-desktop-library.png` is the 0.6 README screenshot, captured from the native Windows window with English controls and the Violet theme. It shows the bottom sample bank browser: search, type/role filters, compatibility, a waveform, note-based audition and insertion, below the full-width tracker. The displayed bank and Pocket Signals V2 test music remain local; neither is included as audio or project data.
 
 `chiploom-desktop-v052.png` records the previous Windows layout, version 0.5.2, with October Letters playing in the Violet theme and English controls. Song settings, audio exports and the stereo meter sit above the full-width tracker.
 
