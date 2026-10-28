@@ -119,7 +119,7 @@ jobs:
           status=0
           for module in test_realtime test_desktop test_desktop_samples test_desktop_editing test_desktop_live test_desktop_08 test_desktop_jam test_desktop_workshop test_desktop_formats test_desktop_realtime; do
             echo "::group::$module"
-            timeout 900 python -m unittest "tests.$module" -v || status=1
+            timeout 300 python tools/run_test_module.py "tests.$module" 240 || status=1
             echo "::endgroup::"
           done
           exit $status
