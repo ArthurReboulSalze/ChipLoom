@@ -89,7 +89,7 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
 
     def test_answer_key_is_written_to_a_file_not_returned_by_default(self):
         result = self.build(seed=3, show_answer=False)
-        out = self.root / "out"
+        out = (self.root / "out").resolve()
         self.assertNotIn("answer_key", result)
         for secret in ("first", "second", "Alpha draft", "Beta draft"):
             self.assertNotIn(f'"{secret}"', json.dumps(result), secret)
