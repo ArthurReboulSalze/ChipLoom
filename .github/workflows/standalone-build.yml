@@ -46,6 +46,15 @@ jobs:
           "$cli" --version
           "$cli" estimate --orders 8 --bpm 160
           ls build/${{ matrix.folder }}/ChipLoom/_internal/tracker4agents/web/app.js
+      - name: Render with the system FFmpeg from the bundle (Linux)
+        # The bundle must not hand its own libraries to FFmpeg (LD_LIBRARY_PATH).
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p /tmp/render && cd /tmp/render
+          "$GITHUB_WORKSPACE/build/linux/ChipLoom/chiploom-cli" demo --song pixel-rush
+          ls -l exports/*/*.wav
       - uses: actions/upload-artifact@v7
         with:
           name: ChipLoom-${{ matrix.folder }}

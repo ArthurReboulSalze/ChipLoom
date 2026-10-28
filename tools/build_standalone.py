@@ -37,7 +37,21 @@ PLATFORM = "windows" if WINDOWS else "linux"
 GUI_FILE, CLI_FILE = ("ChipLoom.exe", "chiploom-cli.exe") if WINDOWS else ("ChipLoom", "chiploom-cli")
 DEFAULT_OUTPUT = ROOT / "build" / PLATFORM
 
-CLI_ENTRY = '''\
+# PyInstaller points LD_LIBRARY_PATH at the bundle so that its own libraries load first. The dynamic
+# loader has read it by the time Python runs, so restoring the user's value changes only the programs
+# ChipLoom starts: FFmpeg must load the system's libstdc++, not the older one in the bundle.
+LINUX_ENVIRONMENT = '''\
+import os
+import sys
+
+if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+    if "LD_LIBRARY_PATH_ORIG" in os.environ:
+        os.environ["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH_ORIG"]
+    else:
+        os.environ.pop("LD_LIBRARY_PATH", None)
+'''
+
+CLI_ENTRY = LINUX_ENVIRONMENT + '''
 from tracker4agents.cli import main
 
 if __name__ == "__main__":
@@ -46,9 +60,8 @@ if __name__ == "__main__":
 
 # A windowed executable has no stdout/stderr: keep argparse and the CLI from crashing,
 # and show startup problems in a message box instead of losing them.
-GUI_ENTRY = '''\
+GUI_ENTRY = LINUX_ENVIRONMENT + '''
 import io
-import sys
 
 
 def _message(text):
