@@ -111,15 +111,15 @@ jobs:
         if: runner.os == 'Windows'
         run: python tools/setup_reference.py
       - name: Install with desktop extra
-        run: python -m pip install -e ".[desktop]"
+        run: python -m pip install -e ".[desktop]" py-spy
       - name: Run real-time engine and desktop tests
-        # One process per module: a Qt hang stays in its module and the log names it.
+        # One process per module: a Qt hang stays in its module, the log names it and shows every thread.
         shell: bash
         run: |
           status=0
           for module in test_realtime test_desktop test_desktop_samples test_desktop_editing test_desktop_live test_desktop_08 test_desktop_jam test_desktop_workshop test_desktop_formats test_desktop_realtime; do
             echo "::group::$module"
-            timeout 300 python tools/run_test_module.py "tests.$module" 240 || status=1
+            timeout 420 python tools/run_test_module.py "tests.$module" 240 || status=1
             echo "::endgroup::"
           done
           exit $status
