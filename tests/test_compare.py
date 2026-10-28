@@ -121,7 +121,7 @@ class MockedAudioComparisonTests(ComparisonFixtureCase):
         xm_path.write_bytes(formats.encode(mod_to_xm(self.beta)[0]))
         with patch("tracker4agents.compare.audio.render", side_effect=fake_render):
             result = create_comparison(self.first, xm_path, self.root / "xm", seed=1, show_answer=True)
-        out = self.root / "xm"
+        out = (self.root / "xm").resolve()
         xm_side = "x" if result["answer_key"]["x"] == "second" else "y"
         mod_side = "y" if xm_side == "x" else "x"
         self.assertEqual(Path(result[xm_side]["mod"]), out / f"{xm_side}.xm")
