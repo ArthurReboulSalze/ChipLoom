@@ -59,8 +59,9 @@ def measure(sample: Sample, volume: int | None = None) -> dict:
     if not region:
         return {"volume": level, "rms": 0.0, "peak": 0.0, "region": [start, end],
                 "unity_rms_db": FLOOR_DB, "loudness_db": FLOOR_DB, "peak_db": FLOOR_DB}
-    rms = math.sqrt(sum(value * value for value in region) / len(region)) / 128
-    peak = max(abs(value) for value in sample.pcm) / 128
+    full_scale = 1 << (sample.bits - 1)  # 128 for a MOD sample, 32768 for a 16-bit XM sample
+    rms = math.sqrt(sum(value * value for value in region) / len(region)) / full_scale
+    peak = max(abs(value) for value in sample.pcm) / full_scale
     gain = level / 64
     return {"volume": level, "rms": round(rms, 6), "peak": round(peak, 6), "region": [start, end],
             "unity_rms_db": _db(rms), "loudness_db": _db(rms * gain), "peak_db": _db(peak * gain)}

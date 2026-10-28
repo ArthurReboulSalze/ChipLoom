@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
                                QLineEdit, QListWidget, QListWidgetItem, QSizePolicy,
                                QVBoxLayout, QWidget)
 
+from .desktop_widgets import XM_REFUSED_TIP
 from .model import NOTES
 from .sample_library import CATEGORIES, DEFAULT_LIBRARY, SampleLibrary
 
@@ -24,7 +25,7 @@ class SampleBrowser(QWidget):
         super().__init__()
         self.window = window
         self.bank: SampleLibrary | None = None
-        self.entry = None
+        self.entry = self._jam = None
         self.page, self.total = 0, 0
         self._query_token = self._preview_token = 0
         self._loading = False
@@ -79,7 +80,7 @@ class SampleBrowser(QWidget):
         content.addWidget(self.results, 1)
         preview = QVBoxLayout()
         preview.setSpacing(3)
-        self.title = window._label("Select a library sample", "section")
+        self.title = window._label("Select a library sample", "itemTitle")
         self.title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         preview.addWidget(self.title)
         self.waveform = waveform_factory(window)
@@ -278,17 +279,22 @@ class SampleBrowser(QWidget):
         self.cancel_preview()
         self.adapt.setChecked(False)
         item = self.results.currentItem()
-        self.entry = None
+        self.entry = self._jam = None
         if item and self.bank and not self._loading:
             try:
                 self.entry = self.bank.get(item.data(Qt.ItemDataRole.UserRole))
-                self.waveform.set_sample(self.bank.read_sample(self.entry["id"]))
+                self._jam = self.bank.read_sample(self.entry["id"])
+                self.waveform.set_sample(self._jam)
             except (OSError, ValueError, RuntimeError) as exc:
                 self.window.message("Library sample unavailable: {detail}", True, detail=str(exc))
         if not self.entry:
             self.waveform.set_sample(None)
         self.show_entry()
         self.update_controls()
+
+    def jam_sample(self):
+        """The selected library entry's sample, for playing it from the keyboard (None when nothing is selected)."""
+        return self._jam if self.entry else None
 
     def show_entry(self):
         if not self.entry:
@@ -339,6 +345,9 @@ class SampleBrowser(QWidget):
         self.adapt.setVisible(incompatible)
         ready = selected and bool(document) and (not occupied or self.replace.isChecked())
         explanation = ""
+        xm = bool(document) and document.module.format == "xm"
+        if xm:   # the core refuses library samples on an XM module
+            ready, explanation = False, XM_REFUSED_TIP
         if ready and incompatible:
             ready = self.adapt.isChecked()
             if ready:
@@ -355,7 +364,7 @@ class SampleBrowser(QWidget):
                                                     for index, sample in enumerate(module.samples, 1)):
                 ready = False
                 explanation = "No free slot. Select an existing slot to replace."
-        if occupied and not self.replace.isChecked():
+        if occupied and not self.replace.isChecked() and not xm:
             explanation = "Check Replace to use this occupied slot."
         self.add_button.setEnabled(bool(ready))
         self.add_button.setToolTip(self.window.t(explanation) if explanation else "")

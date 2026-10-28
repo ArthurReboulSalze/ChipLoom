@@ -32,6 +32,16 @@ class TestInfo(C.Structure):
     _fields_ = [("name", C.c_char * 64), ("type", C.c_char * 64)]
 
 
+def replay_style(data: bytes) -> str:
+    """How libxmp must be configured for this file: "xm", "mod" (M.K./M!K!: ProTracker mode plus
+    the Amiga A500 mixer) or "mod-plain". libxmp 4.7 dereferences a null pointer when the A500
+    mixer flag is combined with ProTracker mode on a MOD it did not recognise as a ProTracker file
+    (6CHN, 8CHN ... or odd headers); those play with the plain mixer instead of the Paula emulation."""
+    if data[:17] == b"Extended Module: ":
+        return "xm"
+    return "mod" if data[1080:1084] in (b"M.K.", b"M!K!") else "mod-plain"
+
+
 def render(source: Path, output: Path, seconds: float, sample_rate: int, library: Path,
            start_seconds: float = 0.0) -> dict:
     dll = C.CDLL(str(library))
@@ -73,13 +83,17 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
         checked(dll.xmp_set_player(ctx, 10, 70), "default pan")
         checked(dll.xmp_load_module_from_memory(ctx, buffer, len(data)), "load")
         loaded = True
+        style = replay_style(data)
+
         checked(dll.xmp_start_player(ctx, sample_rate, 0), "start")
         started = True
-        checked(dll.xmp_set_player(ctx, 11, 3), "ProTracker personality")
-        current_flags = dll.xmp_get_player(ctx, 5)
-        checked(current_flags, "current flags")
-        # CFLAGS applies to the loaded module; FLAGS only configures future loads.
-        checked(dll.xmp_set_player(ctx, 5, (current_flags | 8) & ~1), "PAL CIA / mixer flags")
+        if style != "xm":  # an XM keeps libxmp's own FastTracker II personality
+            checked(dll.xmp_set_player(ctx, 11, 3), "ProTracker personality")
+            current_flags = dll.xmp_get_player(ctx, 5)
+            checked(current_flags, "current flags")
+            # CFLAGS applies to the loaded module; FLAGS only configures future loads.
+            flags = (current_flags | 8) & ~1 if style == "mod" else current_flags & ~1
+            checked(dll.xmp_set_player(ctx, 5, flags), "PAL CIA / mixer flags")
         checked(dll.xmp_set_player(ctx, 1, 70), "stereo separation")
         checked(dll.xmp_set_player(ctx, 0, 1), "amplification")
         frame = FrameInfo()

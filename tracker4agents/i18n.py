@@ -39,8 +39,8 @@ FR = {
     "Open a module to get started": "Ouvre un module pour commencer",
     "Play": "Écouter", "Pause": "Pause", "Stop": "Stop", "Loop": "Boucle", "Volume": "Volume",
     "LIBRARY": "BIBLIOTHÈQUE", "SAMPLES": "SAMPLES",
-    "MOD and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.":
-        "MOD et projets JSON\nDépose un fichier ici pour l'ouvrir.\nF5 recharge les changements de l'agent.",
+    "MOD, XM and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.":
+        "Projets MOD, XM et JSON\nDépose un fichier ici pour l'ouvrir.\nF5 recharge les changements de l'agent.",
     "Order": "Ordre", "Follow playback": "Suivre la lecture",
     "− 1 semitone": "− 1 demi-ton", "+ 1 semitone": "+ 1 demi-ton",
     "Track {number}": "Voie {number}", "Track {number} · MUTED": "Voie {number} · MUET",
@@ -55,7 +55,8 @@ FR = {
     "Save the project changes before continuing?": "Enregistrer les modifications du projet avant de continuer ?",
     "Save": "Enregistrer", "Discard": "Ignorer", "Cancel": "Annuler",
     "Open a module or project": "Ouvrir un module ou un projet",
-    "Modules and projects (*.mod *.MOD *.json);;All files (*)": "Modules et projets (*.mod *.MOD *.json);;Tous les fichiers (*)",
+    "Modules and projects (*.mod *.MOD *.xm *.XM *.json);;All files (*)":
+        "Modules et projets (*.mod *.MOD *.xm *.XM *.json);;Tous les fichiers (*)",
     "Cannot open: {detail}": "Ouverture impossible : {detail}",
     "Session could not be saved: {detail}": "Session non enregistrée : {detail}",
     "Untitled": "Sans titre", "New project": "Nouveau projet",
@@ -157,10 +158,230 @@ FR = {
     "Agent changes merged with your edits · Ctrl+Z to undo":
         "Changements de l'agent fusionnés avec tes modifications · Ctrl+Z pour annuler",
     "Reloaded the agent's changes · Ctrl+Z to undo": "Changements de l'agent rechargés · Ctrl+Z pour annuler",
-    "Edit mode (Ctrl+E): piano keys enter notes, hex digits fill Smp and Effect · Ctrl+C/X/V: blocks · Alt+arrows: move block · Ctrl+↑/↓: transpose · Double-click: edit a cell · Click a row number: seek":
-        "Mode saisie (Ctrl+E) : les touches de piano écrivent les notes, les chiffres hexadécimaux remplissent Smp et Effet · Ctrl+C/X/V : blocs · Alt+flèches : déplacer le bloc · Ctrl+↑/↓ : transposer · Double-clic : éditer une cellule · Clic sur un numéro de ligne : déplacer l'écoute",
-    "Four-channel MOD tracker.\nDouble-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\nPiano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. In Smp and Effect columns type hexadecimal digits.\nCtrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · Ctrl+Up/Down: transpose (Shift: octave).\nThe file reloads by itself when the agent saves it; F5 forces a reload.\nClick a track header to mute or unmute it.\nSpace in patterns: play/pause · Ctrl+Z: undo.\nReal-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\nProTracker M.K. profile; XM and IT are planned.":
-        "Tracker MOD à quatre voies.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver.\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nProfil ProTracker M.K. ; XM et IT sont prévus.",
+    "+ Copy": "+ Copie", "Move": "Déplacer",
+    "Octave {octave} · Keyboard {layout}": "Octave {octave} · Clavier {layout}",
+    "The piano keys play notes: the lower row from octave {octave}, the upper rows from octave {next}. F1-F3 or numpad + and - change the octave.":
+        "Les touches de piano jouent des notes : la rangée basse à partir de l'octave {octave}, les rangées hautes à partir de l'octave {next}. F1-F3 ou pavé numérique + et - changent l'octave.",
+    # --- sound workshop: sample editor and levels
+    "Trim": "Couper", "Gain": "Gain", "Fade": "Fondu", "Preview": "Aperçu", "Levels": "Niveaux",
+    "Loop = selection": "Boucle = sélection", "No loop": "Sans boucle", "Whole sample": "Tout le sample",
+    "Set loop": "Régler la boucle", "Trim sample": "Couper le sample", "Change gain": "Changer le gain",
+    "Fade sample": "Fondu du sample",
+    "two zero bytes added at the start": "deux octets nuls ajoutés au début", "loop shortened": "boucle raccourcie",
+    "loop removed": "boucle retirée",
+    "start ": "début ", "length ": "longueur ", "from ": "de ", "to ": "à ", "in ": "entrée ", "out ": "sortie ",
+    "Loop start in bytes (even). Drag the amber handles on the waveform.":
+        "Début de la boucle en octets (pair). Glisse les poignées ambrées sur la forme d'onde.",
+    "Loop length in bytes (even, at least 4); 0 means no loop.": "Longueur de la boucle en octets (paire, 4 au moins) ; 0 = pas de boucle.",
+    "First byte kept. Drag in the waveform to select a range.": "Premier octet conservé. Glisse dans la forme d'onde pour choisir une plage.",
+    "End of the kept range, in bytes (even).": "Fin de la plage conservée, en octets (pair).",
+    "Gain in decibels. A gain that would clip is refused, with the clean headroom.":
+        "Gain en décibels. Un gain qui saturerait est refusé, avec la marge propre.",
+    "Bytes faded in from silence at the start.": "Octets en fondu depuis le silence au début.",
+    "Bytes faded out to silence at the end.": "Octets en fondu vers le silence à la fin.",
+    "Hear the edited copy and read what would change. The song is not touched.":
+        "Écoute la copie modifiée et lis ce qui changerait. Le morceau n'est pas touché.",
+    "Apply as one undoable change (Ctrl+Z).": "Appliquer en une seule modification annulable (Ctrl+Z).",
+    "Pick a sample in the list to edit its loop, trim, fades and gain.":
+        "Choisis un sample dans la liste pour modifier sa boucle, sa coupe, ses fondus et son gain.",
+    "This song has no samples yet: add one from the Sample library or the Create tab.":
+        "Ce morceau n'a pas encore de sample : ajoute-en un depuis la Bibliothèque ou l'onglet Créer.",
+    "headroom {db:+.1f} dB": "marge {db:+.1f} dB", "fine tune ": "finetune ",
+    "Drag across the waveform to select the part that should loop.":
+        "Glisse sur la forme d'onde pour choisir la partie à boucler.",
+    "No loop afterwards: the sample plays once.": "Plus de boucle ensuite : le sample se joue une fois.",
+    "Loop {start} → {end} ({length} bytes) · jump at the seam {jump}":
+        "Boucle {start} → {end} ({length} octets) · saut à la jonction {jump}",
+    "Keeps bytes {start} → {end}: {before} → {after} bytes": "Garde les octets {start} → {end} : {before} → {after} octets",
+    "{db:+.1f} dB · peak {before} → {after} · {changed} bytes change · clipped {clipped}":
+        "{db:+.1f} dB · crête {before} → {after} · {changed} octets modifiés · saturés {clipped}",
+    "Fade in {fade_in} · out {fade_out} bytes · {changed} bytes change":
+        "Fondu d'entrée {fade_in} · de sortie {fade_out} octets · {changed} octets modifiés",
+    "Nothing changed: the sample already is like that.": "Rien n'a changé : le sample est déjà ainsi.",
+    "applied, Ctrl+Z to undo": "appliqué, Ctrl+Z pour annuler", "{what} · Ctrl+Z to undo": "{what} · Ctrl+Z pour annuler",
+    "Nothing was changed.": "Rien n'a été modifié.", "This edit needs a choice": "Cette modification demande un choix",
+    "This project only allows samples from its declared source, so the sound cannot be edited this way.":
+        "Ce projet n'accepte que les samples de sa source déclarée : le son ne peut pas être modifié ainsi.",
+    "A gain of {db:+.1f} dB would push loud bytes past the 8-bit limit.":
+        "Un gain de {db:+.1f} dB ferait dépasser la limite 8 bits aux octets forts.",
+    "The largest clean gain is {room:+.1f} dB.": "Le plus grand gain propre est {room:+.1f} dB.",
+    "Apply it anyway and flatten (clip) the loudest bytes": "L'appliquer quand même et écrêter les octets les plus forts",
+    "The kept range cuts into the loop.": "La plage conservée coupe la boucle.",
+    "Keep only the part of the loop inside the range": "Garder seulement la partie de la boucle dans la plage",
+    "This fade reaches into the loop, so every repeat would dip.": "Ce fondu entre dans la boucle : chaque répétition baisserait.",
+    "Fade inside the loop anyway": "Faire le fondu dans la boucle quand même",
+    "A sample without a loop must start with two silent bytes (the replayer's no-loop marker).":
+        "Un sample sans boucle doit commencer par deux octets silencieux (le marqueur « sans boucle » du lecteur).",
+    "Add two zero bytes in front; the sound itself stays exactly the same":
+        "Ajouter deux octets nuls devant ; le son lui-même reste exactement le même",
+    "Match": "Égaliser", "Match all": "Tout égaliser", "Sample": "Sample", "Level": "Niveau", "Target": "Cible",
+    "Difference": "Écart", "Match level": "Égaliser le niveau", "Match all levels": "Égaliser tous les niveaux",
+    "Open a song with samples to see how loud each one is.": "Ouvre un morceau avec des samples pour voir leur niveau.",
+    "Differences above {limit} dB are flagged. Levels are the samples' own loudness at their volume, not a measurement of the mix.":
+        "Les écarts de plus de {limit} dB sont signalés. Les niveaux sont ceux des samples à leur volume, pas une mesure du mix.",
+    "Targets from the sample bank at {path}": "Cibles issues de la banque de samples dans {path}",
+    "Targets: built-in reference levels (no sample bank found; pick one in the Sample library tab)":
+        "Cibles : niveaux de référence intégrés (aucune banque trouvée ; choisis-en une dans l'onglet Bibliothèque)",
+    "More than {limit} dB from the target: use Match.": "À plus de {limit} dB de la cible : utilise Égaliser.",
+    "Set this sample's volume to its role's target level.": "Règle le volume de ce sample sur le niveau cible de son rôle.",
+    "Cannot match the level: {detail}": "Égalisation impossible : {detail}",
+    "Matched {count} sample levels · Ctrl+Z to undo": "{count} niveaux de samples égalisés · Ctrl+Z pour annuler",
+    "Kick": "Grosse caisse", "Snare": "Caisse claire", "Hat": "Charleston", "Chord": "Accord", "Texture": "Texture",
+    "Automatic": "Automatique",
+    # --- sound workshop: the Create tab
+    "Create": "Créer", "Instruments": "Instruments", "RECIPE": "RECETTE", "SOUND": "SON", "ADD TO SONG": "AJOUTER AU MORCEAU",
+    "Sine": "Sinus", "Triangle": "Triangle", "Saw": "Dent de scie", "Square": "Carré", "Clear": "Effacer",
+    "Pulse": "Impulsion", "Noise": "Bruit", "Wave": "Onde", "Pluck": "Pincé", "Draw": "Dessin", "Kick hat": "Grosse caisse + charley",
+    "Snare hat": "Caisse claire + charley",
+    "Number of points along one cycle": "Nombre de points sur un cycle",
+    "Listen after each change": "Écouter après chaque changement",
+    "Match the volume to the role's level": "Régler le volume sur le niveau du rôle",
+    "Keep the drawing as plain sample data instead of a recipe": "Garder le dessin comme données de sample brutes plutôt que comme recette",
+    "Name": "Nom", "Role": "Rôle", "First free slot": "Premier emplacement libre", "free": "libre", "auto": "auto",
+    "Start a synthesized song…": "Démarrer un morceau synthétisé…",
+    "Open a new song holding the starter palette of created samples (kick, snare, hat, bass, leads, noise), volumes matched to their roles.":
+        "Ouvre un nouveau morceau avec la palette de départ de samples créés (grosse caisse, caisse claire, charley, basses, mélodies, bruit), volumes réglés selon leurs rôles.",
+    "Synth Palette": "Palette synthé", "Open a song first.": "Ouvre d'abord un morceau.",
+    "Replace this sample?": "Remplacer ce sample ?", "Slot {slot} holds {name!r}. Replace it with the new sound?":
+        "L'emplacement {slot} contient {name!r}. Le remplacer par le nouveau son ?",
+    "Added to slot {slot} · Ctrl+Z to undo": "Ajouté à l'emplacement {slot} · Ctrl+Z pour annuler",
+    "This song only allows samples from its declared source, so this sound cannot be added.":
+        "Ce morceau n'accepte que les samples de sa source déclarée : ce son ne peut pas être ajouté.",
+    "That sample slot cannot be used: {detail}": "Cet emplacement de sample est inutilisable : {detail}",
+    "This sound cannot be added: {detail}": "Ce son ne peut pas être ajouté : {detail}",
+    "Cannot start a synthesized song: {detail}": "Impossible de démarrer un morceau synthétisé : {detail}",
+    "Started a synthesized song with {count} created samples": "Morceau synthétisé démarré avec {count} samples créés",
+    "This recipe cannot be built: {detail}": "Cette recette ne peut pas être construite : {detail}",
+    "{bytes} bytes · {kind} · plays {rate:.0f} Hz at {note}": "{bytes} octets · {kind} · joue à {rate:.0f} Hz sur {note}",
+    "looped": "bouclé", "one-shot": "joué une fois", "tuning off by {cents:+.1f} cents": "désaccord de {cents:+.1f} cents",
+    "Loudness {db:.1f} dB (role {role}, bank reference {reference:.1f} dB)":
+        "Niveau {db:.1f} dB (rôle {role}, référence de la banque {reference:.1f} dB)",
+    "Peak {peak} dBFS · RMS {rms} dBFS · clipped {clipped}": "Crête {peak} dBFS · RMS {rms} dBFS · saturés {clipped}",
+    "Shape": "Forme", "Frequency (Hz)": "Fréquence (Hz)", "Cycles": "Cycles", "Pulse width": "Largeur d'impulsion",
+    "Length (bytes)": "Longueur (octets)", "Smoothing": "Lissage", "1-bit noise": "Bruit 1 bit", "Seed": "Graine",
+    "Peak": "Crête", "Duration (s)": "Durée (s)", "Drive": "Saturation", "Points": "Points",
+    "Clean looped chip wave (pulse, triangle, saw, sine) tuned so note C-2 plays the stated frequency; or a looped noise buffer for texture.":
+        "Onde chip bouclée propre (impulsion, triangle, dent de scie, sinus) accordée pour que la note C-2 joue la fréquence indiquée ; ou un bruit bouclé pour la texture.",
+    "Low pitch-dropping thump with a click.": "Coup grave à hauteur descendante, avec un clic.",
+    "Noise burst over a short tone.": "Rafale de bruit sur une courte tonalité.",
+    "Very short high noise tick.": "Tic de bruit aigu très court.",
+    "Kick with a hat tick on top: one note, two drums.": "Grosse caisse avec un tic de charley dessus : une note, deux percussions.",
+    "Snare with a hat tick on top.": "Caisse claire avec un tic de charley dessus.",
+    "One-shot plucked tone with a baked decay (bass or lead); play it at C-2 for its stated pitch.":
+        "Son pincé joué une fois, à décroissance intégrée (basse ou mélodie) ; joue-le en C-2 pour sa hauteur indiquée.",
+    "Your own looped wave from 4 to 256 points between -1 and 1 (hand-drawn timbres).":
+        "Ta propre onde bouclée de 4 à 256 points entre -1 et 1 (timbres dessinés à la main).",
+    "Waveform. Noise takes seed/length/smooth; the others take frequency/cycles.":
+        "Forme d'onde. Le bruit prend graine/longueur/lissage ; les autres fréquence/cycles.",
+    "Pitch in Hz heard when the sample plays at tracker note C-2.": "Hauteur en Hz entendue quand le sample joue la note C-2.",
+    "Cycles in the loop. Omit for the fewest cycles that land within 2 cents.":
+        "Cycles dans la boucle. Absent : le moins de cycles qui tombent à 2 cents près.",
+    "Cycles in the loop.": "Cycles dans la boucle.",
+    "Pulse width: 0.125, 0.25 and 0.5 are the classic ones.": "Largeur d'impulsion : 0,125, 0,25 et 0,5 sont les classiques.",
+    "Pulse width of the underlying tone.": "Largeur d'impulsion de la tonalité sous-jacente.",
+    "Loop length in bytes (even).": "Longueur de la boucle en octets (paire).",
+    "Low-pass amount: 0 is bright white noise, 0.9 is dark rumble.": "Filtre passe-bas : 0 = bruit blanc clair, 0,9 = grondement sombre.",
+    "1-bit noise (every byte at full height): the loudest, harshest texture.": "Bruit 1 bit (chaque octet à pleine hauteur) : la texture la plus forte et la plus dure.",
+    "Seed of the noise generator; the same seed gives the same bytes.": "Graine du générateur de bruit ; la même graine donne les mêmes octets.",
+    "Fraction of full 8-bit scale used by the loudest byte.": "Part de l'échelle 8 bits pleine utilisée par l'octet le plus fort.",
+    "Length in seconds.": "Durée en secondes.",
+    "Soft saturation that evens out loud head and quiet tail: a denser, louder-in-RMS hit. 0 leaves the original sound; 0.3 suits matching a sample bank.":
+        "Saturation douce qui égalise l'attaque forte et la queue faible : un coup plus dense, plus fort en RMS. 0 laisse le son d'origine ; 0,3 convient pour s'accorder à une banque.",
+    "4 to 256 values along one cycle.": "De 4 à 256 valeurs sur un cycle.",
+    # --- sound workshop: instruments
+    "INSTRUMENTS": "INSTRUMENTS", "SAVE THE SELECTED SAMPLE": "ENREGISTRER LE SAMPLE CHOISI",
+    "APPLY AT THE CURSOR": "APPLIQUER AU CURSEUR", "Search instruments…": "Rechercher un instrument…",
+    "Delete": "Supprimer", "Save instrument": "Enregistrer l'instrument", "Apply at cursor": "Appliquer au curseur",
+    "Replace effects already in the way": "Remplacer les effets déjà présents",
+    "Phrase: one effect per row after the note (000 = nothing)": "Phrase : un effet par ligne après la note (000 = rien)",
+    "+ Row": "+ Ligne", "− Row": "− Ligne", "row {number}": "ligne {number}",
+    "Choose an instrument folder": "Choisir le dossier d'instruments",
+    "Delete this instrument?": "Supprimer cet instrument ?",
+    "Delete {id}? The file is removed from the folder.": "Supprimer {id} ? Le fichier est retiré du dossier.",
+    "{id} · {name} · {role} · {rows} phrase rows": "{id} · {name} · {role} · {rows} lignes de phrase",
+    "Select a sample in Song samples first.": "Choisis d'abord un sample dans Samples du morceau.",
+    "The instrument was not saved: {detail}": "L'instrument n'a pas été enregistré : {detail}",
+    "Select an instrument and a pattern cell first.": "Choisis d'abord un instrument et une cellule du pattern.",
+    "The instrument was not applied: {detail}": "L'instrument n'a pas été appliqué : {detail}",
+    "The instrument folder cannot be read: {detail}": "Le dossier d'instruments est illisible : {detail}",
+    "No instruments here yet. Select a sample in Song samples, write a phrase and press Save instrument.":
+        "Aucun instrument ici pour l'instant. Choisis un sample dans Samples du morceau, écris une phrase et appuie sur Enregistrer l'instrument.",
+    "No instrument matches.": "Aucun instrument ne correspond.",
+    "{count} instrument files could not be read.": "{count} fichiers d'instrument illisibles.",
+    "Saved {id} · {name}": "{id} · {name} enregistré",
+    "{name}: {count} rows written at row {row}": "{name} : {count} lignes écrites à partir de la ligne {row}",
+    "{count} effects kept because something was already there": "{count} effets conservés car la place était prise",
+    "Apply instrument at cursor\tCtrl+I": "Appliquer l'instrument au curseur\tCtrl+I",
+    # --- open in a browser
+    "Open in a browser…": "Ouvrir dans un navigateur…", "Open in a browser": "Ouvrir dans un navigateur",
+    "Open this address in a browser to listen to this song and edit it with the agent, as \"human-web\". No code is needed. The agent keeps its own access.":
+        "Ouvre cette adresse dans un navigateur pour écouter ce morceau et le modifier avec l'agent, sous le nom « human-web ». Aucun code n'est nécessaire. L'agent garde son propre accès.",
+    "Address": "Adresse", "Copy": "Copier", "Open": "Ouvrir", "Close": "Fermer",
+    "Address copied": "Adresse copiée", "This computer only": "Cet ordinateur seulement",
+    "Allow devices on my local network": "Autoriser les appareils de mon réseau local",
+    "Opens the studio (and only the studio) to this computer's private network addresses.":
+        "Ouvre le studio (et lui seul) aux adresses du réseau privé de cet ordinateur.",
+    "The local network could not be opened: {detail}": "Le réseau local n'a pas pu être ouvert : {detail}",
+    "Anyone on that network who knows the address can listen and edit, and the traffic is plain HTTP. Turn it on only on a network you trust.":
+        "Quiconque est sur ce réseau et connaît l'adresse peut écouter et modifier, et le trafic est en HTTP simple. Ne l'active que sur un réseau de confiance.",
+    "LAN listeners are not running yet.": "Le réseau local n'est pas encore ouvert.",
+    "CONNECTED BROWSERS": "NAVIGATEURS CONNECTÉS", "Device": "Appareil", "Browser": "Navigateur", "Network": "Réseau",
+    "Last seen": "Dernière activité", "local network": "réseau local", "this computer": "cet ordinateur",
+    "No browser is connected yet.": "Aucun navigateur n'est encore connecté.",
+    "Live collaboration is off: turn it on in the Agent menu to open the song in a browser.":
+        "La collaboration en direct est désactivée : active-la dans le menu Agent pour ouvrir le morceau dans un navigateur.",
+    "Browsers: {count}": "Navigateurs : {count}",
+    "Browsers connected to this song (Agent menu, Open in a browser…)": "Navigateurs connectés à ce morceau (menu Agent, Ouvrir dans un navigateur…)",
+    "Edit from a browser ({author}): {label} · {summary}": "Modification depuis un navigateur ({author}) : {label} · {summary}",
+    "Last agent activity: {seconds} s ago": "Dernière activité de l'agent : il y a {seconds} s",
+    "The agent asks to open {name}: answer the save prompt":
+        "L'agent demande d'ouvrir {name} : réponds à la question d'enregistrement",
+    "Compare with current": "Comparer avec l'actuel", "End comparison": "Terminer la comparaison",
+    "Compare a take with the current song": "Comparer une version avec le morceau actuel",
+    "Select a take to compare with the current song.": "Sélectionne une version à comparer avec le morceau actuel.",
+    "Comparing: {listening}": "Comparaison : {listening}",
+    "take {id} · {label} (B)": "version {id} · {label} (B)", "current song (A)": "morceau actuel (A)",
+    "Listening to {listening}": "Écoute de {listening}",
+    "Ctrl+B: hear the take, then switch between it and the current song at the same position":
+        "Ctrl+B : écouter la version, puis basculer entre elle et le morceau actuel à la même position",
+    "Listen to current song (A)": "Écouter le morceau actuel (A)", "Listen to take (B)": "Écouter la version (B)",
+    "listening to a take": "écoute d'une version",
+    "Ins": "Ins", "Vol": "Vol",
+    "Double-click to edit. Notes C-0..B-7, === is key off; instrument, volume and effect in hexadecimal (effect letters 0-9 then A-Z).":
+        "Double-clique pour modifier. Notes C-0..B-7, === coupe la note ; instrument, volume et effet en hexadécimal (lettres d'effet : 0-9 puis A-Z).",
+    "That key is outside the C-0..B-7 range at this octave.": "Cette touche sort de C-0..B-7 à cette octave.",
+    "Cells copied from a {copied} module cannot be pasted into a {open} module.":
+        "Les cellules copiées d'un module {copied} ne se collent pas dans un module {open}.",
+    "{format} · {channels} CHANNELS": "{format} · {channels} VOIES",
+    "Export XM…": "Exporter le XM…", "Export XM module": "Exporter le module XM", "XM exported: {name}": "XM exporté : {name}",
+    "XM: Vol is the volume byte in hex (40 = full), effects run 0-9 then A-Z · key 1 enters key off (===)":
+        "XM : Vol est l'octet de volume en hexadécimal (40 = plein), les effets vont de 0-9 puis A-Z · la touche 1 écrit la fin de note (key off, ===)",
+    "{size} bytes · mono {bits}-bit · {loop} ({mode}) · panning {panning} · relative note {note:+d} · C-4 preview":
+        "{size} octets · mono {bits} bits · {loop} ({mode}) · panoramique {panning} · note relative {note:+d} · aperçu C-4",
+    "forward": "aller", "pingpong": "aller-retour",
+    "This edits 8-bit MOD samples and is not available on an XM module.":
+        "Cette action modifie des samples MOD 8 bits : elle n'est pas disponible dans un module XM.",
+    "Levels are measured on 8-bit MOD samples: there is nothing to match in an XM module.":
+        "Les niveaux se mesurent sur des samples MOD 8 bits : il n'y a rien à égaliser dans un module XM.",
+    "Piano keys play the current instrument · Ctrl+E: Edit mode · Ctrl+C/X/V: blocks · Alt+arrows: move · Double-click: edit":
+        "Les touches de piano jouent l'instrument courant · Ctrl+E : mode saisie · Ctrl+C/X/V : blocs · Alt+flèches : déplacer · Double-clic : éditer",
+    "Keyboard shortcuts of the grid": "Raccourcis clavier de la grille",
+    "Piano keys": "Touches de piano", "Double-click": "Double-clic", "Row number": "Numéro de ligne",
+    "Del": "Suppr", "Space": "Espace", "Alt+arrows": "Alt+flèches",
+    "Play the current instrument; in Edit mode they enter notes":
+        "Jouent l'instrument courant ; en mode saisie, elles écrivent les notes",
+    "Edit mode: hex digits also fill Smp and Effect": "Mode saisie : les chiffres hexadécimaux remplissent aussi Smp et Effet",
+    "Copy, cut and paste a block of cells (as grid text)": "Copier, couper et coller un bloc de cellules (en texte de grille)",
+    "Clear the selected cells": "Effacer les cellules sélectionnées",
+    "Move the selected block (drag it too; Ctrl copies)": "Déplacer le bloc sélectionné (ou le glisser ; Ctrl copie)",
+    "Transpose the selection (Shift: an octave)": "Transposer la sélection (Maj : une octave)",
+    "Edit a cell": "Éditer une cellule", "Click to seek there": "Cliquer pour y placer l'écoute",
+    "Play / pause": "Lecture / pause",
+    "Takes the agent saves appear here.": "Les versions de l'agent apparaissent ici.",
+    "Takes the agent saves appear here. Open one to work from it, or compare it with the current song.":
+        "Les versions enregistrées par l'agent apparaissent ici. Ouvre-en une pour partir de celle-ci, ou compare-la au morceau courant.",
+    "MOD and XM tracker.\nDouble-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\nPiano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. In Smp and Effect columns type hexadecimal digits.\nThe piano keys also play what they type: the current instrument with Edit mode off, the selected sound in Song samples, Sample library, Create and Instruments. Space still plays and pauses.\nCtrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · Ctrl+Up/Down: transpose (Shift: octave).\nThe file reloads by itself when the agent saves it; F5 forces a reload.\nClick a track header to mute or unmute it; the grid scrolls sideways when the channels do not fit.\nAn XM adds a volume column and key off (key 1, the key before 2, in Edit mode; === in a cell).\nSpace in patterns: play/pause · Ctrl+Z: undo.\nReal-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\nFour-channel ProTracker MOD, MOD with 2 to 32 channels and the FastTracker II XM profile; IT is planned.":
+        "Tracker MOD et XM.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nLes touches de piano jouent aussi ce qu'elles écrivent : l'instrument courant quand le mode saisie est désactivé, le son choisi dans Samples du morceau, Bibliothèque, Créer et Instruments. Espace lance toujours la lecture et la pause.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver ; la grille défile sur le côté quand les voies ne tiennent pas.\nUn XM ajoute une colonne de volume et la fin de note (touche 1, celle d'avant le 2, en mode saisie ; === dans une cellule).\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nMOD ProTracker à quatre voies, MOD de 2 à 32 voies et profil XM de FastTracker II ; IT est prévu.",
 }
 
 

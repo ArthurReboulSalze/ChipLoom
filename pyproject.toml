@@ -59,7 +59,7 @@ include = ["tracker4agents*"]
 version = { attr = "tracker4agents.__version__" }
 
 [tool.setuptools.package-data]
-tracker4agents = ["assets/*.png"]
+tracker4agents = ["assets/*.png", "web/*.html", "web/*.js", "web/*.css"]
 
 [tool.ruff]
 line-length = 130

@@ -66,6 +66,16 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     serve = command("serve", "Host a headless session on a project or MOD until Ctrl+C.")
     serve.add_argument("source", type=Path)
     serve.add_argument("--port", type=int, default=0)
+    serve.add_argument("--web", action="store_true",
+                       help="Also print the address of the browser studio (/web/); no code is needed.")
+    serve.add_argument("--lan", action="store_true",
+                       help="Offer the browser studio to other devices on your private network (implies --web). "
+                            "Plain HTTP; only the studio is exposed, never the agent API.")
+    serve.add_argument("--lan-host", metavar="ADDRESS", help="Restrict --lan to one private IPv4 address of this computer.")
+    serve.add_argument("--lan-port", type=int, default=0, help="Port for the LAN listener (default: any free port).")
+    serve.add_argument("--no-web", action="store_true", help="Turn the browser studio off for this session.")
+    web = command("web", "Print the address of the browser studio of the running session (no code needed).")
+    web.add_argument("--status", action="store_true", help="List the connected browsers instead of printing the address.")
     return live
 
 
@@ -95,14 +105,32 @@ def _public(entry: dict) -> dict:
     return {key: value for key, value in entry.items() if key != "token"}
 
 
+def _web_announcement(server: LiveServer) -> dict:
+    """The studio address(es) for the owner to open in a browser."""
+    urls = server.web_urls()
+    address = (urls["lan"] or [urls["local"]])[0]
+    return {**{key: value for key, value in server.web_info().items() if key != "devices"},
+            "message": f"Open {address} in a browser."}
+
+
 def _serve(args: argparse.Namespace, stop: threading.Event | None, announce: Callable[[dict], None] | None) -> dict:
+    if args.no_web and (args.web or args.lan):
+        raise ValidationError("--no-web cannot be combined with --web or --lan.", "LIVE_PARAMS")
+    if args.lan_host and not args.lan:
+        raise ValidationError("--lan-host needs --lan.", "LIVE_PARAMS")
     document = Document.open(args.source.resolve())
     session = LiveSession(document)
-    server = LiveServer(session, port=args.port, kind="headless").start()
+    server = LiveServer(session, port=args.port, kind="headless", web=not args.no_web, lan=args.lan,
+                        lan_port=args.lan_port)
+    if args.lan_host:
+        server.enable_lan(True, args.lan_host, args.lan_port)
+    server.start()
     stop = stop or threading.Event()
     try:
         info = {"ok": True, "event": "listening", **server.info(secret=False),
                 "discovery_file": str(live_home() / "live"), "stop": "Ctrl+C"}
+        if args.web or args.lan:
+            info["web"] = _web_announcement(server)
         (announce or (lambda value: print(json.dumps(value, ensure_ascii=False), flush=True)))(info)
         while not stop.wait(0.25):
             pass
@@ -123,6 +151,14 @@ def run(args: argparse.Namespace, stop: threading.Event | None = None,
     if name == "sessions":
         return {"ok": True, "sessions": [_public(item) for item in discover()]}
     client = LiveClient.discover(getattr(args, "session", None))
+    if name == "web":
+        if args.status:
+            return client.call("web_status")
+        info = client.call("web_status")
+        if not info.get("enabled"):
+            raise ValidationError("The browser studio is turned off on this session.", "LIVE_WEB_OFF")
+        address = (info["lan"] or [info["local"]])[0]
+        return {**{key: value for key, value in info.items() if key != "devices"}, "message": f"Open {address} in a browser."}
     if name == "status":
         return client.call("status")
     if name == "score":

@@ -15,14 +15,21 @@ import time
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+                               QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget)
 
+from .desktop_widgets import ElidedLabel
+from .document import Document
+from . import live as live_module
 from .live import LiveConflict, LiveServer, LiveSession
 from .model import ValidationError
 
+# Authors that are the owner (the window, and browsers that joined the studio); older sessions only know "human".
+HUMAN_AUTHORS = tuple(getattr(live_module, "HUMAN_AUTHORS", ("human",)))
+
 CONTEXT_DELAY_MS = 150
-ACTIVE_SECONDS = 120
+ACTIVE_SECONDS = 120          # an agent counts as connected this long after its last sign of life
+MODAL_RETRY_MS = 250          # an agent's request waits this long between looks at the owner's open dialog
 
 
 class GuiDispatcher(QObject):
@@ -73,7 +80,10 @@ class LiveBridge(QObject):
         self.server: LiveServer | None = None
         self.enabled = True
         self.quiet = False            # inside a change the window already presented itself
-        self._agent_seen = 0.0
+        self._agent_seen = 0.0        # latest agent write, proposal, take or request seen in session events
+        self._agent_name: str | None = None
+        self._pending_open: dict | None = None   # an `open` request waiting for the owner's save/discard answer
+        self._open_counter = 0
         self.context_timer = QTimer(self)
         self.context_timer.setSingleShot(True)
         self.context_timer.setInterval(CONTEXT_DELAY_MS)
@@ -83,7 +93,7 @@ class LiveBridge(QObject):
         self.panel_timer.setInterval(0)
         self.panel_timer.timeout.connect(self._refresh_panel)
         self.status_timer = QTimer(self)
-        self.status_timer.setInterval(5000)
+        self.status_timer.setInterval(1000)   # the indicator and the connected-browser count follow the session's own clocks
         self.status_timer.timeout.connect(self.update_status)
         self.status_timer.start()
 
@@ -122,11 +132,19 @@ class LiveBridge(QObject):
                 self.server.start()
             except OSError as exc:
                 self.window.message("Live collaboration unavailable: {detail}", True, detail=exc)
+            else:
+                if self.window.state.values.get("web_lan") is True:   # the owner opened the studio to the network before
+                    try:
+                        self.server.enable_lan(True)
+                    except ValidationError as exc:
+                        self.window.state.values["web_lan"] = False
+                        self.window.message("The local network could not be opened: {detail}", True, detail=exc)
         elif self.server is not None:
             self.server.stop()
 
     def shutdown(self):
         self.dispatcher.closed = True
+        self._pending_open = None
         self.context_timer.stop()
         self.status_timer.stop()
         if self.server is not None:
@@ -169,10 +187,10 @@ class LiveBridge(QObject):
         values = {"path": str(window.document.path) if window.document.path else None,
                   "order": window.current_order, "pattern": pattern,
                   "row": index.row() if index.isValid() else None,
-                  "channel": index.column() // 3 if index.isValid() else None,
+                  "channel": window.pattern_model.channel_of(index.column()) if index.isValid() else None,
                   "selection": {"pattern": pattern, "row": block[0], "rows": block[1], "channel": block[2],
                                 "channels": block[3]} if block else None,
-                  "playing": window.is_playing(),
+                  "playing": window.is_playing(), "audible": list(window.audible()),
                   "position_seconds": round(window.playback_ms() / 1000, 3),
                   "dirty": window.document.dirty, "language": window.language}
         try:
@@ -185,25 +203,31 @@ class LiveBridge(QObject):
         """Called on the GUI thread by the session."""
         if kind == "change":
             if payload["author"] != "human" and not self.quiet:
-                self._agent_seen = time.monotonic()
+                if payload["author"] not in HUMAN_AUTHORS:
+                    self._saw_agent(payload["author"])
                 self.window.agent_changed(payload)
             self.refresh_panel()  # stale flags and the preview follow every change
         elif kind == "proposal":
             if payload["action"] == "created":
-                self._agent_seen = time.monotonic()
                 proposal = payload["proposal"]
+                self._saw_agent(proposal["author"])
                 self.window.message("Agent proposal: {label} ({author}) · see the Agent tab",
                                     label=proposal["label"], author=proposal["author"])
             self.refresh_panel()
         elif kind == "take":
-            self._agent_seen = time.monotonic()
+            self._saw_agent(payload.get("author"))
             self.window.message("New take: {label}", label=payload["label"])
             self.refresh_panel()
         elif kind == "reset":
             self.refresh_panel()
         elif kind == "request":
-            self._agent_seen = time.monotonic()
+            self._saw_agent()
         self.update_status()
+
+    def _saw_agent(self, name: str | None = None):
+        self._agent_seen = time.monotonic()
+        if isinstance(name, str) and name not in (*HUMAN_AUTHORS, "file"):
+            self._agent_name = name
 
     def refresh_panel(self):
         self.panel_timer.start()
@@ -211,18 +235,46 @@ class LiveBridge(QObject):
     def _refresh_panel(self):
         self.window.agent_panel.refresh()
 
+    def last_agent_activity(self) -> float | None:
+        """`time.monotonic()` of the latest sign of an agent, or None. `session.last_agent_activity` is set on
+        every authenticated agent API call, reads included; agent writes, proposals, takes and requests seen
+        in session events count too (they also name the agent)."""
+        now = time.monotonic()
+        marks = [self._agent_seen]
+        reported = getattr(self.session, "last_agent_activity", None)
+        if isinstance(reported, (int, float)) and not isinstance(reported, bool) and 0 < reported <= now:
+            marks.append(float(reported))
+        latest = max(marks)
+        return latest if latest > 0 else None
+
+    def agent_connected(self) -> bool:
+        latest = self.last_agent_activity()
+        running = self.server is not None and self.server.running
+        return bool(running and latest is not None and time.monotonic() - latest < ACTIVE_SECONDS)
+
     def update_status(self):
         window = self.window
         running = self.server is not None and self.server.running
         if not running:
             text, tip = "Live: off", "Live collaboration is off (Agent menu)."
-        elif time.monotonic() - self._agent_seen < ACTIVE_SECONDS and self._agent_seen:
+        elif self.agent_connected():
             text, tip = "Live: agent connected", "An agent worked on this window in the last two minutes."
         else:
             text, tip = "Live: listening", "Waiting for an agent: it finds this window with `chiploom live`."
+        tip = window.t(tip)
+        latest = self.last_agent_activity()
+        if running and latest is not None:
+            seconds = round(time.monotonic() - latest)
+            tip += "\n" + window.t("Last agent activity: {seconds} s ago", seconds=seconds)
+            if self._agent_name:
+                tip += " · " + self._agent_name
         window.live_status.setText(window.t(text))
         extra = f"\n{self.server.url}" if running else ""
-        window.live_status.setToolTip(window.t(tip) + extra)
+        window.live_status.setToolTip(tip + extra)
+        devices = len(self.session.web_devices()) if running and self.session is not None else 0
+        window.web_status.setVisible(devices > 0)
+        window.web_status.setText(window.t("Browsers: {count}", count=devices))
+        window.web_status.setToolTip(window.t("Browsers connected to this song (Agent menu, Open in a browser…)"))
 
     # --- requests from the agent (all on the GUI thread) ---------------------------
     def _play(self, payload: dict) -> dict:
@@ -256,12 +308,68 @@ class LiveBridge(QObject):
         return {"selected": payload}
 
     def _open(self, payload: dict) -> dict:
+        """Open a file or take for the agent. Unsaved changes need the owner's answer to a save/discard
+        prompt, which can take minutes: the agent gets `{"handled": "pending", "prompt": true}` at once and
+        the outcome is journaled when the owner has answered (see `_resolve_open`)."""
         window = self.window
-        if not window._discard_or_save():
-            return {"handled": False, "reason": "owner declined"}
-        if window.open_document(Path(payload["path"]), ask=False):
-            return {"opened": payload["path"]}
-        return {"handled": False, "reason": "the file could not be opened"}
+        if self._pending_open is not None:
+            return {"handled": False, "reason": "another open request is waiting for the owner's answer"}
+        if window.document is None or not window.document.dirty:
+            if window.open_document(Path(payload["path"]), ask=False):
+                return {"opened": payload["path"]}
+            return {"handled": False, "reason": "the file could not be opened"}
+        self._open_counter += 1
+        self._pending_open = {"id": f"o{self._open_counter}", "path": payload["path"], "take": payload.get("take"),
+                              "label": payload.get("label")}
+        self._publish_pending()
+        window.message("The agent asks to open {name}: answer the save prompt", name=Path(payload["path"]).name)
+        QTimer.singleShot(0, self._resolve_open)   # outside the agent's request: the prompt blocks
+        return {"handled": "pending", "prompt": True, "request_id": self._pending_open["id"]}
+
+    def _resolve_open(self):
+        request = self._pending_open
+        if request is None or self.dispatcher.closed:
+            return
+        if QApplication.activeModalWidget() is not None:   # the owner is answering another dialog first
+            QTimer.singleShot(MODAL_RETRY_MS, self._resolve_open)
+            return
+        window = self.window
+        try:
+            if not window._discard_or_save():
+                outcome = "declined"
+            elif window.open_document(Path(request["path"]), ask=False):
+                outcome = "opened"
+            else:
+                outcome = "failed"
+        finally:
+            self._pending_open = None
+            self._publish_pending()
+        self._note_outcome(request, outcome)
+
+    def _publish_pending(self):
+        """Let the agent see a waiting request in `status` (when the session accepts that context key)."""
+        if self.session is None:
+            return
+        pending = self._pending_open
+        try:
+            self.session.update_context(pending_request=None if pending is None else
+                                        {"request_id": pending["id"], "kind": "open", "path": pending["path"],
+                                         "take": pending["take"], "waiting_for": "the owner's save or discard answer"})
+        except ValidationError:
+            pass   # an older session without that key: the immediate reply and the journal note still tell
+
+    OUTCOMES = {"opened": "Open request: the file was opened", "declined": "Open request: the owner declined",
+                "failed": "Open request: the file could not be opened"}
+
+    def _note_outcome(self, request: dict, outcome: str):
+        """Journal how an asynchronous request ended, so the agent finds it in `changes` (author "human",
+        empty diff, kind "request")."""
+        if self.session is None:
+            return
+        extra = {"request": "open", "request_id": request["id"], "outcome": outcome, "path": request["path"],
+                 "take": request["take"]}
+        with self.silent():
+            self.session.record_note(self.OUTCOMES[outcome], "human", **extra)
 
 
 class AgentPanel(QWidget):
@@ -273,7 +381,17 @@ class AgentPanel(QWidget):
         self.setObjectName("agentPanel")
         self.previewing: str | None = None
         self._proposals: list[dict] = []
-        layout = QHBoxLayout(self)
+        self.compare: dict | None = None   # A/B listening: {"take", "label", "module", "side": "A" | "B"}
+        # The columns scroll inside the tab, so a small window does not clip the buttons under them.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QScrollArea.Shape.NoFrame)
+        content = QWidget()
+        area.setWidget(content)
+        outer.addWidget(area)
+        layout = QHBoxLayout(content)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(14)   # room between the proposals, details and takes columns
 
@@ -305,7 +423,7 @@ class AgentPanel(QWidget):
         self.details.setReadOnly(True)
         self.details.setMinimumHeight(45)
         middle.addWidget(self.details, 1)
-        layout.addLayout(middle, 3)
+        layout.addLayout(middle, 2)
 
         right = QVBoxLayout()
         right.addWidget(window._label("TAKES", "section"))
@@ -314,12 +432,30 @@ class AgentPanel(QWidget):
         self.take_list.setMinimumHeight(45)
         self.take_list.itemDoubleClicked.connect(lambda item: self.open_take())
         right.addWidget(self.take_list, 1)
+        self.take_hint = ElidedLabel("", "muted")   # one line: the Agent tab must stay usable in a short window
+        window._bind(self.take_hint, "Takes the agent saves appear here.")
+        window._bind(self.take_hint, "Takes the agent saves appear here. Open one to work from it, or compare it with the current song.",
+                     "setToolTip")
+        right.addWidget(self.take_hint)
         take_buttons = QHBoxLayout()
         self.open_button = window._button("Open take", self.open_take, "openTake")
         take_buttons.addWidget(self.open_button)
+        self.compare_button = window._button("Compare with current", self.toggle_compare, "compareTake")
+        window._bind(self.compare_button, "Ctrl+B: hear the take, then switch between it and the current song at the same position",
+                     "setToolTip")
+        take_buttons.addWidget(self.compare_button)
         take_buttons.addStretch()
         right.addLayout(take_buttons)
-        layout.addLayout(right, 2)
+        compare_row = QHBoxLayout()
+        self.compare_label = QLabel()
+        self.compare_label.setObjectName("compareState")
+        self.compare_label.setWordWrap(True)
+        self.compare_label.setTextFormat(Qt.TextFormat.PlainText)
+        compare_row.addWidget(self.compare_label, 1)
+        self.compare_stop_button = window._button("End comparison", self.end_compare, "endCompare")
+        compare_row.addWidget(self.compare_stop_button)
+        right.addLayout(compare_row)
+        layout.addLayout(right, 3)
 
         self.accept_action = QAction(self)
         self.accept_action.setShortcuts([QKeySequence("Ctrl+Return"), QKeySequence("Ctrl+Enter")])
@@ -356,6 +492,7 @@ class AgentPanel(QWidget):
             if proposal["id"] == wanted:
                 self.proposal_list.setCurrentItem(item)
         self.proposal_list.blockSignals(False)
+        wanted_take = self.take_list.currentItem().data(Qt.ItemDataRole.UserRole) if self.take_list.currentItem() else None
         self.take_list.clear()
         for take in (session.takes() if session else []):
             item = QListWidgetItem(window.t("{id} · {label} · {author} · {seconds:.1f} s", id=take["id"], label=take["label"],
@@ -363,7 +500,10 @@ class AgentPanel(QWidget):
             item.setToolTip(take["path"])
             item.setData(Qt.ItemDataRole.UserRole, take["id"])
             self.take_list.addItem(item)
+            if take["id"] == wanted_take:
+                self.take_list.setCurrentItem(item)
         self.empty_hint.setVisible(not self._proposals)
+        self.take_hint.setVisible(self.take_list.count() == 0)
         if self.previewing is not None and self.selected_id() != self.previewing:
             self.previewing = None
             window.pattern_model.set_overlay(None)
@@ -371,7 +511,7 @@ class AgentPanel(QWidget):
             self._preview(self.selected_id(), jump=False)
         else:
             self.details.clear()
-        window.sample_tabs.setTabText(2, window.t("Agent") + (f" ({len(self._proposals)})" if self._proposals else ""))
+        window.sample_tabs.setTabText(window.sample_tabs.indexOf(self), window.t("Agent") + (f" ({len(self._proposals)})" if self._proposals else ""))
         self._buttons_state()
 
     def retranslate(self):
@@ -382,8 +522,12 @@ class AgentPanel(QWidget):
         for control in (self.accept_button, self.reject_button, self.listen_button):
             control.setEnabled(has)
         self.clear_button.setEnabled(self.previewing is not None)
-        self.open_button.setEnabled(self.take_list.currentItem() is not None or self.take_list.count() > 0)
+        has_take = self.take_list.currentItem() is not None or self.take_list.count() > 0
+        self.open_button.setEnabled(has_take)
+        self.compare_button.setEnabled(has_take or self.compare is not None)
+        self.compare_stop_button.setEnabled(self.compare is not None)
         self.accept_action.setEnabled(has)
+        self._compare_ui()
 
     # --- preview -------------------------------------------------------------------
     def _selected(self, current, previous):
@@ -414,7 +558,7 @@ class AgentPanel(QWidget):
         cells = proposal["diff"].get("cells", [])
         if jump and cells:
             window.show_pattern(cells[0]["pattern"])
-            window.table.scrollTo(window.pattern_model.index(cells[0]["row"], cells[0]["channel"] * 3))
+            window.table.scrollTo(window.pattern_model.index(cells[0]["row"], window.pattern_model.column_of(cells[0]["channel"])))
 
     def clear_preview(self):
         self.previewing = None
@@ -509,13 +653,84 @@ class AgentPanel(QWidget):
                       lambda text: window.message("Audio unavailable: {detail}", True, detail=text))
 
     # --- takes ---------------------------------------------------------------------
-    def open_take(self, *_):
-        window, session = self.window, self.session
+    def chosen_take(self) -> dict | None:
+        """The selected take (the first one when none is selected), as the session describes it."""
         item = self.take_list.currentItem() or (self.take_list.item(0) if self.take_list.count() else None)
-        if item is None or session is None:
-            return False
-        take = next((entry for entry in session.takes() if entry["id"] == item.data(Qt.ItemDataRole.UserRole)), None)
-        return bool(take) and window.open_document(Path(take["path"]))
+        if item is None or self.session is None:
+            return None
+        return next((entry for entry in self.session.takes() if entry["id"] == item.data(Qt.ItemDataRole.UserRole)), None)
+
+    def open_take(self, *_):
+        take = self.chosen_take()
+        return bool(take) and self.window.open_document(Path(take["path"]))
+
+    # --- A/B comparison -------------------------------------------------------------
+    # The take replaces the document only in what the transport plays (`TrackerWindow.listen_to`), at the
+    # same song position; the document, its undo history and the journal are never touched.
+    def toggle_compare(self, *_) -> bool:
+        """Start comparing the chosen take (hearing it first), or switch between current song and take."""
+        window = self.window
+        if self.compare is None:
+            take = self.chosen_take()
+            if take is None or not window.document:
+                window.message("Select a take to compare with the current song.")
+                return False
+            try:
+                module = Document.open(Path(take["path"])).module
+            except (OSError, ValueError, RuntimeError) as exc:
+                window.message("Cannot open: {detail}", True, detail=exc)
+                return False
+            self.compare = {"take": take["id"], "label": take["label"], "module": module, "side": "B"}
+        else:
+            self.compare["side"] = "A" if self.compare["side"] == "B" else "B"
+        compare = self.compare
+        window.listen_to(compare["module"] if compare["side"] == "B" else None)
+        if not window.is_playing():
+            window.start_playback()
+        self._buttons_state()
+        window.message("Comparing: {listening}", listening=self.compare_text())
+        return True
+
+    def end_compare(self, *_, restore: bool = True):
+        """Stop comparing. The current song is heard again (not with `restore=False`: the transport was reset)."""
+        if self.compare is None:
+            return
+        self.compare = None
+        if restore:
+            self.window.listen_to(None)
+        else:
+            self.window.monitor_module = None
+        self._buttons_state()
+
+    def compare_edited(self):
+        """The owner edited the current song while hearing the take: switch back to hear the edit."""
+        if self.compare is not None and self.compare["side"] == "B":
+            self.compare["side"] = "A"
+            self.window.monitor_module = None   # the edit's own reload plays the document
+            self.window._update_title()
+            self._buttons_state()
+
+    def compare_text(self) -> str:
+        compare, window = self.compare, self.window
+        if compare is None:
+            return ""
+        if compare["side"] == "B":
+            return window.t("take {id} · {label} (B)", id=compare["take"], label=compare["label"])
+        return window.t("current song (A)")
+
+    def _compare_ui(self):
+        window, compare = self.window, self.compare
+        if compare is None:
+            self.compare_label.clear()
+            self.compare_label.setProperty("side", "")
+            self.compare_button.setText(window.t("Compare with current"))
+        else:
+            self.compare_label.setText(window.t("Listening to {listening}", listening=self.compare_text()))
+            self.compare_label.setProperty("side", compare["side"])
+            self.compare_button.setText(window.t("Listen to current song (A)" if compare["side"] == "B"
+                                                 else "Listen to take (B)"))
+        self.compare_label.style().unpolish(self.compare_label)
+        self.compare_label.style().polish(self.compare_label)
 
 
 def status_label() -> QLabel:

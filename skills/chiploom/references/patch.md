@@ -66,3 +66,17 @@ Examples:
   (bad cell text), `PATCH_BOUNDS` (past row 63 or channel 3), `ORDERS` (a pattern is
   still used, or the last pattern is not in the order list), `TIMING`.
 - Full field list and error codes: `docs/CLI.md` (sections Patch and Error contract).
+
+## Sample edits and instruments (when the owner asks)
+
+The default policy stays: use library samples as they are and shape them with notes, volume and effects.
+When the owner asks to edit a sound, the sound workshop operations work on the project copy and never touch
+the bank: `sample_loop` (`loop_length` 0 removes the loop; a one-shot must start with two zero bytes, so use
+`adapt` to prepend them), `sample_trim` (keeps the PCM bytes exactly; cutting into a loop needs `adjust_loop`),
+`sample_gain` (refuses to clip unless `allow_clip`), `sample_fade`, `sample_set_pcm` (drawn PCM, not allowed in
+library or synthesized projects) and `sample_match_level` (volume, then clean gain, to the role's reference
+level). Editing a recipe sample drops its recipe and records `derived_from: "recipe"` in
+`metadata.sample_sources`; an edited library sample keeps its `library_id` with `edited: true`. An instrument
+(`chiploom instruments ...`, operation `apply_instrument`) is a sample plus a phrase of effect rows written
+after the note, up to the next note in the channel. Fields, results and codes: `docs/CLI.md`, section Sound
+workshop.

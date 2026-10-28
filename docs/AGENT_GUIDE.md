@@ -233,7 +233,7 @@ The analyzer accepts a bounded subset of 31-sample MOD layouts, including the tw
 
 Reports contain hashes and aggregate structure, not PCM or complete melodies. Effect and note counts describe stored patterns, which may be unused or repeated in playback. Similarity compares exact cells in the union of occupied cells; it is not a perceptual similarity score. Duration estimates from libopenmpt do not prove lossless import into the editor.
 
-For the latest selection, read `references/SELECTION_FR.md`. Useful composition ideas include short phrases, repeated accompaniment with a changed lead, small looped waveforms, and sample changes without a new note. None of this changes an agent model's weights.
+For the latest selection, read `references/SELECTION.md`. Useful composition ideas include short phrases, repeated accompaniment with a changed lead, small looped waveforms, and sample changes without a new note. None of this changes an agent model's weights.
 
 ## Human handoff
 
@@ -243,7 +243,7 @@ The HTML page is a portable inspection/listening artifact, not a second editor. 
 
 ## Composing with the owner in the window (live)
 
-When the owner has ChipLoom open, you can edit the song they are looking at. Your edits show up in the window at once, can be undone there with the owner's own undo, and are recorded in a journal that says who changed what. The window shows live edits, and the owner can accept or reject your proposals. A headless session, `chiploom live serve SONG.json`, offers the same interface without a window (`play` and `stop` then fail with `LIVE_NO_WINDOW`, while `open` and `select` report `handled: false`).
+When the owner has ChipLoom open, you can edit the song they are looking at. Your edits show up in the window at once, can be undone there with the owner's own undo, and are recorded in a journal that says who changed what. The window shows live edits, and the owner can accept or reject your proposals. A headless session, `chiploom live serve SONG.json`, offers the same interface without a window (`play` and `stop` then fail with `LIVE_NO_WINDOW`, while `open` and `select` report `handled: false`). The owner can also open the same session in a browser (**Agent → Open in a browser…**, or the address printed by `live web`); no code is involved. Browser edits are journaled as `human-web` and count as the owner's, so treat them like window edits. `live web --status` lists the connected browsers.
 
 The loop:
 
@@ -253,6 +253,8 @@ The loop:
 4. **On `LIVE_CONFLICT`**: someone else edited a cell, name, sample, the order list or the title you were about to change. Nothing was applied. Read the `conflicts` in the error (each shows the `current` cell and `yours`) and `live changes --since REV`. **The owner's edits win**: adapt your patch to what is there now, or drop that part, then resubmit with the new `revision`.
 5. **Propose big rewrites**: for anything larger than a few bars ("redo the bass", "new drums for the chorus"), use `live patch --propose`. The owner previews it in the window and accepts or rejects it. You cannot accept it yourself and you cannot act as `human`; the song does not change until they decide. Check `live proposals` afterwards, and `withdraw` one you want to replace.
 6. **Announce versions**: when you write a finished alternative as its own file, tell the window with `live take FILE --label "..."`, and the owner can open it from there. Use `live select` to point at a passage and `live play` to start playback when a window is attached. `live save --output FILE` writes a copy and leaves the owner's file open in the window.
+
+   **`live open` can answer "pending".** If the owner has unsaved changes, the window must ask them whether to save or discard first, and that can take minutes. Your request then returns at once with `{"handled": "pending", "prompt": true, "request_id": "o1"}` and nothing has been opened. Do not wait on it and do not send it again (a second `open` returns `handled: false` with a `reason`): carry on with something else, then check `live status` for `pending_request` (present while the question is open) or read `live changes --since REV` for the answer. The answer is a journal entry with `author: "human"`, an empty diff, `kind: "request"`, `request: "open"`, your `request_id` and an `outcome` of `opened`, `declined` (the owner cancelled: respect it and do not ask again unprompted) or `failed`. When the file did open, the journal also holds the usual `kind: "open"` entry, and every `--base` from before it conflicts, so read the score again.
 7. **Listen to their reply**: record what the owner says with `feedback` and read `live changes` again before the next round.
 
 ```sh
@@ -287,7 +289,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## MCP adapter
 
-`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 34 tools (estimate, validate, inspect, patch, export, render, preview, report, compare, feedback, migrate, four `samples_*` tools, five `synth_*` tools and the `live_*` set) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`.
+`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 45 tools (estimate, validate, inspect, patch, export, render, preview, report, compare, feedback, migrate, convert, `export_format`, four `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`.
 
 A client that launches stdio servers can use this shape (field names vary by client):
 
@@ -295,4 +297,14 @@ A client that launches stdio servers can use this shape (field names vary by cli
 {"mcpServers": {"chiploom": {"command": "<checkout>/.venv/Scripts/python.exe", "args": ["-m", "tracker4agents", "mcp"], "cwd": "<checkout>"}}}
 ```
 
-The adapter is covered by the project's automated tests and was driven by hand over a stdio pipe. It has not been tested with a specific MCP client, so this guide claims no client compatibility. It is optional: Codex and Hermes Agent can keep using the CLI directly, which gives the same results. See [the architecture note](ARCHITECTURE.md#is-it-mcp) for scope and evidence.
+The adapter is covered by the project's automated tests and is driven by the official Python MCP SDK as a client in `tools/mcp_smoke.py`. It has not been tried in a model-driven session with an application, so this guide claims no application compatibility. It is optional: Codex and Hermes Agent can keep using the CLI directly, which gives the same results. See [the architecture note](ARCHITECTURE.md#is-it-mcp) for scope and evidence.
+
+## Multi-channel MOD and XM
+
+Check `inspect` first: `channels`, `profile` and, for an XM, `format: "xm"` tell you what you are writing. Grid rows have one cell per channel, so a six-channel `write` with `lines` needs six cells; the `columns` field of `inspect --grid` shows the layout. Everything about notation, limits and refusal codes is in [CLI.md](CLI.md#multi-channel-mod-and-xm); the short version:
+
+- **More channels** (MOD `6CHN`, `8CHN` ... up to 32): same effects and flow rules as four channels; a patch bounds-checks the extra channels. Reference modules with two channels are editable too.
+- **XM** gives you 16-bit samples, ping-pong loops, per-sample panning, a volume column and patterns of any length from 1 to 256 rows. Remember that one XM instrument is exactly one sample, that note labels differ (`C-4` is middle C; a MOD's `C-2` is an XM `C-4`), and that the volume column is a raw hexadecimal byte (`40` sets volume 64, `C8` sets panning 8).
+- **Sample tools**: `library_sample`, `recipe_sample`, `sample_loop|trim|gain|fade|set_pcm|match_level` and `apply_instrument` edit 8-bit MOD samples and are refused on an XM (`XM_OP_UNSUPPORTED`); `sample` can set `volume`, `finetune`, `panning`, `relative_note` and `loop_mode`. Load a MOD sample into an XM with `convert`, then keep composing.
+- **Convert deliberately**: `chiploom convert song.mod --output song.xm` keeps the music and reports what an XM plays differently; going back with `convert song.xm --output song.mod` works only when the XM stayed inside the MOD profile, and otherwise returns every reason.
+- **Listening**: `render` plays an XM with libopenmpt (default) or libxmp, `preview` and `compare` accept `.xm`, and the real-time engine in the window plays it with libxmp's FastTracker II personality. Durations of looping songs can differ between libopenmpt and the plan; the plan is checked against libxmp.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import bisect
 import copy
+import hashlib
 import os
 from pathlib import Path
 
@@ -11,46 +12,68 @@ from PySide6.QtCore import QLibraryInfo, QModelIndex, QStandardPaths, Qt, QThrea
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
-                               QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
+                               QFrame, QGridLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QListWidgetItem, QMainWindow, QMessageBox, QSlider,
                                QSpinBox, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import __version__, audio, project
-from .desktop_live import AgentPanel, LiveBridge, status_label
+from . import __version__, audio, formats, project
+from .desktop_create import CreatePanel, scroll_page
+from .desktop_instruments import InstrumentPanel
+from .desktop_browser import BrowserDialog
+from .desktop_workshop import SampleWorkshop
+from .desktop_live import HUMAN_AUTHORS, AgentPanel, LiveBridge, status_label
 from .desktop_input import LAYOUTS, resolve_layout, valid_layout
+from .desktop_jam import JamController
 from .desktop_orders import OrderEditor
 from .desktop_playback import (BUFFER_CHOICES, LIBXMP_HINT, RealtimeTransport, unavailable_reason, valid_buffer)
-from .desktop_pattern import PatternModel, PatternView, input_locale_name
+from .desktop_pattern import ChannelStrip, PatternModel, PatternView, input_locale_name
 from .desktop_samples import SampleBrowser
 from .desktop_services import AppState, AudioCache
 from .desktop_sync import DiskSync, changed_cells, mark_clean
-from .desktop_widgets import (ASSETS, Task, TaskSignals, Waveform, brand_icon, button, clock, label,
-                              sample_name)
+from .desktop_widgets import (ASSETS, ElidedLabel, ShortcutPopup, Task, TaskSignals, Waveform, brand_icon, button,
+                              clock, label, sample_name, separator, ui_icons)
 from .document import Document
 from .i18n import error_text, translate
 from .level_meter import LevelMeter
 from .model import playback_plan
 from .realtime import RealtimeError
 from .themes import THEMES, stylesheet
+from .web.brand import MAX_CHANNELS, channel_color
 
 ROOT = Path(__file__).resolve().parents[1]
 STYLE = stylesheet('midnight')
 ABOUT_TEXT = (
-    "Four-channel MOD tracker.\n"
+    "MOD and XM tracker.\n"
     "Double-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\n"
     "Piano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. "
     "In Smp and Effect columns type hexadecimal digits.\n"
+    "The piano keys also play what they type: the current instrument with Edit mode off, the selected sound in "
+    "Song samples, Sample library, Create and Instruments. Space still plays and pauses.\n"
     "Ctrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · "
     "Ctrl+Up/Down: transpose (Shift: octave).\n"
     "The file reloads by itself when the agent saves it; F5 forces a reload.\n"
-    "Click a track header to mute or unmute it.\n"
+    "Click a track header to mute or unmute it; the grid scrolls sideways when the channels do not fit.\n"
+    "An XM adds a volume column and key off (key 1, the key before 2, in Edit mode; === in a cell).\n"
     "Space in patterns: play/pause · Ctrl+Z: undo.\n"
     "Real-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\n"
-    "ProTracker M.K. profile; XM and IT are planned.")
-PATTERN_HINT = ("Edit mode (Ctrl+E): piano keys enter notes, hex digits fill Smp and Effect · Ctrl+C/X/V: blocks · "
-                "Alt+arrows: move block · Ctrl+↑/↓: transpose · Double-click: edit a cell · Click a row number: seek")
-CENTER_GAP = 10  # px between the library panel's divider and the pattern/tabs column
+    "Four-channel ProTracker MOD, MOD with 2 to 32 channels and the FastTracker II XM profile; IT is planned.")
+PATTERN_HINT = "Piano keys play the current instrument · Ctrl+E: Edit mode · Ctrl+C/X/V: blocks · Alt+arrows: move · Double-click: edit"
+XM_PATTERN_HINT = "XM: Vol is the volume byte in hex (40 = full), effects run 0-9 then A-Z · key 1 enters key off (===)"
+# The key reference behind the "?" button: (keys, what they do). The descriptions are translated when shown.
+SHORTCUTS = (
+    ("Piano keys", "Play the current instrument; in Edit mode they enter notes"),
+    ("Ctrl+E", "Edit mode: hex digits also fill Smp and Effect"),
+    ("Ctrl+C / X / V", "Copy, cut and paste a block of cells (as grid text)"),
+    ("Del", "Clear the selected cells"),
+    ("Alt+arrows", "Move the selected block (drag it too; Ctrl copies)"),
+    ("Ctrl+↑ / ↓", "Transpose the selection (Shift: an octave)"),
+    ("Double-click", "Edit a cell"),
+    ("Row number", "Click to seek there"),
+    ("Space", "Play / pause"),
+    ("Ctrl+Z", "Undo"),
+)
+CENTER_GAP = 4   # px between the library panel's divider and the pattern/tabs column
 BUFFER_LABELS = {"low": "Low · 80 ms", "normal": "Normal · 150 ms", "high": "High · 300 ms",
                  "very_high": "Very high · 600 ms"}
 __all__ = ["ASSETS", "PatternModel", "PatternView", "STYLE", "Task", "TaskSignals", "TrackerWindow", "Waveform",
@@ -65,8 +88,9 @@ class TrackerWindow(QMainWindow):
         self.setObjectName("Tracker4Agents")
         self.setWindowTitle(f"ChipLoom {__version__}")
         self.setWindowIcon(brand_icon())
-        self.resize(1420, 900)
+        self.resize(1420, 980)
         self.setMinimumSize(1080, 710)
+        self.browser_dialog: BrowserDialog | None = None
         self.setAcceptDrops(True)
         state_dir = state_dir or Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation))
         self.state = AppState(state_dir)
@@ -84,6 +108,7 @@ class TrackerWindow(QMainWindow):
         self._last_position = -1
         self._loop_epoch = 0
         self._refreshing = False
+        self._shown_format = None    # the module format the window is dressed for (see _format_changed)
         self.current_order = 0
         self.plan = {"timeline": [], "duration_seconds": 0}
         self.times = []
@@ -92,10 +117,13 @@ class TrackerWindow(QMainWindow):
         self.player.setAudioOutput(self.output)
         self.sample_player.setAudioOutput(self.sample_output)
         self.live = LiveBridge(self)
+        self.monitor_module = None   # a take heard in place of the document (A/B comparison), else None
         self.rt: RealtimeTransport | None = None
         self.audio_buffer = valid_buffer(self.state.values.get("audio_buffer"))
         self._rt_notice = None
         self._build_ui()
+        self.jam = JamController(self)
+        self.jam.watch_tree()
         self._setup_realtime()
         self.sync = DiskSync(self)
         self._restore_edit_settings()
@@ -139,6 +167,7 @@ class TrackerWindow(QMainWindow):
         source = source or self._default_piece()
         if source:
             QTimer.singleShot(0, lambda: self.open_document(source))
+        self.table.setFocus()   # keys play and type in the grid from the start; no button shows a focus ring
 
     def t(self, source, **values):
         return translate(self.language, source, **values)
@@ -196,7 +225,7 @@ class TrackerWindow(QMainWindow):
 
     def apply_theme(self):
         self.palette_colors = THEMES[self.theme]
-        self.setStyleSheet(stylesheet(self.theme))
+        self.setStyleSheet(stylesheet(self.theme, ui_icons(self.theme)))
         palette = QPalette()
         for role, key in ((QPalette.ColorRole.Window, "bg"), (QPalette.ColorRole.WindowText, "text"),
                           (QPalette.ColorRole.Base, "panel"), (QPalette.ColorRole.Text, "text"),
@@ -229,16 +258,27 @@ class TrackerWindow(QMainWindow):
             self.theme_combo.setItemText(index, self.t(theme["name"]))
         self.keyboard_combo.setItemText(0, self.t("Auto"))
         self._fill_library()
-        self.sample_tabs.setTabText(0, self.t("Song samples"))
-        self.sample_tabs.setTabText(1, self.t("Sample library"))
+        for widget, title in self.tab_titles.items():
+            self.sample_tabs.setTabText(self.sample_tabs.indexOf(widget), self.t(title))
         self.sample_browser.retranslate()
+        self.sample_workshop.editor.retranslate()
+        self.sample_workshop.levels.retranslate()
+        self.create_panel.retranslate()
+        self.instrument_panel.retranslate()
+        if self.browser_dialog is not None:
+            self.browser_dialog.retranslate()
         self.agent_panel.retranslate()
         self._update_buffer_ui()
         self.live.update_status()
         if self.document:
             self._song_labels()
             self._sample_labels()
-        self.pattern_model.headerDataChanged.emit(Qt.Orientation.Horizontal, 0, 11)
+        self._show_format_label()
+        self.sample_workshop.editor.update_format()
+        self.create_panel.update_format()
+        self.sample_workshop.levels.update_format()
+        self.pattern_model.headerDataChanged.emit(Qt.Orientation.Horizontal, 0, max(0, self.pattern_model.columnCount() - 1))
+        self.update_keys_hint()
         self._transport_labels()
         self._monitor_style()
         self.waveform.update()
@@ -256,11 +296,11 @@ class TrackerWindow(QMainWindow):
             control.setToolTip(self.t("Click to unmute track {number}" if muted else "Click to mute track {number}", number=channel + 1))
             control.setAccessibleName(control.text())
             control.setProperty("trackMuted", not audible[channel])
-            color = self.palette_colors["channels"][channel] if audible[channel] else self.palette_colors["disabled"]
-            control.setStyleSheet(f"border-left:3px solid {color};color:{color}")
+            color = self.channel_color(channel) if audible[channel] else self.palette_colors["disabled"]
+            control.setStyleSheet(f"border-left:3px solid {color};color:{color};padding:3px 6px")
             self.solos[channel].setText(self.t("Solo"))
             self.solos[channel].setToolTip(self.t("Solo track {number}", number=channel + 1))
-        self.pattern_model.dataChanged.emit(self.pattern_model.index(0, 0), self.pattern_model.index(63, 11), [Qt.ItemDataRole.ForegroundRole, Qt.ItemDataRole.BackgroundRole])
+        self.pattern_model.refresh_colors()
 
     def _build_ui(self):
         file_menu = self._bind(self.menuBar().addMenu(""), "File", "setTitle")
@@ -312,6 +352,8 @@ class TrackerWindow(QMainWindow):
         self.copy_action = self._menu_action(edit_menu, "Copy cells\tCtrl+C", lambda: self.table.copy_block())
         self.paste_action = self._menu_action(edit_menu, "Paste cells\tCtrl+V", lambda: self.table.paste_block())
         self.clear_action = self._menu_action(edit_menu, "Clear cells\tDel", lambda: self.table.clear_block())
+        self.instrument_action = self._menu_action(edit_menu, "Apply instrument at cursor\tCtrl+I",
+                                                   lambda: self.instrument_panel.apply_at_cursor())
         self.realtime_action = self._action("Real-time playback")
         self.realtime_action.setCheckable(True)
         self.realtime_action.toggled.connect(self.set_realtime)
@@ -334,20 +376,40 @@ class TrackerWindow(QMainWindow):
         agent_menu.addSeparator()
         self._menu_action(agent_menu, "Accept proposal\tCtrl+Enter", lambda: self.agent_panel.accept_selected())
         self._menu_action(agent_menu, "Reject proposal", lambda: self.agent_panel.reject_selected())
-        self._menu_action(agent_menu, "Show the Agent tab", lambda: self.sample_tabs.setCurrentIndex(2))
+        self._menu_action(agent_menu, "Show the Agent tab",
+                          lambda: self.sample_tabs.setCurrentIndex(self.sample_tabs.indexOf(self.agent_panel)))
+        agent_menu.addSeparator()
+        self.browser_action = self._menu_action(agent_menu, "Open in a browser\u2026", self.open_browser)
+        self._menu_action(agent_menu, "Compare a take with the current song", lambda: self.agent_panel.toggle_compare(),
+                          "Ctrl+B")
         self._menu_action(help_menu, "About", lambda: QMessageBox.information(
             self, "ChipLoom", f"ChipLoom {__version__}\n" + self.t(ABOUT_TEXT)))
 
         central = QWidget()
         outer = QVBoxLayout(central)
-        outer.setContentsMargins(20, 14, 20, 10)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         self.setCentralWidget(central)
+        # The header band reads top to bottom: the file (open, save, export) and the look of the window; the song's
+        # identity (title, format, tempo); the transport.
+        header = QFrame()
+        header.setObjectName("header")
+        head = QVBoxLayout(header)
+        head.setContentsMargins(16, 10, 16, 10)
+        head.setSpacing(8)
         top = QHBoxLayout()
+        top.setSpacing(6)
         top.addWidget(self._button('Open…', self.choose_file))
         top.addWidget(self._button('Save project…', self.save_project))
-        top.addWidget(self._button('Export MOD…', self.export_mod))
+        top.addSpacing(6)
+        top.addWidget(separator())
+        top.addSpacing(6)
+        self.export_button = self._button('Export MOD…', self.export_mod)
+        top.addWidget(self.export_button)
+        top.addWidget(self._button('Export WAV…', lambda: self.export_audio("wav"), "exportWav"))
+        top.addWidget(self._button('Export MP3…', lambda: self.export_audio("mp3"), "exportMp3"))
         top.addStretch()
-        top.addWidget(self._label("Theme"))
+        top.addWidget(self._label("Theme", "muted"))
         self.theme_combo = QComboBox()
         self.theme_combo.setObjectName("themeSelector")
         for key, theme in THEMES.items():
@@ -355,7 +417,8 @@ class TrackerWindow(QMainWindow):
         self.theme_combo.setCurrentIndex(self.theme_combo.findData(self.theme))
         self.theme_combo.currentIndexChanged.connect(lambda: self.set_theme(self.theme_combo.currentData()))
         top.addWidget(self.theme_combo)
-        top.addWidget(self._label("Language"))
+        top.addSpacing(8)
+        top.addWidget(self._label("Language", "muted"))
         self.language_combo = QComboBox()
         self.language_combo.setObjectName("languageSelector")
         self.language_combo.addItem("English", "en")
@@ -363,70 +426,89 @@ class TrackerWindow(QMainWindow):
         self.language_combo.setCurrentIndex(self.language_combo.findData(self.language))
         self.language_combo.currentIndexChanged.connect(lambda: self.set_language(self.language_combo.currentData()))
         top.addWidget(self.language_combo)
-        top.addWidget(self._label('MOD · 4 CHANNELS · PAL', "muted"))
-        outer.addLayout(top)
-        song = QHBoxLayout()
-        song.addWidget(self._label('Title'))
+        head.addLayout(top)
+
+        song = QGridLayout()
+        song.setHorizontalSpacing(8)
+        song.setVerticalSpacing(2)
         self.title_edit = QLineEdit()
         self.title_edit.setObjectName("songTitle")
         self.title_edit.setMaxLength(20)
         self.title_edit.setMinimumWidth(150)
         self._bind(self.title_edit, 'Untitled', 'setPlaceholderText')
-        song.addWidget(self.title_edit, 1)
-        song.addWidget(self._label('Tempo'))
+        self._bind(self.title_edit, 'Title', 'setAccessibleName')
+        song.addWidget(self.title_edit, 0, 0)
+        self.format_label = self._label('MOD · 4 CHANNELS · PAL', "formatBadge")
+        song.addWidget(self.format_label, 0, 1)
+        song.addWidget(self._label('Tempo', "muted"), 0, 2)
         self.bpm = QSpinBox()
         self.bpm.setRange(33, 255)
-        self.bpm.setFixedWidth(65)
-        song.addWidget(self.bpm)
-        song.addWidget(self._label('Ticks / row'))
+        self.bpm.setFixedWidth(72)
+        song.addWidget(self.bpm, 0, 3)
+        song.addWidget(self._label('Ticks / row', "muted"), 0, 4)
         self.speed = QSpinBox()
         self.speed.setRange(1, 31)
-        self.speed.setFixedWidth(55)
-        song.addWidget(self.speed)
-        song.addWidget(self._button('Apply at start', self.apply_song, "applySong"))
-        song.addSpacing(14)
-        song.addWidget(self._button('Export WAV…', lambda: self.export_audio("wav"), "exportWav"))
-        song.addWidget(self._button('Export MP3…', lambda: self.export_audio("mp3"), "exportMp3"))
-        outer.addLayout(song)
+        self.speed.setFixedWidth(64)
+        song.addWidget(self.speed, 0, 5)
+        song.addWidget(self._button('Apply at start', self.apply_song, "applySong"), 0, 6)
         details = QHBoxLayout()
+        details.setContentsMargins(4, 0, 0, 0)
+        details.setSpacing(8)
         self.origin = self._label("", "muted")
         details.addWidget(self.origin)
-        details.addStretch()
+        details.addWidget(label("·", "muted"))
         self.summary = self._label('Open a module to get started', "muted")
         details.addWidget(self.summary)
-        outer.addLayout(details)
+        details.addStretch()
+        song.addLayout(details, 1, 0, 1, 7)
+        song.setColumnStretch(0, 1)
+        head.addLayout(song)
+
         transport = QHBoxLayout()
+        transport.setSpacing(8)
         self.play_button = self._button('Play', self.toggle_play, "primary")
         self.play_button.setEnabled(False)
+        self.play_button.setMinimumWidth(92)
         self.stop_button = self._button('Stop', self.stop)
         transport.addWidget(self.play_button)
         transport.addWidget(self.stop_button)
+        transport.addSpacing(4)
         self.seek = QSlider(Qt.Orientation.Horizontal)
         self.seek.setObjectName("seek")
         self.seek.sliderMoved.connect(self.seek_to)
         transport.addWidget(self.seek, 1)
-        self.position_label = self._label("00:00 / 00:00", "muted")
+        self.position_label = self._label("00:00 / 00:48", "muted")
+        self.position_label.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         transport.addWidget(self.position_label)
+        transport.addSpacing(6)
         self.loop = self._bind(QCheckBox(), "Loop")
         transport.addWidget(self.loop)
-        transport.addWidget(self._label('Volume'))
+        transport.addSpacing(6)
+        transport.addWidget(self._label('Volume', "muted"))
         self.volume = QSlider(Qt.Orientation.Horizontal)
         self.volume.setRange(0, 100)
         self.volume.setFixedWidth(95)
         self.volume.valueChanged.connect(self._volume)
         transport.addWidget(self.volume)
+        transport.addSpacing(6)
         self.meter = LevelMeter(self)
         self._bind(self.meter, "Stereo audio level: average level and peak, after the volume control.", "setToolTip")
         transport.addWidget(self.meter)
-        outer.addLayout(transport)
+        head.addLayout(transport)
+        outer.addWidget(header)
+
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(16, 12, 16, 8)
+        outer.addWidget(body, 1)
 
         horizontal = QSplitter(Qt.Orientation.Horizontal)
         horizontal.setObjectName("workspace")
-        outer.addWidget(horizontal, 1)
+        body_layout.addWidget(horizontal, 1)
         library = QWidget()
         library.setMaximumWidth(250)
         library_layout = QVBoxLayout(library)
-        library_layout.setContentsMargins(0, 0, 10, 0)
+        library_layout.setContentsMargins(0, 0, 4, 0)
         self.brand = QLabel()
         self.brand.setObjectName("brandLogo")
         self.brand.setAccessibleName("ChipLoom")
@@ -441,7 +523,7 @@ class TrackerWindow(QMainWindow):
         self.library.itemActivated.connect(self._library_open)
         self.library.setMinimumWidth(195)
         library_layout.addWidget(self.library)
-        library_hint = self._label("MOD and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.", "muted")
+        library_hint = self._label("MOD, XM and JSON projects\nDrop a file here to open it.\nF5 reloads changes made by the agent.", "muted")
         library_hint.setWordWrap(True)
         library_layout.addWidget(library_hint)
         horizontal.addWidget(library)
@@ -458,7 +540,8 @@ class TrackerWindow(QMainWindow):
         patterns_layout = QVBoxLayout(patterns_widget)
         patterns_layout.setContentsMargins(0, 0, 0, 0)
         navigation = QHBoxLayout()
-        navigation.addWidget(self._label('Order'))
+        navigation.setSpacing(6)
+        navigation.addWidget(self._label('Order', "muted"))
         self.orders = QComboBox()
         self.orders.setObjectName("orders")
         self.orders.currentIndexChanged.connect(self.select_order)
@@ -471,31 +554,40 @@ class TrackerWindow(QMainWindow):
         navigation.addWidget(self.follow)
         patterns_layout.addLayout(navigation)
         editing = QHBoxLayout()
+        editing.setSpacing(6)
         self.edit_button = self._button("Edit mode", lambda: None, "editMode")
         self.edit_button.setCheckable(True)
         self.edit_button.toggled.connect(self.set_edit_mode)
         self._bind(self.edit_button, "Type notes with the piano keys (Ctrl+E)", "setToolTip")
         editing.addWidget(self.edit_button)
-        editing.addWidget(self._label("Step"))
+        editing.addSpacing(6)
+        editing.addWidget(self._label("Step", "muted"))
         self.edit_step = QSpinBox()
         self.edit_step.setObjectName("editStep")
         self.edit_step.setRange(0, 16)
         self.edit_step.setValue(1)
         self._bind(self.edit_step, "Rows to advance after each entry", "setToolTip")
         editing.addWidget(self.edit_step)
-        editing.addWidget(self._label("Octave"))
+        editing.addSpacing(6)
+        editing.addWidget(self._label("Octave", "muted"))
         self.edit_octave = QSpinBox()
         self.edit_octave.setObjectName("editOctave")
         self.edit_octave.setRange(1, 3)
         self.edit_octave.setValue(2)
         self._bind(self.edit_octave, "Base octave of the lower key row (F1-F3, numpad + and -)", "setToolTip")
         editing.addWidget(self.edit_octave)
-        editing.addWidget(self._label("Keyboard"))
+        editing.addSpacing(6)
+        editing.addWidget(self._label("Keyboard", "muted"))
         self.keyboard_combo = QComboBox()
         self.keyboard_combo.setObjectName("keyboardLayout")
         for layout_name in LAYOUTS:
             self.keyboard_combo.addItem(layout_name.upper() if layout_name != "auto" else self.t("Auto"), layout_name)
         editing.addWidget(self.keyboard_combo)
+        self.keys_hint = label("", "muted")
+        editing.addSpacing(6)
+        editing.addWidget(self.keys_hint)
+        self.edit_octave.valueChanged.connect(self.update_keys_hint)
+        self.keyboard_combo.currentIndexChanged.connect(self.update_keys_hint)
         for control in (self.edit_step, self.edit_octave):
             control.valueChanged.connect(lambda *_: self._save_preferences())
         self.keyboard_combo.currentIndexChanged.connect(lambda *_: self._save_preferences())
@@ -503,42 +595,44 @@ class TrackerWindow(QMainWindow):
         editing.addWidget(self._button('− 1 semitone', lambda: self.transpose(-1)))
         editing.addWidget(self._button('+ 1 semitone', lambda: self.transpose(1)))
         patterns_layout.addLayout(editing)
-        channel_row = QHBoxLayout()
-        self.mutes, self.solos = [], []
-        for channel in range(4):
-            group = QHBoxLayout()
-            mute, solo = QPushButton(), QPushButton()
-            mute.setObjectName(f"muteTrack{channel + 1}")
-            solo.setObjectName(f"soloTrack{channel + 1}")
-            solo.setFixedWidth(54)
-            for control in (mute, solo):
-                control.setCheckable(True)
-                control.toggled.connect(self.monitor_changed)
-                group.addWidget(control, 1 if control is mute else 0)
-            self.mutes.append(mute)
-            self.solos.append(solo)
-            channel_row.addLayout(group, 1)
-        patterns_layout.addLayout(channel_row)
         self.table = PatternView(self)
+        self.channel_strip = ChannelStrip(self.table)   # Mute and Solo above each channel, scrolling with the grid
+        self.mutes, self.solos = [], []
+        self.set_channels(4)
+        patterns_layout.addWidget(self.channel_strip)
         self.table.setObjectName("patterns")
         self.pattern_model = PatternModel(self)
         self.table.setModel(self.pattern_model)
         self.table.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         self.table.verticalHeader().setDefaultSectionSize(25)
-        self.table.horizontalHeader().setMinimumSectionSize(54)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
         self.table.selectionModel().currentChanged.connect(self.cell_selected)
         self.table.verticalHeader().sectionClicked.connect(lambda row: self.seek_row(row))
         patterns_layout.addWidget(self.table)
-        pattern_hint = self._label(PATTERN_HINT, "muted")
-        pattern_hint.setWordWrap(True)
-        patterns_layout.addWidget(pattern_hint)
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(8)
+        self.pattern_hint = ElidedLabel("", "muted")
+        self._bind(self.pattern_hint, PATTERN_HINT)
+        self._bind(self.pattern_hint, PATTERN_HINT, "setToolTip")
+        hint_row.addWidget(self.pattern_hint, 1)
+        self.help_button = self._button("?", self.show_shortcuts, "helpButton")
+        self._bind(self.help_button, "Keyboard shortcuts of the grid", "setToolTip")
+        self._bind(self.help_button, "Keyboard shortcuts of the grid", "setAccessibleName")
+        hint_row.addWidget(self.help_button)
+        patterns_layout.addLayout(hint_row)
+        self.shortcut_popup = ShortcutPopup(self, SHORTCUTS)
+        self.xm_hint = ElidedLabel("", "muted")
+        self._bind(self.xm_hint, XM_PATTERN_HINT)
+        self._bind(self.xm_hint, XM_PATTERN_HINT, "setToolTip")
+        self.xm_hint.hide()
+        patterns_layout.addWidget(self.xm_hint)
         center.addWidget(patterns_widget)
 
         sample_widget = QWidget()
         sample_layout = QHBoxLayout(sample_widget)
         sample_layout.setContentsMargins(0, 4, 0, 0)
+        sample_layout.setSpacing(14)
         sample_left = QVBoxLayout()
         sample_left.addWidget(self._label('SAMPLES', "section"))
         self.samples = QListWidget()
@@ -550,42 +644,50 @@ class TrackerWindow(QMainWindow):
         self.samples.itemDoubleClicked.connect(lambda item: self.play_sample())
         sample_left.addWidget(self.samples)
         sample_layout.addLayout(sample_left)
-        sample_right = QVBoxLayout()
-        sample_right.setSpacing(3)
-        self.sample_title = self._label('Select a sample', "section")
-        self.sample_title.setStyleSheet("padding-top:0")
-        sample_right.addWidget(self.sample_title)
-        self.waveform = Waveform(self)
-        self.waveform.setMinimumHeight(55)
-        sample_right.addWidget(self.waveform, 1)
-        self.sample_info = self._label("", "muted")
-        sample_right.addWidget(self.sample_info)
-        sample_actions = QHBoxLayout()
-        sample_actions.addWidget(self._button('Play sample', self.play_sample))
-        sample_actions.addWidget(self._label('Volume'))
-        self.sample_volume = QSpinBox()
-        self.sample_volume.setRange(0, 64)
-        sample_actions.addWidget(self.sample_volume)
-        sample_actions.addWidget(self._label('Fine tune'))
-        self.finetune = QSpinBox()
-        self.finetune.setRange(-8, 7)
-        sample_actions.addWidget(self.finetune)
-        sample_actions.addWidget(self._button('Apply', self.apply_sample))
-        sample_right.addLayout(sample_actions)
-        sample_layout.addLayout(sample_right, 1)
+        self.song_samples_page = sample_widget
+        self.sample_workshop = SampleWorkshop(self)
+        sample_left.addLayout(self.sample_workshop.switch)
+        editor = self.sample_workshop.editor
+        # The editor owns these widgets; the window keeps the names it always had for them.
+        self.waveform, self.sample_title, self.sample_info = editor.wave, editor.title, editor.info
+        self.sample_volume, self.finetune = editor.volume, editor.finetune
+        sample_layout.addWidget(self.sample_workshop, 1)
         self.sample_tabs = QTabWidget()
         self.sample_tabs.setObjectName("sampleTabs")
-        self.sample_tabs.addTab(sample_widget, self.t("Song samples"))
         self.sample_browser = SampleBrowser(self, Waveform)
-        self.sample_tabs.addTab(self.sample_browser, self.t("Sample library"))
+        self.create_panel = CreatePanel(self)
+        self.instrument_panel = InstrumentPanel(self)
         self.agent_panel = AgentPanel(self)
-        self.sample_tabs.addTab(self.agent_panel, self.t("Agent"))
+        self.tab_titles = {}
+        for widget, title, page in ((sample_widget, "Song samples", scroll_page(sample_widget)),
+                                    (self.sample_browser, "Sample library", self.sample_browser),
+                                    (self.create_panel, "Create", scroll_page(self.create_panel)),
+                                    (self.instrument_panel, "Instruments", scroll_page(self.instrument_panel)),
+                                    (self.agent_panel, "Agent", self.agent_panel)):
+            self.sample_tabs.addTab(page, self.t(title))
+            self.tab_titles[page] = title
         self.live_status = status_label()
         self.statusBar().addPermanentWidget(self.live_status)
+        self.web_status = QLabel()
+        self.web_status.setObjectName("webStatus")
+        self.web_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.web_status.hide()
+        self.statusBar().addPermanentWidget(self.web_status)
         self.sample_tabs.currentChanged.connect(lambda *_: self.sample_browser.cancel_preview())
         center.addWidget(self.sample_tabs)
-        center.setSizes([520, 235])
+        self.sample_tabs.setMinimumHeight(150)
+        patterns_widget.setMinimumHeight(170)
+        center.setChildrenCollapsible(False)
+        center.setHandleWidth(9)
+        center.setStretchFactor(0, 1)   # the grid takes what the window gains; the workshop keeps its size
+        center.setStretchFactor(1, 0)
+        center.setSizes([560, 300])
+        self.center_splitter = center
+        self._split_moved = False    # until the owner drags the divider, the workshop's height follows the window's
+        center.splitterMoved.connect(lambda *_: setattr(self, "_split_moved", True))
 
+        horizontal.setChildrenCollapsible(False)
+        horizontal.setHandleWidth(9)
         horizontal.setSizes([210, 1175])
         horizontal.setStretchFactor(0, 0)
         horizontal.setStretchFactor(1, 1)
@@ -596,6 +698,30 @@ class TrackerWindow(QMainWindow):
         self.play_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.play_action.triggered.connect(self.toggle_play)
         self.table.addAction(self.play_action)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._fit_split)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._fit_split)
+
+    def _fit_split(self):
+        """Give the grid what the window has: the workshop below it takes 170 to 340 px, whatever is left over
+        beyond 300 px for the grid and its controls. Stops once the owner has moved the divider."""
+        splitter = self.center_splitter
+        total = splitter.height()
+        if self._split_moved or total <= 0 or splitter.sizes()[1] == 0:
+            return
+        bottom = max(170, min(340, total - 300))
+        if abs(splitter.sizes()[1] - bottom) > 1:
+            splitter.setSizes([total - bottom - splitter.handleWidth(), bottom])
+
+    def show_shortcuts(self):
+        """The "?" next to the grid: the key reference, as a popup that closes with a click elsewhere."""
+        self.shortcut_popup.show_under(self.help_button)
+        return self.shortcut_popup
 
     def _default_piece(self):
         for candidate in (ROOT / "examples/pixel_rush.project.json", ROOT / "examples/first_light.project.json"):
@@ -651,7 +777,7 @@ class TrackerWindow(QMainWindow):
 
     def choose_file(self):
         source, _ = QFileDialog.getOpenFileName(self, self.t('Open a module or project'), str(ROOT / "exports"),
-                                               self.t('Modules and projects (*.mod *.MOD *.json);;All files (*)'),
+                                               self.t('Modules and projects (*.mod *.MOD *.xm *.XM *.json);;All files (*)'),
                                                options=QFileDialog.Option.DontUseNativeDialog)
         if source:
             self.open_document(Path(source))
@@ -669,34 +795,54 @@ class TrackerWindow(QMainWindow):
         except (OSError, ValueError, RuntimeError) as exc:
             self.message("Cannot open: {detail}", True, detail=exc)
             return False
+        self._install_document(document, plan)
+        return True
+
+    def open_module(self, module, path: Path | None = None) -> bool:
+        """Open a module built in memory (a new project) as the window's document."""
+        try:
+            document = Document(module, path)
+            plan = playback_plan(module)
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.message("Cannot open: {detail}", True, detail=exc)
+            return False
+        self._install_document(document, plan)
+        return True
+
+    def _install_document(self, document: Document, plan):
+        path = document.path
         self.stop()
         self.debounce.stop()
         self._audio_token += 1
         self.document, self.plan = document, plan
+        self.agent_panel.end_compare(restore=False)
         self.pattern_model.clear_flashes()
         self.pattern_model.set_overlay(None)
         self.current_order = 0
         self._refreshing = True
+        self.set_channels(document.module.channels)
         for control in self.mutes + self.solos:
             control.setChecked(False)
         self._refreshing = False
-        self.state.remember(path)
-        try:
-            self.state.save()
-        except OSError as exc:
-            self.message("Session could not be saved: {detail}", True, detail=exc)
+        if path is not None:
+            self.state.remember(path)
+            try:
+                self.state.save()
+            except OSError as exc:
+                self.message("Session could not be saved: {detail}", True, detail=exc)
         self._fill_library()
         self.refresh_document()
         self.sync.watch(document.path, document.module)
         self.live.attach(document)
         self.prepare_audio(False, 0)
-        return True
 
     def refresh_document(self):
         if not self.document:
             return
         self._refreshing = True
         module = self.document.module
+        self.set_channels(module.channels)   # an agent can replace the module by one with other channels
+        self._format_changed()
         self.plan = playback_plan(module)
         self.times = [entry["seconds"] for entry in self.plan["timeline"]]
         if self.rt is not None:
@@ -729,6 +875,8 @@ class TrackerWindow(QMainWindow):
         self.sample_selected(self.samples.currentRow())
         self.cell_selected(self.table.currentIndex())
         self.sample_browser.update_slots()
+        self.create_panel.refresh_slots()
+        self.sample_workshop.levels.invalidate()
         self.undo_action.setEnabled(self.document.can_undo)
         self.redo_action.setEnabled(self.document.can_redo)
         self.order_editor.refresh()
@@ -745,7 +893,8 @@ class TrackerWindow(QMainWindow):
 
     def _update_title(self):
         if self.document:
-            self.setWindowTitle(f"{'* ' if self.document.dirty else ''}{self.document.module.title} — ChipLoom {__version__}")
+            hearing = f" [{self.t('listening to a take')}]" if self.monitor_module is not None else ""
+            self.setWindowTitle(f"{'* ' if self.document.dirty else ''}{self.document.module.title}{hearing} — ChipLoom {__version__}")
 
     def submit(self, operation, success, failure=None):
         self._task_counter += 1
@@ -768,9 +917,69 @@ class TrackerWindow(QMainWindow):
             job[2](text) if job[2] else self.message(text, True)
 
     def audible(self):
+        """One boolean per channel of the module: not muted, and soloed when any channel is."""
         solo = any(control.isChecked() for control in self.solos)
         return tuple(not mute.isChecked() and (not solo or self.solos[index].isChecked())
                      for index, mute in enumerate(self.mutes))
+
+    def channel_color(self, channel: int) -> str:
+        """The colour of a channel: the theme's four, then their tinted variants (the web studio's palette)."""
+        return channel_color(self.theme, max(0, min(MAX_CHANNELS - 1, channel)))
+
+    def set_channels(self, count: int):
+        """One Mute and one Solo button per channel of the module above the grid, keeping the states of the
+        channels both modules have."""
+        if len(self.mutes) == count:
+            return
+        states = [(mute.isChecked(), solo.isChecked()) for mute, solo in zip(self.mutes, self.solos)]
+        self.mutes, self.solos = self.channel_strip.rebuild(count, states, self.monitor_changed)
+
+    @property
+    def module_format(self) -> str:
+        return self.document.module.format if self.document else "mod"
+
+    def _rebind(self, target, source, method="setText"):
+        """Change the text a widget is translated from (the window's bound texts follow the language)."""
+        self._bindings = [item for item in self._bindings if not (item[0] is target and item[2] == method)]
+        self._bind(target, source, method)
+
+    def _format_changed(self):
+        """What depends on the module's format: the export labels, the octave range, the hints and the sample
+        operations an XM does not offer (the header line follows the channel count and is always refreshed)."""
+        module = self.document.module if self.document else None
+        self._show_format_label()
+        if module is None or module.format == self._shown_format:
+            return
+        self._shown_format = module.format
+        xm = module.format == "xm"
+        self._rebind(self.export_action, "Export XM…" if xm else "Export MOD…")
+        self._rebind(self.export_button, "Export XM…" if xm else "Export MOD…")
+        self.xm_hint.setVisible(xm)
+        low, high = (0, 7) if xm else (1, 3)
+        if (self.edit_octave.minimum(), self.edit_octave.maximum()) != (low, high):
+            value = self.edit_octave.value()
+            if xm and value <= 3:
+                value = 4    # the lower key row of an XM starts at C-4, middle C
+            elif not xm and value > 3:
+                value = 2
+            self.edit_octave.blockSignals(True)
+            self.edit_octave.setRange(low, high)
+            self.edit_octave.setValue(value)
+            self.edit_octave.blockSignals(False)
+            self.update_keys_hint()
+        self.sample_workshop.editor.update_format()
+        self.sample_browser.update_controls()
+        self.create_panel.update_format()
+        self.instrument_panel.update_buttons()
+        self.sample_workshop.levels.update_format()
+
+    def _show_format_label(self):
+        module = self.document.module if self.document else None
+        if module is None:
+            self.format_label.setText(self.t("MOD · 4 CHANNELS · PAL"))
+            return
+        text = self.t("{format} · {channels} CHANNELS", format=module.format.upper(), channels=module.channels)
+        self.format_label.setText(text + (" · PAL" if module.format == "mod" else ""))
 
     def prepare_audio(self, play=False, position=0):
         if not self.document:
@@ -801,7 +1010,7 @@ class TrackerWindow(QMainWindow):
         self.play_button.setText(self.t('Preparing…'))
         self.play_button.setEnabled(False)
         self.message('Preparing playback…')
-        module, audible = self.document.module, self.audible()
+        module, audible = self.listening_module(), self.audible()
 
         def operation():
             return self.cache.prepare(module, audible) if token == self._audio_token else None
@@ -918,10 +1127,11 @@ class TrackerWindow(QMainWindow):
 
     def _sync_position(self):
         playing = self.is_playing()
-        active = playing or self.sample_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        active = (playing or self.sample_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+                  or (self.rt is not None and self.rt.jam_active))
         marker = None
         if self.rt is not None:
-            levels = self.rt.heard_levels() if playing else None
+            levels = self.rt.heard_levels()   # the song's, or the notes played from the keyboard
             if levels:
                 self.meter.feed_levels(*levels)
         self.meter.tick(active, self.volume.value() / 100)
@@ -953,14 +1163,15 @@ class TrackerWindow(QMainWindow):
         if entry["pattern"] == self.pattern_model.pattern:
             self.pattern_model.highlight(entry["row"])
             if self.follow.isChecked() and playing:
-                self.table.scrollTo(self.pattern_model.index(entry["row"], 0), QAbstractItemView.ScrollHint.EnsureVisible)
+                self.table.scroll_to_row(entry["row"])   # vertically only: a grid scrolled sideways stays where it is
 
     def cell_selected(self, index, previous=QModelIndex()):
         if not self.document or not index.isValid():
             return
         if self.edit_mode:
             return  # while typing, the instrument is the one chosen in the sample list
-        value = self.document.module.patterns[self.pattern_model.pattern].get(index.row(), index.column() // 3)
+        value = self.document.module.patterns[self.pattern_model.pattern].get(
+            index.row(), self.pattern_model.channel_of(index.column()))
         if value.sample:
             for row in range(self.samples.count()):
                 if self.samples.item(row).data(Qt.ItemDataRole.UserRole) == value.sample - 1:
@@ -968,11 +1179,14 @@ class TrackerWindow(QMainWindow):
                     break
 
     def sample_selected(self, row):
-        if self._refreshing or not self.document or row < 0:
+        if self._refreshing:
+            return
+        self.sample_workshop.editor.load()   # the waveform, the edit fields, or the empty state
+        self.instrument_panel.update_buttons()
+        if not self.document or row < 0:
             return
         index = self.samples.item(row).data(Qt.ItemDataRole.UserRole)
         sample = self.document.module.samples[index]
-        self.waveform.set_sample(sample)
         self._sample_labels()
         self.sample_volume.setValue(sample.volume)
         self.finetune.setValue(sample.finetune)
@@ -984,7 +1198,15 @@ class TrackerWindow(QMainWindow):
         sample = self.document.module.samples[index]
         self.sample_title.setText(f"{index + 1:02X} · {sample_name(sample, index + 1)}")
         looping = self.t("loop {start} → {end}", start=sample.loop_start, end=sample.loop_start + sample.loop_length) if sample.loop_length else self.t("no loop")
-        self.sample_info.setText(self.t("{size} bytes · mono 8-bit · {loop} · C-2 preview", size=len(sample.pcm), loop=looping))
+        self.sample_info.setText(self.sample_summary(sample, looping))
+
+    def sample_summary(self, sample, looping: str) -> str:
+        """The one-line facts of a song sample: size, bit depth, loop and what the preview plays."""
+        if self.module_format != "xm":
+            return self.t("{size} bytes · mono 8-bit · {loop} · C-2 preview", size=len(sample.pcm), loop=looping)
+        return self.t("{size} bytes · mono {bits}-bit · {loop} ({mode}) · panning {panning} · relative note {note:+d} "
+                      "· C-4 preview", size=len(sample.pcm) * sample.bits // 8, bits=sample.bits, loop=looping,
+                      mode=self.t(sample.loop_mode), panning=sample.panning, note=sample.relative_note)
 
     def play_sample(self):
         if not self.document or not self.samples.currentItem():
@@ -999,6 +1221,26 @@ class TrackerWindow(QMainWindow):
         except (OSError, ValueError, RuntimeError) as exc:
             self.message(str(exc), True)
 
+    def run_patch(self, ops, label: str) -> dict:
+        """Apply patch operations as one undoable transaction and present the change. Unlike `apply_patch`
+        a refusal is raised (`ValidationError` with its code), for callers that explain it themselves."""
+        result = self.document.patch(ops, label)
+        if result["changed"]:
+            self.edited(label)
+        return result
+
+    def audition_wav(self, wav: bytes) -> Path:
+        """Play a short in-memory WAV (an edit preview, a recipe audition) without touching the song."""
+        path = self.cache.directory / f"audition-{hashlib.sha1(wav).hexdigest()[:20]}.wav"
+        if not path.is_file():
+            project.atomic_bytes(path, wav)
+        self.meter.reset()
+        self.pause_playback()
+        self.sample_player.stop()
+        self.sample_player.setSource(QUrl.fromLocalFile(str(path)))
+        self.sample_player.play()
+        return path
+
     def edit(self, operation, label: str = "Edit"):
         if not self.document:
             return
@@ -1010,6 +1252,7 @@ class TrackerWindow(QMainWindow):
 
     def edited(self, label: str = "Edit"):
         """The owner changed the document: redraw, re-render later and journal it as a human edit."""
+        self.agent_panel.compare_edited()   # the owner wants to hear their edit, not the take
         self._debounce_play = False
         if self.rt is not None:
             # Real-time: the engine takes the edit at once; playback (if any) simply continues.
@@ -1060,12 +1303,20 @@ class TrackerWindow(QMainWindow):
         for control in controls:
             control.blockSignals(False)
 
+    def update_keys_hint(self, *_):
+        """The visible reminder of what the piano keys play: octave and keyboard layout."""
+        octave, layout = self.edit_octave.value(), self.keyboard_layout()
+        self.keys_hint.setText(self.t("Octave {octave} · Keyboard {layout}", octave=octave, layout=layout.upper()))
+        self.keys_hint.setToolTip(self.t("The piano keys play notes: the lower row from octave {octave}, the upper rows from "
+                                         "octave {next}. F1-F3 or numpad + and - change the octave.",
+                                         octave=octave, next=min(self.edit_octave.maximum(), octave + 1)))
+
     def keyboard_layout(self) -> str:
         """The concrete piano map in use: "qwerty" or "azerty" (Auto follows the input locale)."""
         return resolve_layout(self.keyboard_combo.currentData(), input_locale_name())
 
     def instrument_slot(self) -> int:
-        """Song sample slot (1-31) used for typed notes, or 0 when the song has no samples."""
+        """Song sample slot (1-31, instruments 1-128 in an XM) used for typed notes, or 0 when the song has no samples."""
         item = self.samples.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) + 1 if item else 0
 
@@ -1213,6 +1464,25 @@ class TrackerWindow(QMainWindow):
     def playback_ms(self) -> int:
         return self.rt.position_ms() if self.rt is not None else self.player.position()
 
+    def listening_module(self):
+        """What the transport plays: the take being compared, otherwise the document's module."""
+        return self.monitor_module if self.monitor_module is not None else self.document.module
+
+    def listen_to(self, module=None):
+        """Hear `module` (a take) at the current song position, or the document again with `None`.
+        Playback state and position are kept; the document is never touched."""
+        if module is self.monitor_module:
+            return
+        playing = self._want_play if self._loading_audio else self.is_playing()
+        position = self._resume_ms if self._loading_audio else self.playback_ms()
+        self.monitor_module = module
+        self.sample_player.stop()
+        if self.rt is not None:
+            self.rt.reload()   # the audio thread swaps the module in on the row being played
+        else:
+            self.prepare_audio(playing, position)
+        self._update_title()
+
     def pause_playback(self):
         """Pause the song (used before a sample audition or a proposal listening)."""
         if self.rt is not None:
@@ -1232,6 +1502,13 @@ class TrackerWindow(QMainWindow):
         self.live_action.setChecked(self.live.enabled)
         self.live_action.blockSignals(False)
         self.live.update_status()
+
+    def open_browser(self):
+        """Agent menu, "Open in a browser...": address, LAN switch and connected browsers."""
+        if self.browser_dialog is None:
+            self.browser_dialog = BrowserDialog(self)
+        self.browser_dialog.open()
+        return self.browser_dialog
 
     def set_live(self, enabled: bool):
         self.live.set_enabled(enabled)
@@ -1264,15 +1541,24 @@ class TrackerWindow(QMainWindow):
         elif not self.is_playing():
             self.toggle_play()
 
+    def _announce_change(self, entry: dict):
+        """Status line for someone else's edit: an agent's, or a browser's (named as such)."""
+        summary = "; ".join(entry["summary"][:2]) or "—"
+        if entry["author"] in HUMAN_AUTHORS:
+            self.message("Edit from a browser ({author}): {label} · {summary}", author=entry["author"],
+                         label=entry["label"], summary=summary)
+        else:
+            self.message("{author}: {label} · {summary}", author=entry["author"], label=entry["label"], summary=summary)
+
     def agent_changed(self, entry: dict):
-        """Someone else (an agent, an accepted proposal) changed the document through the session."""
+        """Someone else (an agent, an accepted proposal, a browser) changed the document through the session."""
+        kind = "human_change" if entry["author"] in HUMAN_AUTHORS else "agent_change"
         if self.rt is not None:
             self.sample_player.stop()
             self.refresh_document()
-            self.pattern_model.flash(entry["diff"].get("cells", []), "agent_change")
+            self.pattern_model.flash(entry["diff"].get("cells", []), kind)
             self.rt.reload()
-            self.message("{author}: {label} · {summary}", author=entry["author"], label=entry["label"],
-                         summary="; ".join(entry["summary"][:2]) or "—")
+            self._announce_change(entry)
             self.live.context_changed()
             return
         playing = self._want_play if self._loading_audio else self.is_playing()
@@ -1283,10 +1569,9 @@ class TrackerWindow(QMainWindow):
         self._loading_audio = self._await_media = self._audio_ready = False
         self.sample_player.stop()
         self.refresh_document()
-        self.pattern_model.flash(entry["diff"].get("cells", []), "agent_change")
+        self.pattern_model.flash(entry["diff"].get("cells", []), kind)
         self.debounce.start()
-        self.message("{author}: {label} · {summary}", author=entry["author"], label=entry["label"],
-                     summary="; ".join(entry["summary"][:2]) or "—")
+        self._announce_change(entry)
         self.live.context_changed()
 
     def _debounced_audio(self):
@@ -1315,12 +1600,17 @@ class TrackerWindow(QMainWindow):
     def apply_sample(self):
         if self.document and self.samples.currentItem():
             index = self.samples.currentItem().data(Qt.ItemDataRole.UserRole)
+            if self.module_format == "xm":   # the XM fine tune runs -128..127: through the patch operation
+                self.apply_patch([{"op": "sample", "slot": index + 1, "volume": self.sample_volume.value(),
+                                   "finetune": self.finetune.value()}], "Set sample")
+                return
             self.edit(lambda: self.document.set_sample(index, self.sample_volume.value(), self.finetune.value()), "Set sample")
 
     def transpose(self, semitones):
         index = self.table.currentIndex()
         if self.document and index.isValid():
-            self.edit(lambda: self.document.transpose(self.pattern_model.pattern, index.column() // 3, semitones), "Transpose track")
+            channel = self.pattern_model.channel_of(index.column())
+            self.edit(lambda: self.document.transpose(self.pattern_model.pattern, channel, semitones), "Transpose track")
         else:
             self.message('Select a cell in the track you want to transpose.')
 
@@ -1336,6 +1626,7 @@ class TrackerWindow(QMainWindow):
         if self._refreshing or not self.document:
             return
         self._monitor_style()
+        self.live.context_changed()   # browser renders follow the window's mutes
         if self.rt is not None:
             self.rt.set_audible(self.audible())  # mutes and solos apply within one audio block, no render
             return
@@ -1373,12 +1664,15 @@ class TrackerWindow(QMainWindow):
                 self.message(str(exc), True)
 
     def export_mod(self):
+        """Write the module file in its own format: .mod for a MOD, .xm for an XM."""
         if self.document:
-            destination = self._save_path(".mod", 'Export MOD module')
+            xm = self.document.module.format == "xm"
+            destination = self._save_path(formats.extension(self.document.module),
+                                          'Export XM module' if xm else 'Export MOD module')
             if destination:
                 try:
                     self.document.export_mod(destination)
-                    self.message("MOD exported: {name}", name=destination.name)
+                    self.message("XM exported: {name}" if xm else "MOD exported: {name}", name=destination.name)
                 except (OSError, ValueError) as exc:
                     self.message(str(exc), True)
 
@@ -1417,6 +1711,8 @@ class TrackerWindow(QMainWindow):
             return
         self.debounce.stop()
         self.sync.stop()
+        if self.browser_dialog is not None:
+            self.browser_dialog.close()
         self.live.shutdown()
         self.sample_browser.shutdown()
         self._audio_token += 1

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import wave
 
-from . import __version__, audio, mod, project
+from . import __version__, audio, formats, project
 from .document import listening_copy
 from .i18n import LANGUAGES
 from .model import Module, ValidationError, playback_plan
@@ -57,14 +57,18 @@ class AudioCache:
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=True)
 
-    def prepare(self, module: Module, audible: tuple[bool, ...] = (True, True, True, True)) -> Path:
+    def prepare(self, module: Module, audible: tuple[bool, ...] | None = None) -> Path:
+        """Render the module (MOD or XM, any channel count) to a WAV, with the muted channels silenced."""
         duration = playback_plan(module)["duration_seconds"]
         if duration > 120:
             raise ValidationError("L'écoute de cette version est limitée aux cycles de 120 secondes ; le module reste consultable et éditable.")
+        # One state per channel of this module; a take with another channel count than the window's keeps what fits.
+        audible = (tuple(audible) if audible is not None else ())[:module.channels]
+        audible += (True,) * (module.channels - len(audible))
         rendered_module = listening_copy(module, audible)
-        payload = mod.encode(rendered_module)
+        payload = formats.encode(rendered_module)
         key = hashlib.sha256(payload + f"desktop-{__version__}-48000-openmpt".encode()).hexdigest()
-        source, destination = self.directory / f"{key}.mod", self.directory / f"{key}.wav"
+        source, destination = self.directory / f"{key}{formats.extension(rendered_module)}", self.directory / f"{key}.wav"
         if destination.is_file():
             try:
                 with wave.open(str(destination), "rb") as stream:
@@ -80,11 +84,15 @@ class AudioCache:
         sample = module.samples[index]
         if not sample.pcm:
             raise ValidationError("Cet emplacement de sample est vide.")
-        payload = bytes(value & 255 for value in sample.pcm)
-        key = hashlib.sha256(payload + str((sample.loop_start, sample.loop_length, sample.finetune, sample.volume)).encode()).hexdigest()
+        # 16-bit XM samples need both bytes in the key; the XM facts change the pitch of the preview.
+        payload = (bytes(value & 255 for value in sample.pcm) if sample.bits == 8
+                   else b"".join(value.to_bytes(2, "little", signed=True) for value in sample.pcm))
+        facts = (sample.loop_start, sample.loop_length, sample.finetune, sample.volume, sample.bits,
+                 sample.relative_note, module.format)
+        key = hashlib.sha256(payload + str(facts).encode()).hexdigest()
         destination = self.directory / f"sample-{key}.wav"
         if not destination.is_file():
-            audio.sample_preview(sample, destination)
+            audio.sample_preview(sample, destination, module.format)
         return destination
 
     def library_sample(self, library, sample_id: str, note: str = "C-2") -> Path:

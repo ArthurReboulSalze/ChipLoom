@@ -104,8 +104,8 @@ def compose(bank: SampleLibrary) -> Module:
     module.patterns, module.orders = patterns, list(range(5))
     module.metadata.update({
         "description": "Original 32-second four-channel composition using ten unchanged samples from the local library.",
-        "display_description": "Dix samples de la bibliothèque, une palette cohérente et un nouveau thème en question-réponse.",
-        "arrangement": "Introduction courte, thème, réponse, respiration et reprise. Uniquement des samples de la bibliothèque ; notes et arrangement nouveaux.",
+        "display_description": "Ten samples from the library, a coherent palette and a new theme in call and response.",
+        "arrangement": "Short introduction, theme, answer, breather and return. Only samples from the library; the notes and the arrangement are new.",
         "channel_names": ["Drums", "Bass", "Arpeggio", "Lead"],
         "timing": {"mode": "PAL CIA", "speed": 6, "bpm": 150},
         "sample_palette": {"imported": len(PALETTE), "newly_created": 0},

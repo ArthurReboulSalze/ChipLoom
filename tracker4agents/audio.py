@@ -15,7 +15,7 @@ import sys
 import tempfile
 import wave
 
-from . import mod
+from . import formats
 from .model import NOTE_TO_PERIOD, PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
 from .project import atomic_bytes
 
@@ -94,7 +94,7 @@ def default_xmp_library() -> Path:
 def render(source: Path, output: Path, engine: str = "openmpt", seconds: float | None = None,
            sample_rate: int = 48000, ffmpeg: str | None = None, xmp_library: Path | None = None,
            from_order: int | None = None) -> dict:
-    module = mod.read(source)
+    module = formats.read(source)
     plan = playback_plan(module)
     start_seconds = 0.0
     if from_order is not None:
@@ -144,12 +144,19 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
                        "stderr": result.stderr.strip(), "trace": None}
         elif engine == "xmp":
             library = (xmp_library or default_xmp_library()).resolve()
-            result = subprocess.run(
-                [sys.executable, "-m", "tracker4agents._xmp_worker", str(source), str(temporary),
-                 str(seconds), str(sample_rate), str(library), str(start_seconds)],
-                cwd=ROOT, capture_output=True, text=True, timeout=60,
-                **SUBPROCESS_OPTIONS,
-            )
+            # libxmp 4.7.3 can crash on some header variants (restart byte, FLT4/4CHN): replay a copy
+            # with the same music and normalised headers (see formats.encode_for_replay).
+            replay = temporary.with_name(temporary.stem + ".replay" + formats.extension(module))
+            replay.write_bytes(formats.encode_for_replay(module))
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "tracker4agents._xmp_worker", str(replay), str(temporary),
+                     str(seconds), str(sample_rate), str(library), str(start_seconds)],
+                    cwd=ROOT, capture_output=True, text=True, timeout=60,
+                    **SUBPROCESS_OPTIONS,
+                )
+            finally:
+                replay.unlink(missing_ok=True)
             if result.returncode:
                 raise RenderError(f"Processus libxmp (code {result.returncode}) : {result.stderr.strip()[-2000:]}")
             details = json.loads(result.stdout)
@@ -170,18 +177,23 @@ def render(source: Path, output: Path, engine: str = "openmpt", seconds: float |
         temporary.unlink(missing_ok=True)
 
 
-def sample_preview(sample: Sample, output: Path) -> None:
-    """Preview a sample at the C-2 playback rate, with loops repeated for one second."""
+def sample_preview(sample: Sample, output: Path, fmt: str = "mod") -> None:
+    """Preview a sample at its C-2 (MOD) or C-4 (XM) playback rate, with loops repeated for one second."""
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Integer C-2 periods, finetunes 0..7 then -8..-1, from ProTracker tuning.
-    periods = (428, 425, 422, 419, 416, 413, 410, 407, 453, 450, 447, 444, 441, 437, 434, 431)
-    rate = round(PAL_CLOCK / periods[sample.finetune & 15])
+    if fmt == "xm":
+        # FastTracker II plays C-4 of a sample at 8363 Hz, shifted by relative note and finetune (1/128 semitone).
+        rate = round(8363 * 2 ** (sample.relative_note / 12 + sample.finetune / (128 * 12)))
+    else:
+        # Integer C-2 periods, finetunes 0..7 then -8..-1, from ProTracker tuning.
+        periods = (428, 425, 422, 419, 416, 413, 410, 407, 453, 450, 447, 444, 441, 437, 434, 431)
+        rate = round(PAL_CLOCK / periods[sample.finetune & 15])
     pcm = sample.pcm
     if sample.loop_length:
         loop = pcm[sample.loop_start:sample.loop_start + sample.loop_length]
         target = rate
         pcm = (pcm[:sample.loop_start] + loop * (target // len(loop) + 1))[:target]
-    values = array("h", (round(value * 256 * sample.volume / 64) for value in pcm))
+    scale = 256 if sample.bits == 8 else 1  # 16-bit PCM is already at WAV scale
+    values = array("h", (round(value * scale * sample.volume / 64) for value in pcm))
     if sys.byteorder != "little":
         values.byteswap()
     with wave.open(str(output), "wb") as audio:

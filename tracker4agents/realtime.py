@@ -16,8 +16,8 @@ import os
 from pathlib import Path
 import sys
 
-from . import mod
-from ._xmp_worker import FrameInfo
+from . import formats
+from ._xmp_worker import FrameInfo, replay_style
 from .model import Module, ValidationError, playback_plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,6 +105,7 @@ class XmpEngine:
         self._pending_marker: dict | None = None
         self._times: dict[tuple[int, int], float] = {}
         self._frame = FrameInfo()
+        self.channels = 4
         self.audible = (True, True, True, True)
         self.loop = True
         self.finished = False
@@ -128,7 +129,13 @@ class XmpEngine:
 
     def load(self, module: Module, order: int = 0, row: int = 0) -> None:
         """Load (or reload) a module and continue from `order`/`row` with its replay state."""
-        payload = mod.encode(module)
+        # Canonical bytes: libxmp 4.7 can crash in the start-up sequence below on modules whose
+        # header carries a restart byte or other imported oddities (see formats.encode_for_replay).
+        payload = formats.encode_for_replay(module)
+        self.channels = module.channels
+        self._style = replay_style(payload)
+        if len(self.audible) != module.channels:  # keep the states of the channels both modules share
+            self.audible = tuple((self.audible + (True,) * module.channels)[:module.channels])
         plan = playback_plan(module)
         self._buffer = C.create_string_buffer(payload, len(payload))
         self._size = len(payload)
@@ -146,9 +153,13 @@ class XmpEngine:
         self._loaded = True
         self._check(self._dll.xmp_start_player(self._ctx, self.sample_rate, 0), "start")
         self._started = True
-        self._check(self._dll.xmp_set_player(self._ctx, PLAYER_MODE, MODE_PROTRACKER), "ProTracker personality")
-        flags = self._check(self._dll.xmp_get_player(self._ctx, PLAYER_CFLAGS), "flags")
-        self._check(self._dll.xmp_set_player(self._ctx, PLAYER_CFLAGS, (flags | FLAGS_VBLANK_OFF_PAL) & ~1), "flags")
+        style = self._style
+        if style != "xm":  # an XM keeps libxmp's FastTracker II personality
+            self._check(self._dll.xmp_set_player(self._ctx, PLAYER_MODE, MODE_PROTRACKER), "ProTracker personality")
+            flags = self._check(self._dll.xmp_get_player(self._ctx, PLAYER_CFLAGS), "flags")
+            # The A500 mixer flag crashes libxmp 4.7 on MODs it does not recognise as ProTracker (see replay_style).
+            wanted = (flags | FLAGS_VBLANK_OFF_PAL) & ~1 if style == "mod" else flags & ~1
+            self._check(self._dll.xmp_set_player(self._ctx, PLAYER_CFLAGS, wanted), "flags")
         self._check(self._dll.xmp_set_player(self._ctx, PLAYER_MIX, 70), "stereo separation")
         self._check(self._dll.xmp_set_player(self._ctx, PLAYER_AMP, 1), "amplification")
         self.set_audible(self.audible)
@@ -215,8 +226,8 @@ class XmpEngine:
         self.seek(target["order"], target["row"])
 
     def set_audible(self, audible: tuple[bool, ...]) -> None:
-        if len(audible) != 4:
-            raise ValidationError("Four channel states are expected.")
+        if len(audible) != self.channels:
+            raise ValidationError(f"{self.channels} channel states are expected.")
         self.audible = tuple(bool(value) for value in audible)
         if self._started:
             for channel, on in enumerate(self.audible):

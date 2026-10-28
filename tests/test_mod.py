@@ -52,13 +52,13 @@ class ModCodecTests(unittest.TestCase):
     def test_truncation_trailing_data_and_unsupported_magic_are_rejected(self):
         good = fixture_bytes()
         bad_magic = bytearray(good)
-        bad_magic[1080:1084] = b"8CHN"
+        bad_magic[1080:1084] = b"FLT8"
         for payload in (good[:-1], good + b"extra", bytes(bad_magic), good[:1000]):
             with self.subTest(length=len(payload)), self.assertRaises(ValidationError):
                 mod.decode(payload)
 
     def test_invalid_order_or_sample_length_is_rejected(self):
-        for offset, value in ((950, 0), (952, 64), (42, 255), (951, 0)):
+        for offset, value in ((950, 0), (950, 129), (952, 64), (42, 255)):
             payload = bytearray(fixture_bytes())
             payload[offset] = value
             with self.subTest(offset=offset), self.assertRaises(ValidationError):
@@ -80,7 +80,7 @@ class ModCodecTests(unittest.TestCase):
         bad.samples[0].loop_length = 4
         bad.samples[0].loop_start = 2
         variants.append(bad)
-        for effect in ("800", "F00", "F20", "E60", "EE1", "EF1", "C41", "D64", "D0A", "B01"):
+        for effect in ("800", "F00", "F20", "E30", "E70", "E80", "EF1", "EFF", "C41", "D64", "D0A", "B01"):
             bad = copy.deepcopy(base)
             bad.patterns[0].put(0, 0, cell("C-2", 1, effect))
             variants.append(bad)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from .model import NOTES, Cell, ValidationError
+from .model import NOTES, XM_NOTES, Cell, ValidationError
 from .patch import cell_text, parse_cell
 
 LAYOUTS = ("auto", "qwerty", "azerty")
@@ -27,6 +27,9 @@ AZERTY_KEYS = {
 # Unshifted number row of an AZERTY keyboard, accepted as hexadecimal digits.
 AZERTY_DIGITS = dict(zip("&é\"'(-è_çà", "1234567890"))
 HEX_DIGITS = "0123456789abcdef"
+# XM: the key left of "2" on the number row (the "&" key of an AZERTY keyboard) enters key off, as in FastTracker II.
+KEY_OFF_KEYS = {"qwerty": "1", "azerty": "&"}
+EFFECT_LETTERS = "ghijklmnopqrstuvwxyz"   # XM effects 16..35 follow F (0-9 then A-Z)
 
 
 def valid_layout(value: object) -> str:
@@ -51,10 +54,24 @@ def semitone(layout: str, text: str) -> int | None:
     return table.get(text.lower()) if len(text) == 1 else None
 
 
-def note_name(octave: int, offset: int) -> str | None:
-    """Tracker note for `offset` semitones above C of `octave`, or None outside C-1..B-3."""
+def note_name(octave: int, offset: int, fmt: str = "mod") -> str | None:
+    """Tracker note for `offset` semitones above C of `octave`, or None outside the format's range
+    (C-1..B-3 in a MOD, C-0..B-7 in an XM)."""
+    if fmt == "xm":
+        index = octave * 12 + offset
+        return XM_NOTES[index] if 0 <= index < len(XM_NOTES) else None
     index = (octave - 1) * 12 + offset
     return NOTES[index] if 0 <= index < len(NOTES) else None
+
+
+def is_key_off(layout: str, text: str) -> bool:
+    """True for the character of the key-off key at this layout (the number-row key before "2")."""
+    return len(text) == 1 and text == KEY_OFF_KEYS["azerty" if layout == "azerty" else "qwerty"]
+
+
+def effect_letter(text: str) -> str | None:
+    """Uppercase letter G-Z that starts an XM effect (the digits and A-F come from `hex_digit`)."""
+    return text.upper() if len(text) == 1 and text.lower() in EFFECT_LETTERS else None
 
 
 def hex_digit(layout: str, text: str) -> str | None:
@@ -69,12 +86,12 @@ def hex_digit(layout: str, text: str) -> str | None:
 
 # --- clipboard ----------------------------------------------------------------------
 
-def format_block(block: list[list[Cell]]) -> str:
+def format_block(block: list[list[Cell]], fmt: str = "mod") -> str:
     """Grid text as printed by `inspect --grid`, without the row prefix: `C-2 01 ... | --- -- ...`."""
-    return "\n".join(" | ".join(cell_text(value) for value in row) for row in block)
+    return "\n".join(" | ".join(cell_text(value, fmt) for value in row) for row in block)
 
 
-def parse_block(text: str) -> list[list[Cell]]:
+def parse_block(text: str, fmt: str = "mod", max_rows: int = 64, max_channels: int = 4) -> list[list[Cell]]:
     """Read grid text from the clipboard: bare cells, or rows like `10 | C-2 01 ... | ...`.
 
     Lines without a `|` that are not cells (titles an agent printed) are skipped. The row
@@ -89,12 +106,12 @@ def parse_block(text: str) -> list[list[Cell]]:
         if len(parts) > 1 and re.fullmatch(r"[0-9A-Fa-f]{2}", parts[0]):
             parts = parts[1:]
         try:
-            rows.append([parse_cell(part) for part in parts])
+            rows.append([parse_cell(part, fmt) for part in parts])
         except ValidationError:
             if "|" in line:
                 raise
     if not rows:
         raise ValidationError("The clipboard holds no pattern cells.", "PATCH_CELL")
-    if len({len(row) for row in rows}) != 1 or len(rows[0]) > 4 or len(rows) > 64:
-        raise ValidationError("The clipboard block must have 1-64 rows of 1-4 cells.", "PATCH_CELL")
+    if len({len(row) for row in rows}) != 1 or len(rows[0]) > max_channels or len(rows) > max_rows:
+        raise ValidationError(f"The clipboard block must have 1-{max_rows} rows of 1-{max_channels} cells.", "PATCH_CELL")
     return rows

@@ -8,8 +8,10 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from . import mod, project
-from .model import Cell, Module, NOTES, NOTE_TO_PERIOD, ValidationError, cell, playback_plan, require_int, validate
+from . import formats, project
+from .model import (
+    XM_KEY_OFF, XM_NOTES, Cell, Module, NOTES, NOTE_TO_PERIOD, ValidationError, cell, playback_plan, require_int, validate,
+)
 from .patch import apply_ops, diff_modules, set_initial_timing
 
 
@@ -30,7 +32,7 @@ class Document:
 
     @classmethod
     def open(cls, path: Path) -> Document:
-        module = project.load(path) if path.suffix.lower() == ".json" else mod.read(path)
+        module = project.load(path) if path.suffix.lower() == ".json" else formats.read(path)
         return cls(module, path)
 
     @property
@@ -124,14 +126,20 @@ class Document:
 
     def transpose(self, pattern: int, channel: int, semitones: int) -> bool:
         require_int(pattern, "pattern", 0, len(self.module.patterns) - 1)
-        require_int(channel, "voie", 0, 3)
+        require_int(channel, "voie", 0, self.module.channels - 1)
         require_int(semitones, "demi-tons", -12, 12)
 
         def change(module: Module):
             selected = module.patterns[pattern]
-            for row in range(64):
+            for row in range(selected.rows):
                 old = selected.get(row, channel)
-                if old.note:
+                if module.format == "xm":
+                    if old.period and old.period != XM_KEY_OFF:
+                        target = old.period - 1 + semitones
+                        if not 0 <= target < len(XM_NOTES):
+                            raise ValidationError("La transposition sortirait des notes C-0 à B-7 ; aucune note n'a été modifiée.")
+                        selected.put(row, channel, Cell(target + 1, old.sample, old.command, old.param, old.volume))
+                elif old.note:
                     target = NOTES.index(old.note) + semitones
                     if not 0 <= target < len(NOTES):
                         raise ValidationError("La transposition sortirait des notes C-1 à B-3 ; aucune note n'a été modifiée.")
@@ -141,13 +149,14 @@ class Document:
 
     def gate_note(self, pattern: int, row: int, channel: int, ticks: int) -> bool:
         require_int(pattern, "pattern", 0, len(self.module.patterns) - 1)
-        require_int(row, "row", 0, 63)
-        require_int(channel, "voie", 0, 3)
+        require_int(row, "row", 0, self.module.patterns[pattern].rows - 1)
+        require_int(channel, "voie", 0, self.module.channels - 1)
         require_int(ticks, "ticks", 1, 15)
         old = self.module.patterns[pattern].get(row, channel)
         if not old.period:
             raise ValidationError("Sélectionne une cellule contenant une note.")
-        return self.replace_cell(pattern, row, channel, cell(old.note, old.sample, f"EC{ticks:X}"))
+        return self.replace_cell(pattern, row, channel,
+                                 cell(old.note, old.sample, f"EC{ticks:X}", self.module.format, old.volume))
 
     def mark_saved(self) -> None:
         """Treat the current module as matching the file on disk (after an external reload)."""
@@ -161,14 +170,17 @@ class Document:
         self._saved = fingerprint(self.module)
 
     def export_mod(self, path: Path) -> None:
-        if path.suffix.lower() != ".mod":
-            raise ValidationError("L'export du module doit avoir une extension .mod.")
-        project.atomic_bytes(path, mod.encode(self.module))
+        """Write the module file: .mod for a MOD, .xm for an XM."""
+        extension = formats.extension(self.module)
+        if path.suffix.lower() != extension:
+            raise ValidationError(f"L'export du module doit avoir une extension {extension}.")
+        project.atomic_bytes(path, formats.encode(self.module))
 
 
 def listening_copy(module: Module, audible_channels: tuple[bool, ...]) -> Module:
-    if len(audible_channels) != 4:
-        raise ValidationError("Quatre états de voie sont attendus.")
+    if len(audible_channels) != module.channels:
+        words = "Quatre états" if module.channels == 4 else f"{module.channels} états"
+        raise ValidationError(f"{words} de voie sont attendus.")
     result = copy.deepcopy(module)
     for pattern in result.patterns:
         for (row, channel), value in list(pattern.cells.items()):

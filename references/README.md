@@ -2,8 +2,8 @@
 
 These reports document musical construction for agents to consult while composing original pieces. They do not train model weights or include source MOD files, PCM or complete note sequences.
 
-- [Initial two references](ANALYSE.md): repetition, small samples and in-note sample changes used as inspiration for Pixel Rush.
-- [Fifteen-module selection](SELECTION_FR.md): a per-module study in French, with arrangement, channel variation, effects and implications for the importer.
+- [Initial two references](ANALYSIS.md): repetition, small samples and in-note sample changes used as inspiration for Pixel Rush.
+- [Fifteen-module selection](SELECTION.md): a per-module study, with arrangement, channel variation, effects and implications for the importer.
 - [Machine-readable selection report](selection-analysis.json): neutral reference IDs, aggregate measurements and strict editing compatibility.
 
 The selection has 13 four-channel and 2 two-channel modules, 101 occupied sample slots and 33,330 PCM bytes in total. Seventy occupied slots are at most 128 bytes. Six modules pass the current strict editor profile; all fifteen were structurally analyzed without modifying the supplied archive.

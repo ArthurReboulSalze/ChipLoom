@@ -98,6 +98,7 @@ def analyze_bytes(raw: bytes, name: str, probe: bool = False) -> dict:
         module = mod.decode(raw)
         plan = playback_plan(module)
         result.update(editable_in_current_profile=True, compatibility_error=None,
+            import_notes=mod.import_notes(module),
             duration_seconds=plan["duration_seconds"], loop_start_seconds=plan["loop_start_seconds"],
             duration_basis="Strict CIA playback plan, to first repeated replay state",
             played_rows=plan["rows"], timing_values=sorted(set((r["speed"], r["bpm"]) for r in plan["timeline"])))

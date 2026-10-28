@@ -145,7 +145,7 @@ tab. Search and auditions run without changing the score. Insertion goes through
 `Document.insert_library_sample`, so the change is undoable and embeds PCM in the
 project. The GUI remembers its selected bank folder; the CLI's default path remains
 relative to the working directory. The human can choose a different folder without
-changing any CLI configuration. See [the French desktop guide](USAGE_FR.md#bibliothèque-de-samples-dans-la-fenêtre).
+changing any CLI configuration. See [the user guide](USER_GUIDE.md#sample-library-in-the-window).
 
 ## Planning and diagnostics (v0.5.0)
 
@@ -433,10 +433,10 @@ python -m tracker4agents feedback exports/song/v1.project.json --text "Bass is t
 | Command | Purpose |
 | --- | --- |
 | `live sessions` | List running sessions: `pid`, `url`, `path`, `title`, `started`, `kind` (`desktop` or `headless`) |
-| `live status` | `path`, `title`, `revision`, `dirty`, `orders`, `pattern_count`, `pending_proposals`, `takes`, `window` (is a window attached), `last_change`. A window also reports its cursor, selection and playback state |
+| `live status` | `path`, `title`, `revision`, `dirty`, `orders`, `pattern_count`, `pending_proposals`, `takes`, `window` (is a window attached), `web_devices` (connected browsers), `last_change`. A window also reports its cursor, selection and playback state, and `pending_request` while an `open` request waits for the owner (see below) |
 | `live score [--pattern N --row R --rows K]` | Without `--pattern`, an overview (orders, duration, patterns with the orders that use them, samples with `library_id` when recorded). With it, grid `lines` |
 | `live patch (--ops FILE\|- \| --op JSON …) [--base REV] [--label TEXT] [--propose] [--author NAME]` | Apply the operations from [Patch](#operations) to the open song as one undoable transaction; with `--propose`, only offer them |
-| `live changes [--since REV] [--author NAME]` | Journal entries after `REV`, each with `revision`, `author`, `label`, `diff` and `summary`, plus a grouped `summary` for `human` and `agent` |
+| `live changes [--since REV] [--author NAME]` | Journal entries after `REV`, each with `revision`, `author`, `label`, `at`, `kind`, `diff` and `summary`, plus a grouped `summary` for `human` (the window and connected browsers) and `agent`. `kind` is `patch`, `edit`, `reload`, `open`, `accept` or `request` (see below) |
 | `live proposals` | Pending proposals with `id`, `label`, `status`, `ops`, `diff`, `summary`, `stale` |
 | `live withdraw ID` | Withdraw your own pending proposal |
 | `live take PATH --label TEXT` | Announce a saved `.json` project or `.mod` as a take (id `t1`, `t2`, …) the owner can open from the window |
@@ -445,7 +445,8 @@ python -m tracker4agents feedback exports/song/v1.project.json --text "Bass is t
 | `live play [--order N]` / `live stop` | Start or stop playback in the window (`LIVE_NO_WINDOW` without a window) |
 | `live select --pattern N --row R --channel C [--rows K --channels K]` | Move the window's selection to show a passage |
 | `live save [--output PATH]` | Save the project JSON |
-| `live serve SOURCE [--port N]` | Host a headless session on a project or MOD until Ctrl+C |
+| `live serve SOURCE [--port N] [--web] [--lan [--lan-host ADDRESS] [--lan-port N]] [--no-web]` | Host a headless session on a project or MOD until Ctrl+C. `--web` also prints the address of the browser studio (no code), `--lan` offers the studio (only the studio) to the private network and implies `--web`, `--no-web` turns the studio off |
+| `live web [--status]` | Print the address of the browser studio of the running session (the local-network address first when that option is on). `--status` lists the connected browsers (`id`, `name`, `agent`, `listener`, `joined_at`, `last_seen`) instead. `LIVE_WEB_OFF` when the studio is off |
 
 Applied patch result (shortened):
 
@@ -471,9 +472,25 @@ Non-overlapping edits pass even with an old `--base`. Without `--base`, **no con
 
 **Without a window** (`window: false`): `play`, `stop` fail with `LIVE_NO_WINDOW`, while `open` and `select` return `{"ok": true, "handled": false}`: nothing consumed the request.
 
+**Open requests that wait for the owner.** `live open` asks the window to open a file or a take. If the window has no unsaved changes it opens at once and the reply is `{"ok": true, "handled": true, "opened": "<path>"}`. If it has unsaved changes, the owner must first answer a save-or-discard question, which can take minutes, so the reply comes immediately with `handled: "pending"` and nothing else has happened yet:
+
+```json
+{"ok": true, "handled": "pending", "prompt": true, "request_id": "o1"}
+```
+
+While the question is open:
+
+- `live status` carries `pending_request`: `{"request_id": "o1", "kind": "open", "path": "...", "take": "t1" or null, "waiting_for": "the owner's save or discard answer"}`. It disappears when the owner answers.
+- A second `live open` is not queued: it returns `{"ok": true, "handled": false, "reason": "another open request is waiting for the owner's answer"}`.
+- When the owner has answered, the outcome is written to the journal as an entry with `author: "human"`, an empty `diff`, `kind: "request"` and these fields: `request: "open"`, `request_id`, `outcome` (`"opened"`, `"declined"` when the owner cancelled, or `"failed"` when the file could not be opened), `path` and `take`. Its `label` reads *Open request: the file was opened*, *Open request: the owner declined* or *Open request: the file could not be opened*. Read it with `live changes --since REV`. When the file was opened, the usual `kind: "open"` entry (the document was replaced, which conflicts with every older `--base`) comes just before it.
+
+So after a `pending` reply, do not assume the file is open: poll `live status` for `pending_request` or read `live changes --since REV` for the `kind: "request"` entry with your `request_id`. Other results are `handled: true` (done) and `handled: false` (nothing consumed the request; a `reason` says why when the window knows).
+
 `live save` with no `--output` writes the session's open project file. With `--output` it writes a copy (`"copy": true`); the session and the owner's window keep their own file. Announce such a copy with `take` if the owner should open it.
 
 `live serve` prints one JSON line when it is listening (`{"ok": true, "event": "listening", "pid": …, "url": …, "path": …, "kind": "headless", "discovery_file": …}`), then blocks. On Ctrl+C it prints `{"event": "stopped", "revision": …, "dirty": …}` and does not write unsaved edits; run `live save` first. To stop a server started in the background, end only that process by its `pid`.
+
+The **browser studio** is a web page served by the same session at `/web/` (loopback only unless the owner enables `--lan` or the window's local-network option, which expose only the studio over plain HTTP, never the agent API). There is no pairing code: a browser that opens the address joins by itself and edits as `human-web`. `live web` prints the address; the agent's bearer token never reaches the page. See the [user guide](USER_GUIDE.md#browser-studio).
 
 ```sh
 CHIPLOOM_HOME=/tmp/chiploom python -m tracker4agents live serve exports/song/project.json &
@@ -490,7 +507,7 @@ For the collaboration procedure, see [the live reference](../skills/chiploom/ref
 python -m tracker4agents mcp [--root DIR]
 ```
 
-`mcp` speaks the Model Context Protocol over standard input and output (JSON-RPC 2.0, one message per line). It supports protocol versions `2025-06-18`, `2025-03-26` and `2024-11-05`, `initialize`, `ping`, `tools/list` and `tools/call`. `--root` sets the working directory used for relative paths in tool arguments (default: the directory the server starts in).
+`mcp` speaks the Model Context Protocol over standard input and output (JSON-RPC 2.0, one message per line). It supports protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26` and `2024-11-05`, `initialize`, `ping`, `tools/list` and `tools/call`. `--root` sets the working directory used for relative paths in tool arguments (default: the directory the server starts in).
 
 Each tool call runs the equivalent `chiploom` command in a **child process**, so the result is exactly the CLI's JSON: it arrives as `structuredContent` (and as text), with `isError: true` when the command failed, carrying the same `code`/`message` fields. Nothing a command prints can corrupt the protocol stream. A command is stopped after 600 seconds (`TIMEOUT`).
 
@@ -500,10 +517,12 @@ Each tool call runs the equivalent `chiploom` command in a **child process**, so
 | `patch` | `patch` with `source`, `output`, `ops` (a JSON array) and `label` |
 | `report`, `compare`, `feedback` | the commands of the same name; `compare` offers `mp3`, `language`, `seed` and `seconds` but not `labels` |
 | `samples_list`, `samples_inspect`, `samples_preview`, `samples_add` | `samples list`, `inspect`, `preview`, `add` (no `extract`, `edit` or `audit`) |
+| `sample_schema`, `sample_edit`, `sample_draw`, `sample_waveform`, `instruments_list`, `instruments_show`, `instruments_save`, `instruments_delete`, `instruments_apply` | the `sample` and `instruments` commands of the [sound workshop](#sound-workshop-sample-editing-and-instruments); `trim`, `loop` and `fade` are two-integer arrays, `phrase` a list of strings |
+| `convert`, `export_format` | `convert` and `export --format` ([multi-channel MOD and XM](#multi-channel-mod-and-xm)) |
 | `synth_types`, `synth_levels`, `synth_preview`, `synth_add`, `synth_palette` | `synth types`, `levels`, `preview`, `add`, `palette`; `recipe` is a JSON object, `match_library` a bank folder, `no_match` a boolean |
 | `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops`, `base_revision`, `label`, `propose`, `author` |
 
-There are 34 tools. `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
+There are 45 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
 
 Configuration for a client that launches stdio servers (field names vary by client; this is the common shape):
 
@@ -519,7 +538,7 @@ Configuration for a client that launches stdio servers (field names vary by clie
 }
 ```
 
-Use the virtual environment's interpreter on the host where the files live (`.venv/bin/python` on Linux and macOS). The adapter is covered by the project's automated tests (`tests/test_mcp.py`) and was exercised by hand over a raw stdio pipe. It has **not** been tested with any specific MCP client, so no client is claimed to work. Agents with a terminal, such as Codex or Hermes, can keep calling the CLI directly; nothing requires MCP.
+Use the virtual environment's interpreter on the host where the files live (`.venv/bin/python` on Linux and macOS). The adapter is covered by the project's automated tests (`tests/test_mcp.py`), and `tools/mcp_smoke.py` drives it with the official Python MCP SDK as a client (see [what was tested](MCP.md#what-was-tested)). It has **not** been tried in a model-driven session with an application such as Codex, Claude Desktop or Claude Code, so no application is claimed to work. Agents with a terminal, such as Codex or Hermes, can keep calling the CLI directly; nothing requires MCP.
 
 ## Error contract and codes
 
@@ -549,6 +568,7 @@ Some core diagnostics keep their French wording in `message` in this version, no
 | --- | --- |
 | Files and formats | `JSON_SYNTAX`, `IO_ERROR`, `SCHEMA`, `UNKNOWN_FIELD`, `MOD_FORMAT`, `ARCHIVE_INVALID`, `FILE_TOO_LARGE`, `INTEGER_RANGE`, `INVALID_VALUE`, `TEXT_ASCII`, `TEXT_LENGTH`, `TEXT_TYPE` |
 | Score content | `NOTE_UNKNOWN`, `NOTE_RANGE`, `EFFECT_FORMAT`, `EFFECT_PARAM`, `EFFECT_UNSUPPORTED`, `CELL_DUPLICATE`, `FLOW` (invalid `Bxx`/`Dxx` target), `TIMING` (`F00`/`F20`, or no room for `timing`), `PATTERNS`, `ORDERS` |
+| XM and channels | `MOD_XM_FIELD` (an XM-only field such as the volume column on a MOD), `XM_SAMPLE` (bits, loop mode or volume of an XM sample), `XM_OP_UNSUPPORTED` (a patch operation that only applies to MOD) |
 | Samples | `SAMPLE_SLOT`, `SAMPLE_REF` (a cell uses a slot that does not exist), `SAMPLE_LOOP`, `SAMPLE_LENGTH`, `SAMPLE_PCM`, `SAMPLE_PCM_HASH`, `RECIPE_INVALID` (a recipe parameter, role or recipe JSON), `SAMPLE_LIBRARY`, `SAMPLE_SOURCE` (the project's sample source is not respected; `violations` lists the slots) |
 | Project validation | `PROJECT_INVALID` (the wrapper of `validate --report`; each entry has its own code) |
 | Patch | `PATCH_FORMAT`, `PATCH_OP`, `PATCH_FIELD`, `PATCH_CELL`, `PATCH_BOUNDS` |
@@ -557,8 +577,9 @@ Some core diagnostics keep their French wording in `message` in this version, no
 | Live: connection | `LIVE_NOT_RUNNING` (no matching session, or it did not answer), `LIVE_TIMEOUT`, `LIVE_AUTH`, `LIVE_FORBIDDEN` (browser request), `LIVE_HOST`, `LIVE_BAD_REQUEST`, `LIVE_BAD_RESPONSE`, `LIVE_METHOD`, `LIVE_UNKNOWN_METHOD`, `LIVE_TOO_LARGE`, `LIVE_COMMAND` |
 | Live: editing | `LIVE_CONFLICT`, `LIVE_BASE` (invalid `--base`), `LIVE_AUTHOR`, `LIVE_LABEL`, `LIVE_PARAMS`, `LIVE_PROPOSAL`, `LIVE_TAKE` |
 | Live: window | `LIVE_NO_WINDOW`, `LIVE_OPEN`, `LIVE_REQUEST`, `LIVE_SAVE_PATH`, `LIVE_CONTEXT`, `LIVE_ERROR` |
+| Live: browser studio | `LIVE_WEB_OFF` (the studio is turned off for the session), `LIVE_WEB_AUTH` (this browser has not joined, or its cookie expired), `LIVE_CSRF`, `LIVE_LAN` (the LAN listener could not start), `LIVE_RENDER` (invalid preview request), `LIVE_RENDER_UNAVAILABLE` (no renderer), `LIVE_BUSY` (another preview is rendering) |
 | Generic fallbacks | `VALIDATION`, `RUNTIME_ERROR`, `ERROR`; `FEEDBACK_INVALID` (feedback text or rating) |
-| MCP adapter only | `TIMEOUT` (a command ran over 600 seconds), `CLI_ERROR` (the command printed something that was not JSON) |
+| MCP adapter only | `TIMEOUT` (a command ran over 600 seconds), `CLI_ERROR` (the command printed something that was not JSON), `INVALID_ARGUMENTS` (tool arguments that do not match the tool's schema) |
 
 New codes may be added; existing ones keep their meaning. A code in a family you do not recognise should be treated as an error of that family.
 
@@ -577,3 +598,155 @@ New codes may be added; existing ones keep their meaning. A code in a family you
 ```
 
 Each entry has `path` (where in the file), `code`, `message` and, when translated, `message_fr`. Paths look like `patterns[4].events[12]` for the sparse layout and `patterns[4].rows['0C']` for grid rows. Success prints the usual `validate` result with `errors: []` and `error_count: 0`.
+
+## Sound workshop: sample editing and instruments
+
+These tools shape sounds **on a copy of a project** and keep the music in the notes. They exist for the owner (the window's sound workshop) and for agents the owner asks to edit a sound. The default composition policy of an agent is unchanged: take library samples as they are, shape them with notes, volume and effects, and record the library IDs. Every command below writes a **new** `.json` project; the input is never touched. Everything is also available as [patch operations](#operations) (one validated, undoable transaction) and as MCP tools.
+
+### Sample edits (patch operations)
+
+All of them take `slot` (1-31, an occupied slot) and work on the signed 8-bit PCM. Offsets are bytes and even. Every result has `changed` (false when nothing differed: the recipe and provenance are then left alone). Unknown fields are `UNKNOWN_FIELD`.
+
+| `op` | Fields | Effect |
+| --- | --- | --- |
+| `sample_loop` | `loop_start`, `loop_length`, optional `adapt` | Set the loop (even points, at least 4 bytes, ending inside the sample; `SAMPLE_LOOP` otherwise). `loop_length` 0 removes the loop and needs `loop_start` 0. **A sample without a loop must begin with two zero bytes** (the replayer's silent no-loop word): if the first two bytes are not zero, removing the loop is refused with `SAMPLE_LOOP` unless `adapt` is true, which prepends two zero bytes and leaves the original PCM intact. Reports `seam_jump` (difference between the last loop byte and the first, 0-255: a measure of the click at the seam) and `adaptations` |
+| `sample_trim` | `start`, `end` (at least one), `adjust_loop`, `adapt` | Keep exactly `pcm[start:end]` (both even, at least 4 bytes; `SAMPLE_LENGTH`). A loop that stays whole moves with the bytes. A range that cuts the loop is refused (`SAMPLE_LOOP`) unless `adjust_loop`, which keeps the part of the loop inside the range (`loop-shortened`; under 4 bytes the loop is removed, `loop-removed`). A result without a loop that would not begin with two zero bytes needs `adapt` (same prepend as above) |
+| `sample_gain` | `db` (-60 to 60), `allow_clip` | Multiply the PCM by 10^(db/20), rounding halves away from zero. A gain that would leave -128..127 is refused (`SAMPLE_CLIP`; the message gives the clean headroom) unless `allow_clip`, which clamps and reports `clipped`. Reports `peak_before`, `peak_after`, `changed_bytes`, `headroom_db` |
+| `sample_fade` | `fade_in`, `fade_out` (bytes, at least one), `allow_loop` | Linear fade from/to silence over the first/last bytes. On a looped sample a fade must stay outside the loop (`SAMPLE_LOOP`) unless `allow_loop` (every repeat would then dip) |
+| `sample_set_pcm` | `pcm_base64`, `pcm_sha256`, optional `loop_start`, `loop_length` (default: no loop), `name`, `volume`, `finetune`, `replace`, `adapt` | Put drawn or computed PCM in a slot (an existing one, or the next free slot). Same hash-checked encoding as a schema v2 project (`SAMPLE_PCM`, `SAMPLE_PCM_HASH`); an occupied slot needs `replace` and keeps its name, volume and fine tune unless given; a one-shot needs its two zero bytes or `adapt`. Refused (`SAMPLE_SOURCE`) in projects declared `library` or `synthesized` |
+| `sample_match_level` | optional `role`, `library` | Set the volume to the reference level of the sample's role (`kick`, `snare`, `hat`, `bass`, `lead`, `chord`, `texture`, or a group; default: the recorded role, else inferred). `library` is a sample bank whose median levels are the reference (default: the fixed levels, as in [Loudness matching](#loudness-matching)). If volume 64 cannot reach the target, clean gain is added to the PCM (never clipped; `limited_by_peak` is true when the peak still falls short). A recipe sample **stays a recipe**: its volume is matched and its `peak` raised if needed (`method: "recipe"`). Result: `method`, `target_db`, `volume_before`, `volume`, `gain_db`, `measured_db`, `deviation_db`, `limited_by_peak` |
+| `apply_instrument` | see [Instruments](#instruments) | Write a note and the instrument's effect phrase |
+
+```json
+{"op": "sample_trim", "slot": 4, "start": 0, "end": 800, "adapt": true}
+{"op": "sample_loop", "slot": 7, "loop_start": 128, "loop_length": 512}
+{"op": "sample_gain", "slot": 7, "db": -3.5}
+{"op": "sample_fade", "slot": 4, "fade_out": 200}
+{"op": "sample_match_level", "slot": 7, "role": "bass"}
+```
+
+**Provenance.** Every edit that changes PCM or the loop is recorded in the project's `metadata.sample_sources[slot]`. Schema v2 stays compatible: `metadata` is free-form, and library and recipe insertion already write that map.
+
+| Edited slot | Entry after the first edit |
+| --- | --- |
+| Recipe sample | `{"origin": "derived", "derived_from": "recipe", "recipe": {the recipe that built the PCM}, "recipe_type", "role"?, "edited": true, "edits": [...], "edit_count": 1}`. The slot's `recipe` is dropped: the project now stores the edited bytes (`pcm_base64`) |
+| Library sample | its entry keeps `library_id` and `origin`, plus `"edited": true`, `edits`, `edit_count` |
+| Other embedded PCM | `{"origin": "embedded-pcm", "edited": true, "edits": [...], "edit_count": n}` |
+| `sample_set_pcm` | `{"origin": "drawn", "pcm_sha256", "replaced_library_id"?}` |
+
+`edits` keeps the last 16 operations as `{"op": "sample_gain", "db": -3.5}`; `edit_count` is the total. Inserting another sample in the slot (`library_sample`, `recipe_sample`) replaces the entry. `report` and the window read `role` and `library_id` from it.
+
+**Sample source rules.** Editing a library sample in a `library` project is shaping and is allowed (its `library_id` stays). Drawn or embedded PCM is refused in `library` and `synthesized` projects (`SAMPLE_SOURCE`), and so is any PCM edit of a recipe sample in a `synthesized` project (it would drop the recipe and fail `validate`). In that case use `sample_match_level`, change the recipe, or draw with the `draw` recipe (`sample draw --as-recipe`). `SAMPLE_SOURCE` errors carry `violations`.
+
+### `sample` commands
+
+| Command | Result |
+| --- | --- |
+| `sample edit PROJECT --slot N --output OUT.json [--trim START END] [--loop START LENGTH \| --no-loop] [--fade IN OUT] [--gain DB] [--match-level [--role R] [--library PATH]] [--adjust-loop] [--adapt] [--allow-clip] [--allow-loop] [--label L]` | Applies the given edits in this fixed order (trim, loop, fade, gain, match-level) as one transaction and writes a **new** project (the output must differ from the input). Returns `changed`, `results` (one entry per operation, in that order), `changes`, `duration_seconds` and `sample` (`bytes`, `volume`, `finetune`, loop, `recipe`, `pcm_sha256`, `peak`, `loudness_db`, `provenance`) |
+| `sample draw PROJECT --slot N --points JSON --output OUT.json [--cycles 16] [--frequency 261.63] [--peak 0.88] [--name N] [--volume V] [--finetune F] [--replace] [--as-recipe]` | Draws a looped wave from 4-256 points between -1 and 1 (`@file.json` accepted) into a slot. By default the PCM is embedded (`sample_set_pcm`); with `--as-recipe` a `draw` recipe is stored (`recipe_sample`), which also works in `synthesized` projects |
+| `sample waveform SOURCE --slot N [--buckets 128]` or `sample waveform --recipe JSON` | `{"bytes", "loop_start", "loop_length", "bucket_count", "buckets": [[min, max], ...]}`: the signed PCM's minimum and maximum per bucket, for drawing a waveform or for a reader that cannot listen |
+| `sample schema` | Every recipe type with parameters, ranges, defaults and a valid `default_recipe`, plus `roles`, `notes` and `limits`: what a form needs |
+
+Errors use the usual contract. `SAMPLE_CLIP` (a gain would clip) is new; the others are existing codes: `SAMPLE_LOOP`, `SAMPLE_LENGTH`, `SAMPLE_SLOT`, `SAMPLE_PCM`, `SAMPLE_PCM_HASH`, `SAMPLE_SOURCE`, `RECIPE_INVALID`, `PATCH_FIELD`.
+
+### Instruments
+
+An instrument is a sample plus how to play it: default volume and fine tune, and a **phrase** of up to 32 effect rows written on the rows that follow the note (a plucked bass is a sample and `["000", "C30", "C20", "C10"]`). One JSON file per instrument, in an instrument folder (default `exports/instruments`, ignored by git with the rest of `exports/`). IDs are `INS-0001`, `INS-0002`, ...; names are neutral ASCII labels of at most 22 characters (they become the sample name).
+
+```json
+{
+  "schema": "chiploom.instrument.v1",
+  "id": "INS-0001",
+  "name": "Soft Pluck",
+  "role": "bass",
+  "tags": ["pluck"],
+  "volume": 44,
+  "finetune": 0,
+  "phrase": ["000", "C30", "C20", "C10"],
+  "sample": {"kind": "recipe", "recipe": {"type": "wave", "shape": "triangle", "frequency": 130.81}}
+}
+```
+
+`sample` is one of `{"kind": "library", "library_id": "SMP-0007"}` (the ID only: no PCM is copied, the bank is read when the sample is inserted), `{"kind": "recipe", "recipe": {...}}`, or `{"kind": "pcm", "pcm_base64", "pcm_sha256", "loop_start", "loop_length", "origin"?}`, where `origin` (`library_id`, `edited`, `derived_from: "recipe"`, `recipe_type`) says where edited PCM came from. `role`, `tags` (up to 16 lowercase words), `volume` (default 40) and `finetune` (default 0) are optional. Phrase rows are three hexadecimal digits; `...`, `---` and an empty string mean `000`. `Bxx`, `Dxx` and `Fxx` (song flow and timing) and effects the profile does not play are refused. Errors: `INSTRUMENT_INVALID`, `INSTRUMENT_NOT_FOUND`, `INSTRUMENT_EXISTS`, `UNKNOWN_FIELD`, plus the sample and recipe codes.
+
+**`apply_instrument`** fields: `pattern`, `channel`, `row`, `note`, `instrument` (an ID in the instrument folder, or an inline instrument object), and optional `slot`, `replace`, `length`, `overwrite`, `library` (sample bank for library instruments, default `exports/sample_library`) and `instruments` (instrument folder, default `exports/instruments`).
+
+- The note goes on `row` with the instrument's sample number. Phrase row 0 is the effect of that same row, row 1 the next row, and so on, in the same channel.
+- It stops at the next row of that channel that holds a note (`stopped: "next_note"`), after `length` rows (default: the phrase length; `"length"` when that cuts the phrase), at row 63 (`"end_of_pattern"`) or at the end of the phrase (`"phrase_end"`). It never crosses into another pattern. Only the cells listed in `rows_written` change; sample numbers in later cells are left alone.
+- Existing effects are kept: a phrase row that meets one is listed in `skipped` unless `overwrite` is true, and `Bxx`/`Dxx`/`Fxx` are never replaced. A `000` phrase row never clears anything.
+- The sample is reused when the song already holds an identical one (same PCM, loop, volume and fine tune; the name does not matter). Otherwise it goes in `slot` (an occupied one needs `replace`) or the first free slot (`SAMPLE_SLOT` when all 31 are in use). A library instrument whose sample the song already holds, unedited, needs no bank.
+- Sample source rules as for any insertion: library instruments are refused in `synthesized` projects, recipe instruments in `library` projects (`SAMPLE_SOURCE`). PCM instruments are refused in both, unless their `origin.library_id` makes them a library sample in a `library` project.
+- Result: `slot`, `slot_reused`, `instrument`, `name`, `rows_written`, `phrase_rows`, `stopped`, `skipped`, `sample`.
+
+| Command | Result |
+| --- | --- |
+| `instruments list [--dir D] [--query Q] [--tag T] [--role R] [--offset N] [--limit N]` | `{"ok", "folder", "total", "instruments": [...], "invalid"?}`: summaries without PCM; unreadable files are listed in `invalid` instead of failing the list |
+| `instruments show ID [--dir D] [--full]` | One instrument; `--full` includes embedded PCM |
+| `instruments save --name N (--project P --slot S \| --recipe JSON \| --library-id SMP-... \| --json JSON) [--phrase "000,C30,C20"] [--role R] [--tag T] [--volume V] [--finetune F] [--embed] [--id INS-... --replace] [--dir D]` | Saves and returns `instrument`. From a project slot: a recipe sample becomes a recipe instrument, an unedited library sample a library one, an edited or embedded sample a PCM one (`--embed` forces PCM), with the slot's volume and fine tune. `--phrase` is a comma- or space-separated list, or a JSON list. An existing `--id` needs `--replace` (`INSTRUMENT_EXISTS`) |
+| `instruments delete ID [--dir D]` | Deletes the file; `{"deleted": "INS-0001"}` |
+| `instruments apply PROJECT --output OUT.json (--instrument ID \| --inline JSON) --pattern P --channel C --row R --note N [--slot S] [--replace] [--length L] [--overwrite] [--library PATH] [--dir D] [--label L]` | Runs `apply_instrument` and writes a **new** project. Returns `applied` (the result above), `changes`, `changed`, `duration_seconds` |
+
+### Python API for the window
+
+Everything is Qt-free and takes plain data. The window should route edits through the document so each one stays a single undoable transaction:
+
+```python
+document.patch([{"op": "sample_gain", "slot": 3, "db": -3}], "Gain")        # tracker4agents.document.Document
+document.patch([{"op": "sample_set_pcm", "slot": 5, "replace": True,
+                 **sample_tools.pcm_fields(pcm, loop_start, loop_length)}], "Draw")
+document.patch([{"op": "apply_instrument", "pattern": 0, "channel": 1, "row": 8, "note": "C-2",
+                 "instrument": "INS-0001", "instruments": "exports/instruments"}], "Instrument")
+```
+
+| Function (module `tracker4agents.sample_tools` unless noted) | Use |
+| --- | --- |
+| `preview_recipe(recipe, note="C-2", seconds=1.0, volume=64, finetune=0, name="Preview", role=None) -> (wav_bytes, measurements)` | Audition a recipe in memory (mono 16-bit 44.1 kHz WAV, loop and fine tune honoured; no FFmpeg, no file) with the sample facts, loudness and WAV peak/RMS. Raises `ValidationError` (`RECIPE_INVALID` or `INVALID_VALUE`) |
+| `render_wav(sample, note="C-2", seconds=1.0) -> (wav_bytes, int16_values)` | The same for any `Sample` (an edited slot); identical bytes to `audio.audition_sample` |
+| `recipe_schema() -> dict` | Types, parameters (`kind`, `min`, `max`, `default`, `choices`, `applies_to`, `required`), a valid `default_recipe` per type, `roles`, `notes`, `limits` |
+| `draw_to_pcm(points, cycles=16, frequency=261.625565, peak=0.88) -> tuple[int, ...]` | PCM of a looped drawn wave (the `draw` recipe's maths); the loop is the whole sample |
+| `pcm_fields(pcm, loop_start=0, loop_length=None) -> dict` | The `pcm_base64`, `pcm_sha256`, `loop_start` and `loop_length` fields of a `sample_set_pcm` operation (default: the whole sample loops) |
+| `waveform_summary(pcm, buckets=128) -> list[tuple[int, int]]` | (min, max) per bucket; fewer buckets than requested when the sample is shorter |
+| `with_loop`, `trim`, `gain`, `fade`, `match_level`, `headroom_db` | The pure edits behind the operations: take a `Sample`, return `(new Sample, report)`; useful for a live preview before committing the operation |
+| `tracker4agents.instruments`: `InstrumentLibrary(folder)` (`list`, `get`, `save`, `delete`), `normalize`, `from_slot(module, slot, name, phrase=(), role=None, tags=None, volume=None, finetune=None, embed=False)`, `parse_phrase`, `build_sample` | The instrument folder and capturing an instrument from a song |
+
+MCP tools: `sample_schema`, `sample_edit`, `sample_draw`, `sample_waveform`, `instruments_list`, `instruments_show`, `instruments_save`, `instruments_delete`, `instruments_apply`, with the arguments of the commands (`trim`, `loop` and `fade` are two-integer arrays, `phrase` a list of strings). The patch operations are also reachable through the `patch` and `live_patch` tools.
+
+## Multi-channel MOD and XM
+
+ChipLoom reads and writes MOD files with 2 to 32 channels and a first FastTracker 2 XM profile. Four-channel `M.K.` projects, MODs and playback plans are unchanged.
+
+### Channels
+
+`Module.channels` is 4 by default. A MOD names its channel count by signature: `M.K.`/`M!K!`/`FLT4`/`4CHN` (four), `2CHN` to `9CHN`, `10CH` to `32CH`. `FLT8` (Startrekker pairs of patterns) is refused with `MOD_FLT8`; `CD61`/`CD81`/`OCTA`/`TDZx` (Octalyser and TakeTracker rules) with `MOD_VARIANT`. libopenmpt and libxmp place MOD channels left-right-right-left, repeating, for 6 and 8 channels as for 4; a plan agrees with libxmp's trace on 2, 6, 8, 10 and 16 channels.
+
+In a project, `channels` is a top-level field (absent means 4) and the profile is `protracker-4ch-pal-v1` for four channels or `protracker-nch-pal-v1` otherwise. A grid row holds one cell per channel separated by `|`; `events` use `"channel": 0..N-1`. Patch operations (`set`, `write` with `lines` or `cells`, `copy`, `move`, `clear`, `transpose`, `timing`) and the live `select` request check rows and channels against the pattern and the module. `audible` in a live context has one boolean per channel.
+
+### XM profile (`fasttracker2-xm-v1`)
+
+A project is an XM when it has `"format": "xm"` and `"profile": "fasttracker2-xm-v1"`; a file is an XM when it starts with `Extended Module: `. Supported: 2 to 32 channels, patterns of 1 to 256 rows (`"length"` in the pattern object, default 64), up to 256 patterns and orders, up to 128 instruments with **exactly one sample each**, 8-bit and 16-bit samples (project fields `bits`, `loop_mode` `forward|pingpong`, `panning` 0-255, `relative_note` -96..95, `finetune` -128..127, loop points counted in sample frames), the volume column, linear and Amiga frequency tables. `module.samples[i]` is instrument i+1; header values and the parts the tools do not edit live in `metadata.xm`: `tracker_name`, `frequency_table` (`linear|amiga`), `restart_position`, `default_speed`, `default_bpm`, `inactive_orders`, and `instruments.<n>` with `volume_envelope`/`panning_envelope` (`points`, `sustain`, `loop_start`, `loop_end`, `type`), `vibrato`, `fadeout`. They are stored and written back; the tools do not edit envelopes.
+
+New files are written with the tracker name `FastTracker v2.00`, which makes libxmp and libopenmpt keep FastTracker II's flow behaviour.
+
+**Notation.** The same label means a different note in the two formats, so grid text is always read with the module's format. A MOD cell is `NOTE SS EEE` with notes `C-1`..`B-3`. An XM cell is `NOTE II VV EEE`: notes `C-0`..`B-7` (`C-4` is middle C; `===` is key off), the instrument in hexadecimal, `VV` the raw volume-column byte in hexadecimal (`--` empty), and the effect as a letter or digit plus two hexadecimal digits (`0`-`9`, then `A`-`Z`, so `G40` is global volume 40 and `X12` extra-fine porta down). Volume column: `10`-`50` set volume, `6x`/`7x` slide down/up, `8x`/`9x` fine slide, `Ax` vibrato speed, `Bx` vibrato, `Cx` panning, `Dx`/`Ex` pan slide left/right, `Fx` tone portamento; `01`-`0F` and `51`-`5F` are refused (`XM_VOLUME_COLUMN`). A ProTracker `C-2` (period 428) is an XM `C-4`.
+
+**Effects.** Accepted: `0`-`9`, `A`-`H`, `K`, `L`, `P`, `R`, `T`, `X`, and `E1x E2x E3x E4x E5x E6x E7x E9x EAx EBx ECx EDx EEx`. Refused with `EFFECT_UNSUPPORTED`: the other letters and `E0x`, `E8x`, `EFx` (undefined in FastTracker II). `F00` is refused (`TIMING`), `Fxx` below `20` is the speed and `20` and above the tempo, `Dxx` is a decimal row (`00`-`99`), `Cxx` and `Gxx` stop at `40`. The playback plan follows speed, tempo, `Bxx`, `Dxx`, `E6x` and `EEx` exactly like libxmp (checked against its trace on generated files); the other effects are accepted and left to the replay engines, which are not compared sample for sample.
+
+**Playback plan.** The timeline starts at the header's `default_speed` and `default_bpm`, uses each pattern's own row count, and at the end of the order list returns to `restart_position` when the song already passed through that order (libxmp's rule), else to order 0. For files claiming FastTracker II or OpenMPT an `E60` also sets the row on which the next order change starts (FastTracker II's loop bug, reproduced by libxmp); other tracker names do not. A break on a delayed row skips a row in a MOD but not in an XM. libopenmpt's own song length uses a different loop detection and can differ on looping songs.
+
+**Import.** Unsupported input is refused with a code: `XM_VERSION` (only 0x0104), `XM_MULTISAMPLE` (an instrument with more than one sample or a key map), `XM_SAMPLE_TYPE` (stereo, ADPCM), `XM_INSTRUMENT_HEADER`, `XM_FORMAT` (anything malformed), `SAMPLE_LENGTH`. Everything else is kept or reported in `import_notes` (`preserved` or `converted`, like a MOD): trailing data after the last sample (`TRAILING_DATA_DROPPED`), a loop running past the sample end (`SAMPLE_LOOP_CLAMPED`), loop values on an unlooped sample (`SAMPLE_IGNORED_LOOP_KEPT`), non-ASCII names (`TEXT_KEPT_RAW`), a file with no instrument (`INSTRUMENT_ADDED`) and packing that differs from ChipLoom's (`REPACKED`). Files written by ChipLoom re-export byte for byte.
+
+### Commands
+
+```text
+chiploom export project.json --output song.xm          # by extension, or --format mod|xm
+chiploom import song.xm --output song.json              # .mod and .xm; prints import_notes
+chiploom convert song.mod --output song.xm              # MOD to XM
+chiploom convert song.xm --output song.mod              # XM to MOD, only when it fits
+chiploom validate|inspect|render|report|preview|compare song.xm
+```
+
+`export` converts a project of the other format first (the result has a `conversion` report). `convert` takes a MOD, XM or project and writes `.mod`, `.xm` or a `.json` project (`--to` overrides the extension).
+
+**MOD to XM** keeps the order list, patterns, instruments, effects and PCM: MOD notes `C-1`..`B-3` become XM `C-3`..`B-5`; the Amiga frequency table keeps slides and vibrato meaningful; every sample gets finetune `-20/128` semitone (plus `16` per MOD finetune step) so XM `C-4` sounds like the PAL period 428 (measured within 0.1 Hz in libopenmpt and libxmp); channels are centred because a MOD file stores no panning. The report lists what changed: `FILTER_EFFECT_DROPPED` (E0x), `E5X_REMAPPED`, `TIMING_DIFFERS` (a MOD-only flow quirk), and `lossless` is false then. **XM to MOD** is refused with `CONVERT_REFUSED` and a `reasons` list (`code`, `message`, where) unless the XM has at most 31 instruments, 8-bit forward-looped samples with even lengths and loops, centred panning, a finetune that is an exact MOD step (`-20 + 16n`), 64-row patterns, notes `C-3`..`B-5`, no volume column, key off or envelopes, only MOD effects, the Amiga table, speed 6 / 125 BPM and restart 0.
+
+MCP: `convert` and `export_format` (appended to the tool list).

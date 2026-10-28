@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install Ruff
@@ -33,8 +33,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install core only
@@ -46,6 +46,14 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
+      - name: Install the official MCP Python SDK in a separate environment
+        # Not a project dependency: tests/test_mcp_clients.py drives `chiploom mcp` with the SDK as a real client.
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/mcp-client"
+          if [ -d "$RUNNER_TEMP/mcp-client/Scripts" ]; then CLIENT_PYTHON="$RUNNER_TEMP/mcp-client/Scripts/python.exe"; else CLIENT_PYTHON="$RUNNER_TEMP/mcp-client/bin/python"; fi
+          "$CLIENT_PYTHON" -m pip install "mcp==2.3.0"
+          echo "CHIPLOOM_MCP_CLIENT_PYTHON=$CLIENT_PYTHON" >> "$GITHUB_ENV"
       - name: Run tests (GUI tests require optional dependencies)
         run: python -m unittest discover -s tests -v
       - name: Build MOD without GUI or external decoder
@@ -56,7 +64,7 @@ jobs:
   desktop:
     name: Desktop / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     # The Linux desktop run is new: it reports problems without blocking merges until it has proven stable.
     continue-on-error: ${{ matrix.experimental }}
     strategy:
@@ -72,8 +80,8 @@ jobs:
       # Qt's own FFmpeg backend prints per-file banners in debug mode; keep the test log readable.
       QT_LOGGING_RULES: qt.multimedia.*.debug=false;qt.multimedia.*.info=false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install Linux FFmpeg and Qt runtime libraries
@@ -105,15 +113,24 @@ jobs:
       - name: Install with desktop extra
         run: python -m pip install -e ".[desktop]"
       - name: Run real-time engine and desktop tests
-        run: python -m unittest tests.test_realtime tests.test_desktop tests.test_desktop_samples tests.test_desktop_editing tests.test_desktop_live -v
+        # One process per module: a Qt hang stays in its module and the log names it.
+        shell: bash
+        run: |
+          status=0
+          for module in test_realtime test_desktop test_desktop_samples test_desktop_editing test_desktop_live test_desktop_08 test_desktop_jam test_desktop_workshop test_desktop_formats test_desktop_realtime; do
+            echo "::group::$module"
+            timeout 900 python -m unittest "tests.$module" -v || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   build:
     name: Package build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Build sdist and wheel
@@ -133,7 +150,7 @@ jobs:
           /tmp/wheel-check/bin/python -m pip install dist/*.whl
           /tmp/wheel-check/bin/chiploom --version
           /tmp/wheel-check/bin/chiploom estimate --orders 8 --bpm 160
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*

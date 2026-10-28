@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+import tempfile
 
-from PySide6.QtCore import QObject, QRunnable, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+from PySide6.QtCore import QObject, QPointF, QRunnable, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from .model import Sample
+from .themes import icon_colors
 
 ASSETS = Path(__file__).resolve().parent / "assets"
+# Said on every control that edits MOD samples (loop, trim, gain, fades, library, recipes, instruments) when the open
+# module is an XM: the core refuses those operations there (patch.MOD_ONLY_OPERATIONS).
+XM_REFUSED_TIP = "This edits 8-bit MOD samples and is not available on an XM module."
 
 
 def brand_icon() -> QIcon:
@@ -36,6 +42,109 @@ def brand_icon() -> QIcon:
     return icon
 
 
+def _glyph(kind: str, color: str, size: int) -> QImage:
+    """A check mark or a chevron, drawn with round strokes on a transparent square."""
+    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), size * (0.15 if kind == "check" else 0.14))
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    points = {"check": ((.22, .52), (.43, .72), (.78, .30)), "down": ((.20, .36), (.50, .66), (.80, .36)),
+              "up": ((.20, .64), (.50, .34), (.80, .64))}[kind]
+    painter.drawPolyline([QPointF(x * size, y * size) for x, y in points])
+    painter.end()
+    return image
+
+
+def ui_icons(theme: str) -> dict[str, str]:
+    """The glyphs the stylesheet shows as images (check mark, combo and spin box chevrons) for a theme.
+
+    Written once as small PNGs (plus a @2x copy for high-density screens) in a folder named after the colours they
+    use, so a changed palette never meets a stale file. Returns {} when the folder cannot be written: the stylesheet
+    then falls back to plain indicators."""
+    colors = icon_colors(theme)
+    folder = Path(tempfile.gettempdir()) / "chiploom-ui" / (theme + "-" + hashlib.sha1(
+        repr(sorted(colors.items())).encode()).hexdigest()[:10])
+    wanted = {"check": ("check", colors["check"]), "up": ("up", colors["chevron"]), "down": ("down", colors["chevron"]),
+              "up_off": ("up", colors["chevron_off"]), "down_off": ("down", colors["chevron_off"])}
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for name, (kind, color) in wanted.items():
+            for suffix, size in (("", 14), ("@2x", 28)):
+                target = folder / f"{name}{suffix}.png"
+                if not target.is_file() and not _glyph(kind, color, size).save(str(target), "PNG"):
+                    return {}
+    except OSError:
+        return {}
+    return {name: str(folder / f"{name}.png") for name in wanted}
+
+
+class ElidedLabel(QLabel):
+    """A one-line label that shortens its text with an ellipsis instead of widening its row; the full text stays
+    in `text()` and in the tooltip."""
+
+    def __init__(self, text: str = "", name: str = ""):
+        super().__init__(text)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        if name:
+            self.setObjectName(name)
+
+    def minimumSizeHint(self):
+        return QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        shown = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        painter.drawText(self.rect(), int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), shown)
+
+
+def separator() -> QFrame:
+    """A thin vertical rule between two groups of buttons."""
+    rule = QFrame()
+    rule.setObjectName("separator")
+    rule.setFixedHeight(22)
+    return rule
+
+
+class ShortcutPopup(QFrame):
+    """The key reference of the pattern grid: keys on the left, what they do on the right, one row per habit.
+
+    `rows` is a list of (keys, description) where the description is a translatable source string."""
+
+    def __init__(self, window, rows):
+        super().__init__(window, Qt.WindowType.Popup)
+        self.window, self.rows = window, rows
+        self.setObjectName("shortcutPopup")
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(16, 12, 16, 12)
+        self.grid.setHorizontalSpacing(16)
+        self.grid.setVerticalSpacing(6)
+        self.build()
+
+    def build(self):
+        while self.grid.count():
+            self.grid.takeAt(0).widget().deleteLater()
+        for index, (keys, text) in enumerate(self.rows):
+            key = label(self.window.t(keys), "shortcutKeys")
+            self.grid.addWidget(key, index, 0, Qt.AlignmentFlag.AlignTop)
+            description = label(self.window.t(text), "muted")
+            description.setWordWrap(True)
+            description.setMinimumWidth(300)
+            self.grid.addWidget(description, index, 1)
+
+    def show_under(self, anchor: QWidget):
+        self.build()
+        self.adjustSize()
+        spot = anchor.mapToGlobal(anchor.rect().bottomRight())
+        self.move(spot.x() - self.width(), spot.y() - self.height() - anchor.height() - 4)
+        self.show()
+
+
 def label(text: str, name: str = "") -> QLabel:
     result = QLabel(text)
     result.setTextFormat(Qt.TextFormat.PlainText)
@@ -46,6 +155,7 @@ def label(text: str, name: str = "") -> QLabel:
 
 def button(text: str, callback, name: str = "") -> QPushButton:
     result = QPushButton(text)
+    result.setFocusPolicy(Qt.FocusPolicy.TabFocus)   # a mouse click keeps the keyboard in the grid; Tab still reaches it
     if name:
         result.setObjectName(name)
     result.clicked.connect(callback)
@@ -105,6 +215,7 @@ class Waveform(QWidget):
             painter.drawText(rectangle, Qt.AlignmentFlag.AlignCenter, self.window.t("Select a sample"))
             return
         data = self.sample.pcm
+        peak = 32768 if self.sample.bits == 16 else 128
         if self.sample.loop_length:
             start = rectangle.left() + rectangle.width() * self.sample.loop_start / len(data)
             end = rectangle.left() + rectangle.width() * (self.sample.loop_start + self.sample.loop_length) / len(data)
@@ -115,6 +226,6 @@ class Waveform(QWidget):
         for index in range(count):
             value = data[min(len(data) - 1, index * len(data) // count)]
             x = rectangle.left() + index * rectangle.width() / max(1, count - 1)
-            y = rectangle.center().y() - value * rectangle.height() * 0.46 / 128
+            y = rectangle.center().y() - value * rectangle.height() * 0.46 / peak
             path.moveTo(x, y) if index == 0 else path.lineTo(x, y)
         painter.drawPath(path)

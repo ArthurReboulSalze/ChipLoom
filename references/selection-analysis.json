@@ -952,7 +952,7 @@
       "loop_start_seconds": null,
       "duration_basis": "Unavailable: strict playback plan not applicable",
       "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "compatibility_error": "Pattern 2, row 31, track 0: period 1024 outside the profile's 36 notes.",
       "libopenmpt_duration_seconds": 33.28,
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
@@ -1651,7 +1651,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 25.6,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S03",
@@ -2400,13 +2401,63 @@
           "identical_channels": []
         }
       ],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This prototype accepts only four-channel M.K. MOD files.",
+      "duration_seconds": 46.08,
+      "loop_start_seconds": 0.0,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 46.08,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0x00 is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        },
+        {
+          "code": "SAMPLE_LOOP_WORDS_KEPT",
+          "kind": "preserved",
+          "message": "The loop header words of an unlooped sample differ from ProTracker's 0, 1 (for example loop length 0). They mean 'no loop' for every player; kept and written back.",
+          "slots": [
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        }
+      ],
+      "played_rows": 768,
+      "timing_values": [
+        [
+          3,
+          125
+        ]
+      ]
     },
     {
       "reference_id": "S04",
@@ -3214,7 +3265,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 35.84,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S05",
@@ -3959,13 +4011,68 @@
           "identical_channels": []
         }
       ],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "duration_seconds": 40.1,
+      "loop_start_seconds": 1.7,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 40.0,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0x00 is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        },
+        {
+          "code": "SAMPLE_LOOP_WORDS_KEPT",
+          "kind": "preserved",
+          "message": "The loop header words of an unlooped sample differ from ProTracker's 0, 1 (for example loop length 0). They mean 'no loop' for every player; kept and written back.",
+          "slots": [
+            1,
+            2,
+            3,
+            5,
+            6,
+            7,
+            11,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        {
+          "code": "SAMPLE_UNLOOPED_HEAD",
+          "kind": "preserved",
+          "message": "These unlooped samples do not start with two zero bytes. ProTracker keeps replaying that first word after the sample ends; libxmp and libopenmpt stop instead. PCM kept as is.",
+          "slots": [
+            3
+          ]
+        }
+      ],
+      "played_rows": 401,
+      "timing_values": [
+        [
+          5,
+          125
+        ]
+      ]
     },
     {
       "reference_id": "S06",
@@ -4381,7 +4488,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 30.72,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S07",
@@ -4818,7 +4926,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 10.24,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S08",
@@ -5503,7 +5612,7 @@
       "loop_start_seconds": null,
       "duration_basis": "Unavailable: strict playback plan not applicable",
       "editable_in_current_profile": false,
-      "compatibility_error": "MOD text is not printable ASCII as required by the v1 profile.",
+      "compatibility_error": "Pattern 0, row 0, track 1: effect EFF not supported by the v1 profile.",
       "libopenmpt_duration_seconds": 46.08,
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
@@ -5712,13 +5821,64 @@
         }
       ],
       "similar_pattern_pairs": [],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "duration_seconds": 7.68,
+      "loop_start_seconds": 0.0,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 7.68,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0x00 is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        },
+        {
+          "code": "SAMPLE_LOOP_WORDS_KEPT",
+          "kind": "preserved",
+          "message": "The loop header words of an unlooped sample differ from ProTracker's 0, 1 (for example loop length 0). They mean 'no loop' for every player; kept and written back.",
+          "slots": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        }
+      ],
+      "played_rows": 64,
+      "timing_values": [
+        [
+          6,
+          125
+        ]
+      ]
     },
     {
       "reference_id": "S10",
@@ -6336,7 +6496,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 22.4,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S11",
@@ -6849,13 +7010,35 @@
           "identical_channels": []
         }
       ],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "duration_seconds": 20.48,
+      "loop_start_seconds": 5.12,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 20.48,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0xFF is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        },
+        {
+          "code": "TEXT_KEPT_RAW",
+          "kind": "preserved",
+          "message": "These sample names contain bytes outside printable ASCII or after the first NUL; they are shown with '?' and written back unchanged until renamed.",
+          "slots": [
+            3
+          ]
+        }
+      ],
+      "played_rows": 256,
+      "timing_values": [
+        [
+          4,
+          125
+        ]
+      ]
     },
     {
       "reference_id": "S12",
@@ -7557,7 +7740,7 @@
       "loop_start_seconds": null,
       "duration_basis": "Unavailable: strict playback plan not applicable",
       "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "compatibility_error": "Pattern 0, row 0, track 1: effect EFF not supported by the v1 profile.",
       "libopenmpt_duration_seconds": 115.2,
       "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
     },
@@ -7996,7 +8179,8 @@
         ]
       ],
       "libopenmpt_duration_seconds": 20.48,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": []
     },
     {
       "reference_id": "S14",
@@ -8308,13 +8492,27 @@
         }
       ],
       "similar_pattern_pairs": [],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This MOD uses a restart/tempo byte outside the ProTracker v1 profile.",
+      "duration_seconds": 15.36,
+      "loop_start_seconds": 0.0,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 15.36,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0xFF is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        }
+      ],
+      "played_rows": 64,
+      "timing_values": [
+        [
+          12,
+          125
+        ]
+      ]
     },
     {
       "reference_id": "S15",
@@ -8650,13 +8848,70 @@
           "identical_channels": []
         }
       ],
-      "duration_seconds": null,
-      "loop_start_seconds": null,
-      "duration_basis": "Unavailable: strict playback plan not applicable",
-      "editable_in_current_profile": false,
-      "compatibility_error": "This prototype accepts only four-channel M.K. MOD files.",
+      "duration_seconds": 32.0,
+      "loop_start_seconds": 0.0,
+      "duration_basis": "Strict CIA playback plan, to first repeated replay state",
+      "editable_in_current_profile": true,
+      "compatibility_error": null,
       "libopenmpt_duration_seconds": 32.0,
-      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility."
+      "replay_probe_note": "FFprobe/libopenmpt duration estimate; does not establish editable round-trip compatibility.",
+      "import_notes": [
+        {
+          "code": "RESTART_BYTE_KEPT",
+          "kind": "preserved",
+          "message": "Restart byte 0x00 is written back unchanged. ProTracker ignores it; the playback plan loops back to order 0."
+        },
+        {
+          "code": "SAMPLE_LOOP_WORDS_KEPT",
+          "kind": "preserved",
+          "message": "The loop header words of an unlooped sample differ from ProTracker's 0, 1 (for example loop length 0). They mean 'no loop' for every player; kept and written back.",
+          "slots": [
+            1,
+            2,
+            3,
+            5,
+            6,
+            7,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        {
+          "code": "SAMPLE_UNLOOPED_HEAD",
+          "kind": "preserved",
+          "message": "These unlooped samples do not start with two zero bytes. ProTracker keeps replaying that first word after the sample ends; libxmp and libopenmpt stop instead. PCM kept as is.",
+          "slots": [
+            3
+          ]
+        }
+      ],
+      "played_rows": 320,
+      "timing_values": [
+        [
+          5,
+          125
+        ]
+      ]
     }
   ],
   "publication": "Structural observations using neutral IDs; original filenames, internal titles and reference hashes omitted."

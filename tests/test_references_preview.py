@@ -32,14 +32,25 @@ class ReferenceTests(unittest.TestCase):
         self.assertNotIn('"pcm":', json.dumps(result))
         self.assertNotIn('"note":', json.dumps(result))
 
-    def test_analysis_does_not_silently_normalize_unsupported_restart(self):
+    def test_analysis_keeps_a_restart_byte_instead_of_normalizing_it(self):
         raw = bytearray(mod.encode(demo.create()))
         raw[951] = 0
         original = bytes(raw)
         result = analyze_bytes(raw, "variant.mod")
+        self.assertTrue(result["editable_in_current_profile"])
+        self.assertEqual(result["restart_byte"], 0)
+        self.assertEqual([note["code"] for note in result["import_notes"]], ["RESTART_BYTE_KEPT"])
+        self.assertEqual(mod.encode(mod.decode(raw)), original)
+        self.assertEqual(bytes(raw), original)
+
+    def test_analysis_does_not_silently_normalize_an_unsupported_effect(self):
+        raw = bytearray(mod.encode(demo.create()))
+        raw[1084 + 2:1084 + 4] = bytes((0x1E, 0xF1))  # EF1 (invert loop) on the first cell
+        original = bytes(raw)
+        result = analyze_bytes(raw, "variant.mod")
         self.assertFalse(result["editable_in_current_profile"])
         self.assertIsNone(result["duration_seconds"])
-        self.assertIn("restart", result["compatibility_error"])
+        self.assertIn("EF1", result["compatibility_error"])
         self.assertEqual(bytes(raw), original)
         with self.assertRaises(ValueError):
             mod.decode(raw)
@@ -61,7 +72,7 @@ class ReferenceTests(unittest.TestCase):
             self.assertTrue(report["ok"])
             self.assertEqual(len(report["modules"]), 1)
             self.assertEqual(report["modules"][0]["channels"], 2)
-            self.assertFalse(report["modules"][0]["editable_in_current_profile"])
+            self.assertTrue(report["modules"][0]["editable_in_current_profile"])  # N-channel MODs are editable
             self.assertEqual(list(Path(folder).iterdir()), [archive])
             self.assertEqual(archive.read_bytes(), before)
 

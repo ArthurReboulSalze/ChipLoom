@@ -42,7 +42,9 @@ class DesktopTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication(["tracker4agents-tests"])
         cls.app.setQuitOnLastWindowClosed(False)
-        cls.app.setStyle("Fusion")
+        if cls.app.property("chiploomFusion") is None:   # restyling widgets left by earlier modules can stall
+            cls.app.setStyle("Fusion")
+            cls.app.setProperty("chiploomFusion", True)
         # The Windows offscreen plugin does not enumerate installed fonts.
         if not QFontDatabase.families() and os.name == "nt":
             for name in ("segoeui.ttf", "consola.ttf"):

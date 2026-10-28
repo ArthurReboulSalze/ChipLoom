@@ -5,6 +5,9 @@ embeds a `LiveSession` and a `LiveServer`; an agent talks to the server through
 `LiveClient` (or `chiploom live ...`). Headless, `chiploom live serve SOURCE` hosts the
 same session without a window.
 
+A browser can join the same session through `/web/` (see `tracker4agents.web`): it joins by itself
+when the owner opens the studio address, it edits as `human-web`, and the agent API stays loopback-only.
+
 The session keeps a journal of who changed what (`human` edits made in the window, agent
 patches), detects overlapping edits through `base_revision`, offers proposals the owner
 reviews, lists takes (saved versions) and relays UI requests (play, stop, open, select).
@@ -26,6 +29,7 @@ import re
 import secrets
 import socket
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -38,6 +42,8 @@ from .document import Document
 from .errors import error_payload
 from .model import Module, Pattern, ValidationError, playback_plan, require_int, validate
 from .patch import apply_ops, cell_text, diff_modules, pattern_grid, summarize, touched
+from .web import gateway
+from .web.access import WebAccess
 
 API_VERSION = 1
 MAX_BODY = 2 * 1024 * 1024
@@ -47,7 +53,8 @@ CLOSED_PROPOSAL_LIMIT = 50
 TAKE_LIMIT = 100
 AUTHOR = re.compile(r"^[A-Za-z0-9_.\- ]{1,32}$")
 CONTEXT_KEYS = {"path", "order", "pattern", "row", "channel", "selection", "playing",
-                "position_seconds", "dirty", "language"}
+                "position_seconds", "dirty", "language", "audible", "pending_request"}
+HUMAN_AUTHORS = ("human", "human-web")   # the owner: the window, and browsers that joined the studio
 REQUEST_KINDS = {"play", "stop", "open", "select", "seek"}
 NEEDS_WINDOW = {"play", "stop", "seek"}
 
@@ -69,8 +76,8 @@ def clone_module(module: Module) -> Module:
     """Cheap independent copy: PCM tuples are immutable and shared, cells are frozen."""
     return Module(module.title,
                   [dataclasses.replace(sample, recipe=copy.deepcopy(sample.recipe)) for sample in module.samples],
-                  [Pattern(pattern.name, dict(pattern.cells)) for pattern in module.patterns],
-                  list(module.orders), copy.deepcopy(module.metadata))
+                  [Pattern(pattern.name, dict(pattern.cells), pattern.rows) for pattern in module.patterns],
+                  list(module.orders), copy.deepcopy(module.metadata), module.channels, module.format)
 
 
 def _author(value: object) -> str:
@@ -172,6 +179,9 @@ class LiveSession:
         self._takes: list[dict] = []
         self._take_counter = 0
         self._handlers: dict[str, Callable[[dict], Any]] = {}
+        self.web = WebAccess()
+        # time.monotonic() of the last authenticated agent API call, reads included.
+        self.last_agent_activity: float | None = None
 
     # --- plumbing ---------------------------------------------------------------------
 
@@ -201,6 +211,15 @@ class LiveSession:
         self._journal.append(entry)
         del self._journal[:-JOURNAL_LIMIT]
         return entry
+
+    def record_note(self, label: str, author: str = "human", **extra: Any) -> dict:
+        """Journal an event without a score change, e.g. the outcome of an agent's request."""
+        def note() -> dict:
+            with self._lock:
+                entry = self._record(author, label, {"cells": []}, "request", extra)
+            self._emit("change", _public(entry))
+            return _public(entry)
+        return self._dispatcher(note)
 
     def _oldest(self) -> int:
         return self._journal[0]["revision"] if self._journal else self._revision + 1
@@ -264,7 +283,7 @@ class LiveSession:
         summary = {"human": {"entries": 0, "cells": 0, "lines": []},
                    "agent": {"entries": 0, "cells": 0, "lines": [], "authors": []}}
         for entry in entries:
-            group = summary["human" if entry["author"] == "human" else "agent"]
+            group = summary["human" if entry["author"] in HUMAN_AUTHORS else "agent"]
             group["entries"] += 1
             group["cells"] += entry["diff"].get("cells_total", len(entry["diff"].get("cells", [])))
             if len(group["lines"]) < 12:
@@ -302,7 +321,7 @@ class LiveSession:
             if key[0] == "cell":
                 _, pattern, row, channel = key
                 item.update(pattern=pattern, row=row, channel=channel,
-                            current=cell_text(module.patterns[pattern].get(row, channel))
+                            current=cell_text(module.patterns[pattern].get(row, channel), module.format)  # XM: volume column
                             if pattern < len(module.patterns) else None,
                             yours=after.get((pattern, row, channel)))
             elif key[0] == "structure":
@@ -355,10 +374,17 @@ class LiveSession:
     @_guarded
     def update_context(self, **values) -> None:
         """The window reports its state: path, order, pattern, row, channel, selection, playing,
-        position_seconds, dirty, language. `None` removes a key."""
+        position_seconds, dirty, language, audible (one boolean per channel of the module, four for a
+        MOD: the channels left unmuted; the browser studio renders with them). `None` removes a key."""
         unknown = set(values) - CONTEXT_KEYS
         if unknown:
             raise ValidationError(f"Unknown context keys {sorted(unknown)}; use {sorted(CONTEXT_KEYS)}.", "LIVE_CONTEXT")
+        audible = values.get("audible")
+        channels = self.document.module.channels  # N-channel: one state per channel of the open module
+        if audible is not None and not (isinstance(audible, (list, tuple)) and len(audible) == channels
+                                        and all(type(item) is bool for item in audible)):
+            words = "four" if channels == 4 else str(channels)
+            raise ValidationError(f"audible: {words} true/false values expected.", "LIVE_CONTEXT")
         for key, value in values.items():
             if value is None:
                 self._context.pop(key, None)
@@ -376,7 +402,7 @@ class LiveSession:
                   "dirty": self._context["dirty"] if "dirty" in self._context else document.dirty,
                   "orders": list(module.orders), "pattern_count": len(module.patterns),
                   "pending_proposals": sum(item["status"] == "pending" for item in self._proposals),
-                  "takes": len(self._takes), "window": bool(self._handlers),
+                  "takes": len(self._takes), "window": bool(self._handlers), "web_devices": len(self.web.devices()),
                   "last_change": last and {"revision": last["revision"], "author": last["author"],
                                            "label": last["label"], "at": last["at"]}}
         return result
@@ -387,11 +413,14 @@ class LiveSession:
         self._absorb()
         module = self.document.module
         if pattern is not None:
-            lines = pattern_grid(module, pattern, start, rows if start + rows <= 64 else 64 - start)
+            # N-channel / XM: the pattern knows its own row count, the module its channels and cell format.
+            total = module.patterns[pattern].rows if type(pattern) is int and 0 <= pattern < len(module.patterns) else 64
+            lines = pattern_grid(module, pattern, start, rows if start + rows <= total else total - start)
             return {"revision": self._revision, "pattern": pattern, "name": module.patterns[pattern].name,
                     "start": start, "rows": len(lines),
                     "used_in_orders": [i for i, value in enumerate(module.orders) if value == pattern],
-                    "header": "ROW | channel 1 | channel 2 | channel 3 | channel 4 (cells: NOTE SS EEE)",
+                    "header": "ROW | " + " | ".join(f"channel {i + 1}" for i in range(module.channels))
+                              + (" (cells: NOTE II VV EEE)" if module.format == "xm" else " (cells: NOTE SS EEE)"),
                     "lines": lines}
         sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
         samples = []
@@ -410,6 +439,18 @@ class LiveSession:
                               "used_in_orders": [i for i, value in enumerate(module.orders) if value == index]}
                              for index, item in enumerate(module.patterns)],
                 "samples": samples}
+
+    @_guarded
+    def snapshot(self) -> Module:
+        """An independent copy of the current module (to render or inspect without holding the session)."""
+        self._absorb()
+        return clone_module(self.document.module)
+
+    # --- browsers -----------------------------------------------------------------------
+
+    def web_devices(self) -> list[dict]:
+        """Connected browsers: id, name, agent (user agent), listener, joined_at, last_seen, expires_at."""
+        return self.web.devices()
 
     # --- proposals ----------------------------------------------------------------------
 
@@ -525,6 +566,15 @@ class LiveSession:
         return [dict(take) for take in self._takes]
 
     @_guarded
+    def take_module(self, take_id: str) -> Module:
+        """The module stored in a take (a registered .json or .mod file), loaded fresh."""
+        found = next((item for item in self._takes if item["id"] == take_id), None)
+        if found is None:
+            raise ValidationError(f"Unknown take {take_id!r}.", "LIVE_TAKE")
+        file = Path(found["path"])
+        return project.load(file) if file.suffix.lower() == ".json" else mod.read(file)
+
+    @_guarded
     def request_open(self, take: str | None = None, path: str | Path | None = None) -> dict:
         """Ask the window to open a take (by id) or a file. Headless: `{"handled": False}`."""
         if (take is None) == (path is None):
@@ -564,10 +614,11 @@ class LiveSession:
                 raise ValidationError("seconds: a number >= 0 expected.", "LIVE_REQUEST")
         elif kind == "select":
             pattern = require_int(payload.get("pattern", 0), "pattern", 0, len(module.patterns) - 1)
-            row = require_int(payload.get("row", 0), "row", 0, 63)
-            channel = require_int(payload.get("channel", 0), "channel", 0, 3)
-            require_int(payload.get("rows", 1), "rows", 1, 64 - row)
-            require_int(payload.get("channels", 1), "channels", 1, 4 - channel)
+            row_count = module.patterns[pattern].rows  # N-channel / XM: bounds come from the pattern and module
+            row = require_int(payload.get("row", 0), "row", 0, row_count - 1)
+            channel = require_int(payload.get("channel", 0), "channel", 0, module.channels - 1)
+            require_int(payload.get("rows", 1), "rows", 1, row_count - row)
+            require_int(payload.get("channels", 1), "channels", 1, module.channels - channel)
             payload = {"pattern": pattern, "row": row, "channel": channel, "rows": payload.get("rows", 1),
                        "channels": payload.get("channels", 1)}
         return payload
@@ -701,8 +752,9 @@ def _params(params: dict, required: tuple = (), optional: tuple = ()) -> dict:
 
 def _agent_author(params: dict) -> str:
     author = _author(params.get("author", "agent"))
-    if author.lower() == "human":
-        raise ValidationError("The author 'human' is reserved for edits made in the window.", "LIVE_AUTHOR")
+    if author.lower().startswith("human"):
+        raise ValidationError("Authors starting with 'human' are reserved for edits made by the owner "
+                              "(the window and connected browsers).", "LIVE_AUTHOR")
     return author
 
 
@@ -742,32 +794,63 @@ API: dict[str, Callable[[LiveSession, dict], dict]] = {
     "select": _api_request("select", ("pattern", "row", "rows", "channel", "channels")),
     "save": lambda s, p: s.save(**_params(p, (), ("path",))),
 }
+
+
+# Methods that need the server itself (listeners, URLs) rather than only the session. They are
+# part of the loopback bearer-token API: an agent can read the studio addresses and the connected
+# browsers, but only the owner (command line flag or window setting) can open the LAN listener.
+SERVER_API: dict[str, Callable[[LiveServer, dict], dict]] = {
+    "web_status": lambda s, p: s.web_info() if _params(p) == {} else {},
+}
 HTTP_STATUS = {"LIVE_AUTH": 401, "LIVE_CONFLICT": 409, "LIVE_NO_WINDOW": 503, "LIVE_UNKNOWN_METHOD": 404,
-               "LIVE_TOO_LARGE": 413, "LIVE_BAD_REQUEST": 400, "LIVE_METHOD": 405, "LIVE_FORBIDDEN": 403}
+               "LIVE_TOO_LARGE": 413, "LIVE_BAD_REQUEST": 400, "LIVE_METHOD": 405, "LIVE_FORBIDDEN": 403,
+               "LIVE_WEB_OFF": 404, "LIVE_WEB_AUTH": 401, "LIVE_CSRF": 403,
+               "LIVE_BUSY": 429, "LIVE_RENDER_UNAVAILABLE": 503}
 DRAIN_LIMIT = 64 * 1024 * 1024
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     server_version = "ChipLoomLive/1"
     protocol_version = "HTTP/1.0"
     timeout = 30
+    body_consumed = False
 
     def log_message(self, *args):  # nothing on stderr
         pass
 
-    def _send(self, status: int, payload: dict) -> None:
-        body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    def peer(self) -> str:
+        """The client's address (a seam for tests)."""
+        return self.client_address[0]
+
+    def send_bytes(self, status: int, body: bytes, content_type: str, headers: dict | None = None) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        for name, value in {"Cache-Control": "no-store", **(headers or {})}.items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
+
+    def send_json(self, status: int, payload: dict, headers: dict | None = None) -> None:
+        body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        self.send_bytes(status, body, "application/json; charset=utf-8", headers)
+
+    def send_error_payload(self, exc: Exception, extra: dict | None = None, headers: dict | None = None) -> None:
+        """A structured failure with the status its code maps to (conflicts carry their details)."""
+        payload = error_payload(exc)
+        if isinstance(exc, LiveConflict):
+            return self.send_json(409, {**payload, "conflicts": exc.conflicts, "revision": exc.revision}, headers)
+        status = HTTP_STATUS.get(payload["code"], 422 if isinstance(exc, ValueError) else 500)
+        self.send_json(status, {**payload, **(extra or {})}, headers)
+
+    def _send(self, status: int, payload: dict) -> None:
+        self.send_json(status, payload)
 
     def _fail(self, status: int, code: str, message: str, **extra) -> None:
         self._send(status, {"ok": False, "error": "ValidationError", "code": code, "message": message, **extra})
 
-    def _drain(self, length: int) -> None:
+    def drain(self, length: int) -> None:
         remaining = min(length, DRAIN_LIMIT)
         try:
             while remaining > 0:
@@ -781,24 +864,43 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def _reject_verb(self) -> None:
         self._fail(405, "LIVE_METHOD", "Use POST /v1/<method> with a JSON body.")
 
-    do_GET = do_PUT = do_DELETE = do_PATCH = do_HEAD = _reject_verb
+    do_PUT = do_DELETE = do_PATCH = do_HEAD = do_OPTIONS = _reject_verb
+
+    def _web(self, method: str) -> bool:
+        path = self.path.split("?", 1)[0]
+        if path == "/web" or path.startswith("/web/"):
+            gateway.handle(self, self.server.owner, method)  # type: ignore[attr-defined]
+            return True
+        return False
+
+    def do_GET(self) -> None:
+        if not self._web("GET"):
+            self._reject_verb()
 
     def do_POST(self) -> None:
         owner: LiveServer = self.server.owner  # type: ignore[attr-defined]
+        if self._web("POST"):
+            return
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = -1
         consumed = False
         try:
+            # The agent API belongs to this computer: never on the LAN listener, never for a remote peer.
+            if self.server.role != "loopback" or not gateway.client_allowed(self.peer(), "loopback"):  # type: ignore[attr-defined]
+                return self._fail(403, "LIVE_FORBIDDEN", "The agent API is only served on loopback.")
+            host = self.headers.get("Host")
+            if host is not None and host.lower() not in self.server.allowed_hosts:  # type: ignore[attr-defined]
+                return self._fail(403, "LIVE_FORBIDDEN", "Unexpected Host header.")
             if self.headers.get("Origin") is not None:
                 return self._fail(403, "LIVE_FORBIDDEN", "Browser requests are not accepted.")
             header = self.headers.get("Authorization") or ""
             if not hmac.compare_digest(header.encode("utf-8"), f"Bearer {owner.token}".encode("utf-8")):
                 return self._fail(401, "LIVE_AUTH", "Missing or wrong token; read it from the discovery file.")
             match = re.fullmatch(r"/v1/([a-z_]+)", self.path.split("?", 1)[0])
-            if not match or match.group(1) not in API:
-                return self._fail(404, "LIVE_UNKNOWN_METHOD", f"Unknown method; use one of {sorted(API)}.")
+            if not match or (match.group(1) not in API and match.group(1) not in SERVER_API):
+                return self._fail(404, "LIVE_UNKNOWN_METHOD", f"Unknown method; use one of {sorted(API) + sorted(SERVER_API)}.")
             if length < 0:
                 return self._fail(400, "LIVE_BAD_REQUEST", "Invalid Content-Length.")
             if length > MAX_BODY:
@@ -812,34 +914,68 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if not isinstance(params, dict):
                 return self._fail(400, "LIVE_BAD_REQUEST", "The body must be a JSON object.")
             try:
-                result = API[match.group(1)](owner.session, params)
+                name = match.group(1)
+                owner.session.last_agent_activity = time.monotonic()
+                result = API[name](owner.session, params) if name in API else SERVER_API[name](owner, params)
                 self._send(200, {"ok": True, **result})
-            except LiveConflict as exc:
-                payload = error_payload(exc)
-                self._send(409, {**payload, "conflicts": exc.conflicts, "revision": exc.revision})
             except Exception as exc:  # structured failure instead of a dropped connection
-                payload = error_payload(exc)
-                status = HTTP_STATUS.get(payload["code"], 422 if isinstance(exc, ValueError) else 500)
-                self._send(status, payload)
+                self.send_error_payload(exc)
         finally:
             if not consumed and length > 0:
-                self._drain(length)
+                self.drain(length)
 
 
 class _Httpd(http.server.ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
+    owner: LiveServer
+    role = "loopback"                 # "loopback" serves the agent API and the web studio; "lan" only the studio
+    allowed_hosts: frozenset = frozenset()
 
 
 class _Httpd6(_Httpd):
     address_family = socket.AF_INET6
 
 
+def lan_addresses() -> list[str]:
+    """Private IPv4 addresses of this computer (the ones a tablet on the same network could reach)."""
+    found: set[str] = set()
+    try:
+        found.update(info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+    except OSError:
+        pass
+    try:  # connecting a UDP socket sends nothing; it only asks the OS which address the default route uses
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            found.add(probe.getsockname()[0])
+    except OSError:
+        pass
+    return sorted(address for address in found if _private_lan_address(address))
+
+
+def _private_lan_address(address: object) -> bool:
+    """An RFC 1918 IPv4 address (10/8, 172.16/12, 192.168/16): what a home or office network hands out."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return ip.version == 4 and any(ip in network for network in gateway.LAN_NETWORKS[:3])
+
+
 class LiveServer:
-    """Loopback-only JSON server: `POST /v1/<method>` with `Authorization: Bearer <token>`."""
+    """Loopback JSON server for the agent (`POST /v1/<method>` with `Authorization: Bearer <token>`),
+    plus the browser studio under `/web/`.
+
+    The studio is reachable on the same loopback listener. For a tablet or phone on the
+    same network, `enable_lan(True)` (or `lan=True`) starts extra listeners bound to this computer's
+    private network addresses. Those listeners serve **only** `/web/`: the agent API, the bearer token
+    and the discovery file never leave loopback. There is no code to type: a browser joins by
+    opening the address, and LAN traffic is plain HTTP.
+    """
 
     def __init__(self, session: LiveSession, host: str = "127.0.0.1", port: int = 0, token: str | None = None,
-                 kind: str = "headless", home: Path | None = None):
+                 kind: str = "headless", home: Path | None = None, web: bool = True, lan: bool = False,
+                 lan_port: int = 0):
         address = "127.0.0.1" if host == "localhost" else host
         try:
             loopback = ipaddress.ip_address(address).is_loopback
@@ -848,17 +984,24 @@ class LiveServer:
         if not loopback:
             raise ValidationError("The live server only binds to loopback (127.0.0.1 or ::1).", "LIVE_HOST")
         require_int(port, "port", 0, 65535)
+        require_int(lan_port, "lan_port", 0, 65535)
         if kind not in ("desktop", "headless"):
             raise ValidationError("kind: 'desktop' or 'headless' expected.", "LIVE_PARAMS")
         if token is not None and (not isinstance(token, str) or len(token) < 16):
             raise ValidationError("token: text of at least 16 characters expected.", "LIVE_PARAMS")
         self.session, self.kind, self._address, self._port = session, kind, address, port
         self.token = token or secrets.token_hex(32)
+        self.web_enabled = bool(web)
+        self.render_slot = threading.Semaphore(1)     # one browser render at a time
         self._home = Path(home) if home else None
         self._httpd: _Httpd | None = None
         self._thread: threading.Thread | None = None
+        self._lan: list[tuple[_Httpd, threading.Thread]] = []
+        self._lan_wanted = bool(lan)
+        self._lan_host: str | None = None
+        self._lan_port = lan_port
         self._file: Path | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._started = ""
 
     @property
@@ -872,12 +1015,43 @@ class LiveServer:
     def running(self) -> bool:
         return self._httpd is not None
 
+    @property
+    def lan_enabled(self) -> bool:
+        """True while LAN listeners are up (or will start with the server)."""
+        return bool(self._lan) or (self._lan_wanted and not self.running)
+
+    def web_urls(self) -> dict:
+        """Where to open the studio: `{"local": url, "lan": [urls], "lan_enabled": bool}`.
+
+        Without `enable_lan(True)` there is no LAN URL, only the loopback one (this computer's own
+        browser). LAN URLs are plain `http://`."""
+        return {"local": f"{self.url}/web/", "lan": [f"http://{address}:{port}/web/" for address, port in self._lan_endpoints()],
+                "lan_enabled": self.lan_enabled}
+
+    def web_info(self) -> dict:
+        """What the owner needs: studio URLs, connected browsers, the plain-HTTP warning when on the LAN."""
+        info = {**self.web_urls(), "enabled": self.web_enabled, "devices": self.session.web_devices()}
+        if info["lan"]:
+            info["warning"] = ("Anyone on that network who knows the address can listen and edit, and the traffic is plain HTTP. "
+                               "Turn it on only on a network you trust.")
+        elif self.lan_enabled:
+            info["warning"] = "LAN listeners are not running yet."
+        else:
+            info["note"] = ("Only this computer can open the studio. To reach it from a tablet, start the session with "
+                            "`live serve SOURCE --web --lan` or enable the LAN option in the window.")
+        return info
+
+    def _lan_endpoints(self) -> list[tuple[str, int]]:
+        return [(httpd.server_address[0], httpd.server_address[1]) for httpd, _ in self._lan]
+
     def info(self, secret: bool = True) -> dict:
         """The discovery record (without the token when `secret=False`)."""
         document = self.session.document
         data = {"pid": os.getpid(), "url": self.url, "token": self.token,
                 "path": str(document.path) if document.path else None, "title": document.module.title,
                 "started": self._started, "kind": self.kind, "api": API_VERSION}
+        if self.web_enabled:
+            data["web_url"] = f"{self.url}/web/"
         if not secret:
             del data["token"]
         return data
@@ -889,12 +1063,23 @@ class LiveServer:
             name = f"{os.getpid()}-{self._httpd.server_address[1]}.json"
         return directory / name
 
+    @staticmethod
+    def _hosts(addresses: list[str], port: int) -> frozenset:
+        names = {f"{address}:{port}" for address in addresses}
+        if any(address in ("127.0.0.1", "::1") for address in addresses):
+            names |= {f"{name}:{port}" for name in LOOPBACK_HOSTS}
+        if any(not ipaddress.ip_address(address).is_loopback for address in addresses):
+            machine = socket.gethostname().lower()
+            names |= {f"{machine}:{port}", f"{machine}.local:{port}"}
+        return frozenset(names)
+
     def start(self) -> LiveServer:
         with self._lock:
             if self._httpd is not None:
                 return self
             self._httpd = (_Httpd6 if ":" in self._address else _Httpd)((self._address, self._port), _Handler)
-            self._httpd.owner = self  # type: ignore[attr-defined]
+            self._httpd.owner = self
+            self._httpd.allowed_hosts = self._hosts(["127.0.0.1", "::1"], self._httpd.server_address[1])
             self._started = now()
             self._thread = threading.Thread(target=self._httpd.serve_forever, kwargs={"poll_interval": 0.1},
                                             name="chiploom-live", daemon=True)
@@ -903,7 +1088,72 @@ class LiveServer:
             self._file = self._discovery_file()
             _OWNED.add(self._file.name)
             self._write_discovery()
+            if self._lan_wanted:
+                try:
+                    self._start_lan()
+                except ValidationError:
+                    self.stop()
+                    raise
         return self
+
+    # --- LAN ----------------------------------------------------------------------------
+
+    def enable_lan(self, enabled: bool = True, host: str | None = None, port: int = 0) -> list[str]:
+        """Open (or close) the studio to this computer's private network and return its URLs.
+
+        Only the studio is served there; the agent API stays on loopback. `host` restricts the
+        listener to one private IPv4 address of this computer (default: every private address
+        found). Turning it off closes the listeners and forgets the browsers that joined through them.
+        Raises `LIVE_LAN` if no private address is available or the port cannot be bound."""
+        with self._lock:
+            if not enabled:
+                self._lan_wanted = False
+                self._stop_lan()
+                return []
+            if not self.web_enabled:
+                raise ValidationError("The browser studio is turned off on this session.", "LIVE_WEB_OFF")
+            require_int(port, "port", 0, 65535)
+            if host is not None and not _private_lan_address(host):
+                raise ValidationError("host: a private IPv4 address of this computer (10.x, 172.16-31.x, 192.168.x) "
+                                      "expected; the studio is never offered on public or wildcard addresses.", "LIVE_HOST")
+            self._lan_wanted, self._lan_host, self._lan_port = True, host, port
+            if self.running:
+                self._stop_lan()
+                self._start_lan()
+            return [f"http://{address}:{number}/web/" for address, number in self._lan_endpoints()]
+
+    def _start_lan(self) -> None:
+        addresses = [self._lan_host] if self._lan_host else lan_addresses()
+        if not addresses:
+            raise ValidationError("No private network address was found on this computer, so the studio cannot be offered "
+                                  "to other devices. Connect to a network, or keep using the local address.", "LIVE_LAN")
+        port = self._lan_port
+        try:
+            for address in addresses:
+                try:
+                    httpd = _Httpd((address, port), _Handler)
+                except OSError:
+                    if not self._lan:   # the first listener must get the port that was asked for
+                        raise
+                    httpd = _Httpd((address, 0), _Handler)   # the shared port is taken on this interface
+                httpd.owner, httpd.role = self, "lan"
+                httpd.allowed_hosts = self._hosts([address], httpd.server_address[1])
+                thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.1},
+                                          name="chiploom-live-lan", daemon=True)
+                thread.start()
+                self._lan.append((httpd, thread))
+                port = port or httpd.server_address[1]   # later interfaces try to share the first port
+        except OSError as exc:
+            self._stop_lan()
+            raise ValidationError(f"The LAN listener could not start ({exc}).", "LIVE_LAN") from exc
+
+    def _stop_lan(self) -> None:
+        lan, self._lan = self._lan, []
+        for httpd, thread in lan:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+        self.session.web.forget("lan")
 
     def _write_discovery(self) -> None:
         if self._file is None:
@@ -931,6 +1181,8 @@ class LiveServer:
             httpd, self._httpd = self._httpd, None
             if httpd is None:
                 return
+            self._stop_lan()
+            self.session.web.forget()
             if self._on_event in self.session._listeners:
                 self.session._listeners.remove(self._on_event)
             httpd.shutdown()
