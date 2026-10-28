@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix an occasional freeze of the window in rendered playback (without libxmp or an audio device): changing mutes, solos or the song while a render was being heard could deadlock Qt's audio thread. The meter now reads the rendered WAV at the playback position instead of receiving decoded buffers from that thread.
+- CI prints the stack of a desktop test module that hangs and stops it after 4 minutes.
+- The Windows build now includes the browser studio page (the first 0.8.0 zip lacked it and was replaced).
+
 ## 0.8.0 — 2026-10-28
 
 This release groups what was proposed after 0.7 as four releases (0.8 to 1.0). See the [roadmap](docs/ROADMAP.md).

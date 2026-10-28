@@ -56,7 +56,7 @@ The window is a **Qt Widgets / PySide6** application, with no HTML page. It lets
 - find **First Light**, **Pixel Rush** and recent files; open a MOD or a JSON project, including by drag and drop;
 - listen, pause, move the playback position in the song or to a pattern row, and follow the four channels; the loop respects the module's restart position;
 - mute or unmute a channel by clicking its large **Track 1-4** button above the pattern, or hear it alone with **Solo**; inaudible channels are dimmed, without changing the score;
-- follow the sound level on an **animated stereo meter**, which measures the average level and the peaks of the signal actually decoded, also while a sample is being auditioned;
+- follow the sound level on an **animated stereo meter**, which measures the average level and the peaks of the audio being played, also while a sample is being auditioned;
 - choose among four themes (**Midnight**, **Amber**, **Violet**, **Light**) and switch between **English** and **Français** with the menus at the top right; English is the default;
 - show the samples and their loops, listen to them separately, and edit, create and level them in the [sound workshop](#sound-workshop);
 - hear sounds from the piano keys ([keyboard audition](#keyboard-audition)) and let a tablet or second screen edit with you ([open in a browser](#open-in-a-browser));

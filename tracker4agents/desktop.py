@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo, QModelIndex, QStandardPaths, Qt, QThreadPool, QTimer, QTranslator, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFontDatabase, QKeySequence, QPalette, QPixmap
-from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog,
                                QFrame, QGridLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QSlider,
@@ -35,7 +35,7 @@ from .desktop_widgets import (ASSETS, ElidedLabel, ShortcutPopup, Task, TaskSign
                               clock, label, sample_name, separator, ui_icons)
 from .document import Document
 from .i18n import error_text, translate
-from .level_meter import LevelMeter
+from .level_meter import LevelMeter, WavLevels
 from .model import playback_plan
 from .realtime import RealtimeError
 from .themes import THEMES, stylesheet
@@ -130,19 +130,9 @@ class TrackerWindow(QMainWindow):
         self._connect_live()
         self.apply_theme()
         self.retranslate()
-        self.probes = []
-        audio_format = QAudioFormat()
-        audio_format.setSampleRate(48000)
-        audio_format.setChannelCount(2)
-        audio_format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        for player in (self.player, self.sample_player):
-            probe = QAudioBufferOutput(audio_format, self)
-            player.setAudioBufferOutput(probe)
-            # Marshal PCM to the GUI thread. A direct Python callback from Qt's
-            # audio renderer can deadlock with stop()/close waiting for that thread.
-            probe.audioBufferReceived.connect(lambda buffer, source=player: self._meter_buffer(buffer, source),
-                                              Qt.ConnectionType.QueuedConnection)
-            self.probes.append(probe)
+        # The meter reads the rendered WAVs being played; Qt's buffer output would call Python from its
+        # audio thread, which can deadlock with QMediaPlayer.stop() (see WavLevels).
+        self.wav_levels = ((self.player, WavLevels()), (self.sample_player, WavLevels()))
         self.player.mediaStatusChanged.connect(self._media_status)
         self.player.playbackStateChanged.connect(lambda _: self._transport_labels())
         self.player.errorOccurred.connect(lambda error, text: self._media_error(text))
@@ -283,10 +273,6 @@ class TrackerWindow(QMainWindow):
         self._monitor_style()
         self.waveform.update()
         self._show_message()
-
-    def _meter_buffer(self, buffer, player):
-        if player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.meter.feed(buffer)
 
     def _monitor_style(self):
         audible = self.audible()
@@ -1134,6 +1120,12 @@ class TrackerWindow(QMainWindow):
             levels = self.rt.heard_levels()   # the song's, or the notes played from the keyboard
             if levels:
                 self.meter.feed_levels(*levels)
+        for player, wav in self.wav_levels:
+            if player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                levels = wav.at(player.source().toLocalFile(), player.position())
+                if levels:
+                    self.meter.feed_levels(*levels)
+                break
         self.meter.tick(active, self.volume.value() / 100)
         if not self.document or self._loading_audio:
             return

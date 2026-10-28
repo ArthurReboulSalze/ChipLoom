@@ -1,12 +1,13 @@
-"""Stereo RMS/peak display, fed by QMediaPlayer's decoded audio buffers."""
+"""Stereo RMS/peak display, fed by the real-time engine or by the rendered WAV being played."""
 
 from array import array
 import math
+import sys
 import time
+import wave
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtMultimedia import QAudioFormat
 from PySide6.QtWidgets import QWidget
 
 
@@ -28,6 +29,45 @@ def pcm_levels(payload: bytes, channels: int = 2) -> tuple[tuple[float, ...], tu
     return tuple(rms), tuple(peaks)
 
 
+class WavLevels:
+    """Levels of a rendered 16-bit WAV around a playback position, measured on the GUI thread.
+
+    Qt's QAudioBufferOutput hands decoded audio over from its renderer thread, and a Python
+    receiver there deadlocks with QMediaPlayer.stop(): the renderer waits for the GIL while the
+    GUI thread, holding it, waits for the renderer. The window plays files it rendered itself,
+    so it reads the heard audio from them instead.
+    """
+
+    WINDOW = .05   # seconds measured per tick
+
+    def __init__(self):
+        self.path, self.pcm, self.channels, self.rate = None, b"", 0, 0
+
+    def at(self, path: str, milliseconds: int):
+        if path != self.path:
+            self._load(path)
+        if not self.rate:
+            return None
+        width = 2 * self.channels
+        start = int(milliseconds * self.rate / 1000) * width
+        chunk = self.pcm[start:start + int(self.WINDOW * self.rate) * width]
+        return pcm_levels(chunk, self.channels) if chunk else None
+
+    def _load(self, path: str):
+        self.path, self.pcm, self.channels, self.rate = path, b"", 0, 0
+        try:
+            with wave.open(path, "rb") as audio:
+                if audio.getsampwidth() != 2 or audio.getnchannels() not in (1, 2):
+                    return
+                values = array("h", audio.readframes(audio.getnframes()))
+                channels, rate = audio.getnchannels(), audio.getframerate()
+        except (OSError, EOFError, wave.Error):
+            return
+        if sys.byteorder != "little":
+            values.byteswap()
+        self.pcm, self.channels, self.rate = values.tobytes(), channels, rate
+
+
 class LevelMeter(QWidget):
     def __init__(self, window):
         super().__init__(window)
@@ -43,14 +83,8 @@ class LevelMeter(QWidget):
         self.received_at = 0.0
         self.update()
 
-    def feed(self, buffer):
-        if buffer.isValid() and buffer.format().sampleFormat() == QAudioFormat.SampleFormat.Int16:
-            self.raw_rms, self.raw_peaks = pcm_levels(bytes(buffer.constData()), buffer.format().channelCount())
-            self.received_at = time.monotonic()
-            self.buffer_count += 1
-
     def feed_levels(self, rms, peaks):
-        """Levels computed by the real-time engine for the audio being heard (no Qt buffer involved)."""
+        """Levels of the audio being heard, from the real-time engine or the rendered WAV."""
         self.raw_rms, self.raw_peaks = rms, peaks
         self.received_at = time.monotonic()
         self.buffer_count += 1

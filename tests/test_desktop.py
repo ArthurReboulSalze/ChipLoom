@@ -1,6 +1,7 @@
 """Optional Qt integration tests, using real FFmpeg WAVs and Qt's media player."""
 from __future__ import annotations
 
+from array import array
 import atexit
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+import wave
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # These tests drive QMediaPlayer; the real-time (libxmp) path is covered by test_desktop_realtime.
@@ -25,6 +27,7 @@ try:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit
     from tracker4agents.desktop import STYLE, TrackerWindow
+    from tracker4agents.level_meter import WavLevels
 except ModuleNotFoundError:
     TrackerWindow = None
 
@@ -329,6 +332,34 @@ class DesktopTests(unittest.TestCase):
         self.wait_until(lambda: window.meter.buffer_count > before + 2, 5)
         self.assertEqual(window.meter.raw_peaks, (0.0, 0.0))
         self.assertEqual(window.meter.levels, (0.0, 0.0))
+
+
+@unittest.skipUnless(TrackerWindow is not None, "PySide6 requis.")
+class WavLevelsTests(unittest.TestCase):
+    """The meter reads the rendered WAV at the playback position, never Qt's audio thread."""
+
+    def write(self, path, channels, frames, width=2, rate=8000):
+        with wave.open(str(path), "wb") as audio:
+            audio.setparams((channels, width, rate, 0, "NONE", "not compressed"))
+            audio.writeframes(frames)
+        return str(path)
+
+    def test_levels_follow_the_position_in_mono_and_stereo_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            silence_then_tone = array("h", [0] * 8000 + [16384, -16384] * 4000)   # 0.5 s of silence, then 0.5 s at -6 dB
+            stereo = self.write(Path(directory) / "stereo.wav", 2, silence_then_tone.tobytes())
+            levels = WavLevels()
+            self.assertEqual(levels.at(stereo, 100), ((0.0, 0.0), (0.0, 0.0)))
+            rms, peaks = levels.at(stereo, 700)
+            self.assertEqual(peaks, (.5, .5))
+            self.assertAlmostEqual(rms[0], .5)
+            self.assertIsNone(levels.at(stereo, 2000))   # past the end
+            mono = self.write(Path(directory) / "mono.wav", 1, array("h", [8192] * 8000).tobytes())
+            self.assertEqual(levels.at(mono, 0)[1], (.25, .25))
+            narrow = self.write(Path(directory) / "narrow.wav", 1, bytes(800), width=1)
+            self.assertIsNone(levels.at(narrow, 0))
+            self.assertIsNone(levels.at(str(Path(directory) / "missing.wav"), 0))
+            self.assertIsNone(levels.at("", 0))
 
 
 if __name__ == "__main__":
