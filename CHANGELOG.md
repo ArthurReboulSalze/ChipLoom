@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 — unreleased
+## 0.8.0 — 2026-10-28
 
 This release groups what was proposed after 0.7 as four releases (0.8 to 1.0). See the [roadmap](docs/ROADMAP.md).
 

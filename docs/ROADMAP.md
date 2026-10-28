@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 28 October 2026, planning version 0.8.0. Earlier planning notes (translated from the original French) are kept in
+Updated 28 October 2026, after the 0.8.0 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together
@@ -18,16 +18,17 @@ Version 0.7 groups what was first planned as four releases (0.7 to 1.0).
 
 See the [changelog](../CHANGELOG.md) for details and the [CLI reference](CLI.md) for contracts.
 
-## 0.8.0: in progress
+## 0.8.0: shape sounds and share the session
 
 Version 0.8 groups what was proposed after 0.7 as four releases (0.8 to 1.0).
 
-| Theme | Planned |
+| Theme | What landed |
 | --- | --- |
 | Consolidation | MCP adapter tested with real clients and documented configurations; window: drag-and-drop of blocks, comparing a take with the current song, a reliable "agent connected" indicator, agent `open` requests that never time out on the owner's prompt; Linux desktop tested on a real Debian machine with sound; CI actions on current versions |
 | Sound workshop in the window | Sample editor (loop points, volume, fine tune, trim) on undoable copies; recipe editor with immediate listening and waveform drawing; sample levels against the bank with one-click matching; reusable instruments (a sample plus a short effect phrase) |
 | Browser studio | A local web page joining the same live session as the window, opened by its address, with no code; listening, an editable grid and the Agent tab, usable from a tablet; works with a headless `live serve` too |
-| Wider formats | `E6x` pattern loops and `EEx` pattern delays, more four-channel MOD variants, 6- and 8-channel MOD, and a first XM profile with its own validation |
+| Wider formats | `E6x` pattern loops and `EEx` pattern delays, more four-channel MOD variants, MOD with 2 to 32 channels, and a first XM profile with its own validation, all editable in the window |
+| Playing by ear | Keyboard audition of the current instrument, sample, recipe or instrument, up to 6 notes mixed with the song in the real-time stream |
 
 ## After 0.8
 
