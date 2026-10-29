@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from . import formats, project
+from . import comments as comment_store, formats, project
 from .model import (
     XM_KEY_OFF, XM_NOTES, Cell, Module, NOTES, NOTE_TO_PERIOD, ValidationError, cell, playback_plan, require_int, validate,
 )
@@ -23,10 +23,16 @@ def fingerprint(module: Module) -> str:
 class Document:
     def __init__(self, module: Module, path: Path | None = None):
         validate(module)
+        # Comments live beside the module, outside the undo history (see comments.py); they are written
+        # back to metadata.comments when the project is saved.
+        self.comments: list[dict] = comment_store.load(module.metadata)
+        if isinstance(module.metadata, dict):
+            module.metadata.pop("comments", None)
         self.module = module
         self.path = path.resolve() if path else None
         self.revision = 0
         self._saved = fingerprint(module)
+        self._saved_comments = self._comments_key()
         self._undo: list[tuple[str, Module]] = []
         self._redo: list[tuple[str, Module]] = []
 
@@ -35,9 +41,19 @@ class Document:
         module = project.load(path) if path.suffix.lower() == ".json" else formats.read(path)
         return cls(module, path)
 
+    def _comments_key(self) -> str:
+        return json.dumps(self.comments, sort_keys=True, ensure_ascii=False)
+
     @property
     def dirty(self) -> bool:
-        return fingerprint(self.module) != self._saved
+        return fingerprint(self.module) != self._saved or self._comments_key() != self._saved_comments
+
+    def project_dict(self) -> dict:
+        """The project as saved: the module plus its comments in metadata.comments."""
+        data = project.to_dict(self.module)
+        if self.comments:
+            data.setdefault("metadata", {})["comments"] = comment_store.view_all(self.comments)
+        return data
 
     @property
     def can_undo(self) -> bool:
@@ -161,13 +177,15 @@ class Document:
     def mark_saved(self) -> None:
         """Treat the current module as matching the file on disk (after an external reload)."""
         self._saved = fingerprint(self.module)
+        self._saved_comments = self._comments_key()
 
     def save_project(self, path: Path) -> None:
         if path.suffix.lower() != ".json":
             raise ValidationError("Un projet éditable doit avoir une extension .json.")
-        project.write_json(path, project.to_dict(self.module))
+        project.write_json(path, self.project_dict())
         self.path = path.resolve()
         self._saved = fingerprint(self.module)
+        self._saved_comments = self._comments_key()
 
     def export_mod(self, path: Path) -> None:
         """Write the module file: .mod for a MOD, .xm for an XM."""

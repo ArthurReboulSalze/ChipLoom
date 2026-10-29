@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import mod, project
+from . import comments as comment_store, mod, project
 from .document import Document
 from .errors import error_payload
 from .model import Module, Pattern, ValidationError, playback_plan, require_int, validate
@@ -158,8 +158,9 @@ class LiveSession:
     thread; an internal re-entrant lock always serializes sessions calls.
 
     `on_event(kind, payload)` receives: "change" (journal entry), "proposal"
-    ({"action", "proposal"}), "take", "request" ({"kind","payload","handled"}), "reset",
-    "saved". It runs inside the dispatcher; exceptions it raises are ignored.
+    ({"action", "proposal"}), "comment" ({"action": created|replied|resolved|reopened, "comment"}),
+    "take", "request" ({"kind","payload","handled"}), "reset", "saved". It runs inside the
+    dispatcher; exceptions it raises are ignored.
     """
 
     def __init__(self, document: Document, *, dispatcher: Callable[[Callable[[], Any]], Any] | None = None,
@@ -396,12 +397,14 @@ class LiveSession:
         self._absorb()
         module, document = self.document.module, self.document
         last = self._journal[-1] if self._journal else None
+        open_comments = sum(item["status"] == "open" for item in document.comments)
         result = {**self._context,
                   "path": str(document.path) if document.path else self._context.get("path"),
                   "title": module.title, "revision": self._revision, "document_revision": document.revision,
                   "dirty": self._context["dirty"] if "dirty" in self._context else document.dirty,
                   "orders": list(module.orders), "pattern_count": len(module.patterns),
                   "pending_proposals": sum(item["status"] == "pending" for item in self._proposals),
+                  "open_comments": open_comments,
                   "takes": len(self._takes), "window": bool(self._handlers), "web_devices": len(self.web.devices()),
                   "last_change": last and {"revision": last["revision"], "author": last["author"],
                                            "label": last["label"], "at": last["at"]}}
@@ -553,6 +556,56 @@ class LiveSession:
         self._emit("proposal", {"action": "withdrawn", "proposal": view})
         return view
 
+    # --- comments (see comments.py) ----------------------------------------------------
+
+    def _comment_event(self, comment: dict, action: str, author: str) -> dict:
+        """Journal a comment change (an empty diff, kind "comment") and tell the listeners."""
+        view = comment_store.view(comment)
+        entry = self._record(author, comment_store.label(comment, action), {"cells": []}, "comment",
+                             {"comment": comment["id"], "action": action, "place": comment["place"]})
+        self._emit("change", _public(entry))
+        self._emit("comment", {"action": action, "comment": view})
+        return view
+
+    @_guarded
+    def comments(self, status: str | None = "open") -> list[dict]:
+        """Comments with the given status ("open" by default; None or "all" for every one)."""
+        if status not in (None, "all", *comment_store.STATUSES):
+            raise ValidationError("status: open, resolved or all expected.", "COMMENT_INVALID")
+        return [comment_store.view(item) for item in self.document.comments
+                if status in (None, "all") or item["status"] == status]
+
+    @_guarded
+    def add_comment(self, text: object, place: object = None, author: str = "human") -> dict:
+        """Attach a comment to a block of the score (`place`) or to the whole song (None)."""
+        self._absorb()
+        author = _author(author)
+        comment = comment_store.create(self.document.module, self.document.comments, text, place, author)
+        self.document.comments.append(comment)
+        comment_store.trim(self.document.comments)
+        return self._comment_event(comment, "created", author)
+
+    @_guarded
+    def reply_comment(self, comment_id: object, text: object, author: str = "agent") -> dict:
+        author = _author(author)
+        comment = comment_store.find(self.document.comments, comment_id)
+        comment_store.reply(comment, text, author)
+        return self._comment_event(comment, "replied", author)
+
+    @_guarded
+    def resolve_comment(self, comment_id: object, author: str = "agent", text: object = None,
+                        reopen: bool = False) -> dict:
+        """Mark a comment resolved (with an optional closing reply), or reopen it with `reopen=True`."""
+        author = _author(author)
+        comment = comment_store.find(self.document.comments, comment_id)
+        wanted = "open" if reopen else "resolved"
+        if comment["status"] == wanted:
+            raise ValidationError(f"Comment {comment['id']} is already {wanted}.", "COMMENT_INVALID")
+        if text is not None:
+            comment_store.reply(comment, text, author)
+        comment_store.set_status(comment, wanted, author)
+        return self._comment_event(comment, "reopened" if reopen else "resolved", author)
+
     # --- takes --------------------------------------------------------------------------
 
     @_guarded
@@ -673,7 +726,7 @@ class LiveSession:
             self.document.save_project(target)
             self._emit("saved", {"path": str(target)})
             return {"path": str(target), "copy": False, "dirty": self.document.dirty, "revision": self._revision}
-        project.write_json(target, project.to_dict(self.document.module))
+        project.write_json(target, self.document.project_dict())
         return {"path": str(target), "copy": True, "session_path": str(own) if own else None,
                 "dirty": self.document.dirty, "revision": self._revision}
 
@@ -762,6 +815,12 @@ def _params(params: dict, required: tuple = (), optional: tuple = ()) -> dict:
     return params
 
 
+def _flag(value: object, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValidationError(f"{name}: true or false expected.", "LIVE_PARAMS")
+    return value
+
+
 def _agent_author(params: dict) -> str:
     author = _author(params.get("author", "agent"))
     if author.lower().startswith("human"):
@@ -800,6 +859,14 @@ API: dict[str, Callable[[LiveSession, dict], dict]] = {
     "take": lambda s, p: {"take": s.add_take(_params(p, ("path",), ("label", "author"))["path"],
                                               p.get("label"), _agent_author(p))},
     "takes": lambda s, p: {"takes": s.takes()} if _params(p) == {} else {},
+    "comments": lambda s, p: {"comments": s.comments(**_params(p, (), ("status",)))},
+    "comment": lambda s, p: {"comment": s.add_comment(_params(p, ("text",), ("place", "author"))["text"],
+                                                      p.get("place"), _agent_author(p))},
+    "reply": lambda s, p: {"comment": s.reply_comment(_params(p, ("id", "text"), ("author",))["id"], p["text"],
+                                                      _agent_author(p))},
+    "resolve": lambda s, p: {"comment": s.resolve_comment(_params(p, ("id",), ("text", "reopen", "author"))["id"],
+                                                          _agent_author(p), p.get("text"),
+                                                          _flag(p.get("reopen", False), "reopen"))},
     "open": lambda s, p: s.request_open(**_params(p, (), ("take", "path"))),
     "play": _api_request("play", ("order",)),
     "stop": _api_request("stop"),

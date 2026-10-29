@@ -513,7 +513,7 @@ python -m tracker4agents feedback exports/song/v1.project.json --text "Bass is t
   --rating 3 --version v1 --output exports/song/v1-feedback.project.json
 ```
 
-`feedback` copies a project to a **new** `.json` file with an entry appended to `metadata.feedback`: `{"text", "rating", "source", "version", "recorded_at"}`. `--rating` is an integer 1–5 and optional, `--source` defaults to `owner`, `--version` should match the label you gave the version you asked about. Text is limited to 2000 characters without control characters. Feedback is recorded, not interpreted; it does not change the score or any model.
+`feedback` copies a project to a **new** `.json` file with an entry appended to `metadata.feedback`: `{"text", "rating", "source", "version", "recorded_at"}`. `--rating` is an integer 1–5 and optional, `--source` defaults to `owner`, `--version` should match the label you gave the version you asked about. Text is limited to 2000 characters without control characters. `--pattern N` (with `--row`, `--rows`, `--channel`, `--channels`) ties the note to a block of the score and adds `place` to the entry. Feedback is recorded, not interpreted; it does not change the score or any model.
 
 ## Live sessions
 
@@ -537,6 +537,10 @@ python -m tracker4agents feedback exports/song/v1.project.json --text "Bass is t
 | `live withdraw ID` | Withdraw your own pending proposal |
 | `live take PATH --label TEXT` | Announce a saved `.json` project or `.mod` as a take (id `t1`, `t2`, …) the owner can open from the window |
 | `live takes` | List takes with title, duration, size and SHA-256 |
+| `live comments [--status open\|resolved\|all]` | Comments attached to places in the song (open ones by default); see [Comments](#comments) |
+| `live comment TEXT [--pattern N --row R --rows K --channel C --channels K] [--author NAME]` | Attach a comment to a block (or, without `--pattern`, to the whole song) |
+| `live reply ID TEXT [--author NAME]` | Reply to a comment |
+| `live resolve ID [--text TEXT] [--reopen] [--author NAME]` | Mark a comment resolved, with an optional closing reply, or reopen it |
 | `live open (PATH \| --take ID)` | Ask the window to open a file or a take |
 | `live play [--order N]` / `live stop` | Start or stop playback in the window (`LIVE_NO_WINDOW` without a window) |
 | `live select --pattern N --row R --channel C [--rows K --channels K]` | Move the window's selection to show a passage |
@@ -597,6 +601,29 @@ python -m tracker4agents live changes --since 0
 
 For the collaboration procedure, see [the live reference](../skills/chiploom/references/live.md) and [the agent guide](AGENT_GUIDE.md#composing-with-the-owner-in-the-window-live).
 
+### Comments
+
+The owner can attach a comment to a block of the song, in the window or the browser studio ("track 5 drags here"), so the agent knows exactly where. A comment is:
+
+```json
+{"id": "c3", "author": "human", "text": "Track 5 drags here", "at": "2026-10-29T10:00:00Z",
+ "place": {"pattern": 1, "row": 0, "rows": 32, "channel": 4, "channels": 1},
+ "cells": ["00 | --- -- -- ...", "..."],
+ "status": "open", "replies": [{"author": "agent", "text": "Moved it to the eighth grid", "at": "..."}],
+ "resolved_by": null, "resolved_at": null}
+```
+
+`place` is null for a remark about the whole song. `cells` keeps the block as grid text (at most 32 rows) as it was when the comment was written, so it still says what the owner pointed at after later edits. Authors follow the live rules: `human` from the window, `human-web` from a browser, and an agent name (never one starting with `human`) from the agent API, which may also write comments of its own (for example "listen from here").
+
+- Every new comment, reply, resolution and reopening is a journal entry with `kind: "comment"`, an empty `diff`, `comment` (its id), `action` (`created`, `replied`, `resolved`, `reopened`) and `place`, so `live changes` shows them in order with the edits. `live status` gives `open_comments`.
+- Comments are saved with the project under `metadata.comments` and come back when it is reopened. They live beside the score, outside the undo history: undoing a note never removes a comment, and adding one makes the project unsaved.
+- Errors: `COMMENT_INVALID` (empty or longer than 1000 characters, a place outside the song, an already resolved comment), `COMMENT_UNKNOWN`. At most 300 comments are kept (the oldest resolved ones go first) and 50 replies per comment.
+- MCP tools: `live_comments`, `live_comment`, `live_reply` (with `resolve` or `reopen`).
+
+The usual loop: read `live comments` (or the `kind: "comment"` entries of `live changes`), select the place with `live select` if useful, fix it with `live patch`, then `live resolve ID --text "what I changed"` so the owner sees the answer next to their comment.
+
+`feedback` takes the same place (`--pattern N --row R --rows K --channel C --channels K`) to store a listening note tied to a block in `metadata.feedback`.
+
 ### Syncing a project into the session
 
 `live sync PROJECT.json` is for the agent that rewrites or regenerates a whole project (with a script, say) while the owner has the song open. Instead of reopening the file, which would replace the owner's undo history, it sends only the differences, as ordinary agent patches the owner sees highlighted and can undo one by one.
@@ -649,7 +676,7 @@ Each tool call runs the equivalent `chiploom` command in a **child process**, so
 | `synth_types`, `synth_levels`, `synth_preview`, `synth_add`, `synth_palette` | `synth types`, `levels`, `preview`, `add`, `palette`; `recipe` is a JSON object, `match_library` a bank folder, `no_match` a boolean |
 | `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops` or `ops_file`, `base_revision`, `label`, `propose`, `author` |
 
-There are 48 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
+There are 51 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
 
 Configuration for a client that launches stdio servers (field names vary by client; this is the common shape):
 

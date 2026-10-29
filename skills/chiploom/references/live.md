@@ -50,6 +50,16 @@ journaled as `human-web` and count as the owner's. `live web` prints the studio 
 8. **Save.** `live save` writes the session's own project file. `live save --output PATH`
    writes a copy (`"copy": true`); the session and the owner's window keep their file.
 
+## Comments from the owner
+
+The owner can attach a comment to a block in the window or the browser studio. Read them
+with `live comments` (or the `kind: "comment"` entries of `live changes`): `place` gives the
+pattern, rows and channels (null: the whole song), `cells` the block as it was when written.
+Work where it points, then `live resolve ID --text "what I changed"`; ask with
+`live reply ID TEXT` first when the remark is unclear. Never resolve a comment you did not
+address. Your own comments (`live comment TEXT --pattern ...`) can point the owner at a
+passage to listen to.
+
 ## Syncing a regenerated song
 
 When a script rewrites the whole project while the window is open, send it with

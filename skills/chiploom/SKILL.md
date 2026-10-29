@@ -180,7 +180,10 @@ If the owner has the ChipLoom window open (`live sessions` lists a session), do 
 rewrite their file: edit the open song through `live`. Details and conflict handling
 are in [references/live.md](references/live.md). The procedure:
 
-1. `live status` and `live score`; remember `revision`. Read `live changes --since 0`.
+1. `live status` and `live score`; remember `revision`. Read `live changes --since 0` and
+   `live comments`: the owner attaches remarks to places in the song (`place`: pattern, rows,
+   channels; `cells`: what was there). Answer each one where it points, then
+   `live resolve ID --text "what you changed"`; reply with `live reply` when you need to ask.
 2. Send small patches with `--base <revision> --label "..."`. Keep the returned revision.
 3. On `LIVE_CONFLICT` nothing was applied. Read `conflicts` and `live changes`; the
    owner's edits win. Adapt, then resubmit with the new revision.

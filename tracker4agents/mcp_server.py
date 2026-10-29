@@ -131,10 +131,13 @@ TOOLS = [
           lambda a: ["compare", a["first"], a["second"], "--output", a["output"], *_flags(a, {
               "mp3": "--mp3", "language": "--language", "seed": "--seed", "seconds": "--seconds",
               "equalize": "--equalize"})]),
-    _tool("feedback", "Record listening feedback in a project's metadata, written to a new project file.",
-          {"project": S, "text": S, "rating": I, "output": S, "version": S}, ["project", "text", "output"],
+    _tool("feedback", "Record listening feedback in a project's metadata, written to a new project file; pattern "
+          "(with row, rows, channel, channels) ties it to a block of the score.",
+          {"project": S, "text": S, "rating": I, "output": S, "version": S, "pattern": I, "row": I, "rows": I,
+           "channel": I, "channels": I}, ["project", "text", "output"],
           lambda a: ["feedback", a["project"], "--output", a["output"], *_flags(a, {
-              "text": "--text", "rating": "--rating", "version": "--version"})]),
+              "text": "--text", "rating": "--rating", "version": "--version", "pattern": "--pattern",
+              "row": "--row", "rows": "--rows", "channel": "--channel", "channels": "--channels"})]),
     _tool("migrate", "Rewrite a v1 project (or a MOD) as a compact v2 project.", {"source": S, "output": S},
           ["source", "output"], lambda a: ["migrate", a["source"], "--output", a["output"]]),
     _tool("samples_list", "Search the local sample library by text, tags, category and MOD compatibility.",
@@ -202,6 +205,25 @@ TOOLS = [
           (),
           lambda a: ["live", *_flags(a, {"session": "--session"}), "patch", *_ops_json(a), *_flags(a, {
               "label": "--label", "base_revision": "--base", "propose": "--propose", "author": "--author"})]),
+    _tool("live_comments", "Read the comments the owner (or an agent) attached to places in the live song: id, text, "
+          "place (pattern, row, rows, channel, channels; null = whole song), the cells as they were, status, replies.",
+          {"session": S, "status": _enum("open", "resolved", "all")}, (),
+          lambda a: ["live", *_flags(a, {"session": "--session"}), "comments", *_flags(a, {"status": "--status"})], True),
+    _tool("live_comment", "Attach a comment to a block of the live song (pattern with row, rows, channel, channels), "
+          "or to the whole song when pattern is omitted. Reply to an existing comment with live_reply instead.",
+          {"session": S, "text": S, "pattern": I, "row": I, "rows": I, "channel": I, "channels": I, "author": S},
+          ["text"],
+          lambda a: ["live", *_flags(a, {"session": "--session"}), "comment", a["text"], *_flags(a, {
+              "pattern": "--pattern", "row": "--row", "rows": "--rows", "channel": "--channel",
+              "channels": "--channels", "author": "--author"})]),
+    _tool("live_reply", "Reply to a comment in the live song; resolve=true also marks it resolved (say what you "
+          "changed), reopen=true reopens a resolved one.",
+          {"session": S, "id": S, "text": S, "resolve": B, "reopen": B, "author": S}, ["id"],
+          lambda a: (["live", *_flags(a, {"session": "--session"}), "resolve", a["id"],
+                      *_flags(a, {"text": "--text", "reopen": "--reopen", "author": "--author"})]
+                     if a.get("resolve") or a.get("reopen") else
+                     ["live", *_flags(a, {"session": "--session"}), "reply", a["id"], a.get("text", ""),
+                      *_flags(a, {"author": "--author"})])),
     _tool("live_sync", "Bring a project file into the live song: the differences go as undoable patches (samples, "
           "structure and order list, then one patch per changed pattern), each checked against the revision read "
           "first so the owner's newer edits stop the sync instead of being overwritten. Lists what patches cannot "

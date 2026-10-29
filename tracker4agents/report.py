@@ -816,8 +816,10 @@ def _text(value: object, label: str, maximum: int, required: bool = True) -> str
 
 
 def add_feedback(module: Module, text: str, rating: int | None = None, source: str = "owner",
-                 version_label: str | None = None, *, now: datetime | None = None) -> Module:
-    """Return a deep copy of the module with one listening note appended to metadata['feedback']."""
+                 version_label: str | None = None, *, now: datetime | None = None, place: dict | None = None) -> Module:
+    """Return a deep copy of the module with one listening note appended to metadata['feedback'].
+
+    `place` ({pattern, row, rows, channel, channels}) ties the note to a block of the score."""
     text = _text(text, "Feedback text", MAX_FEEDBACK_TEXT)
     source = _text(source, "Feedback source", 40)
     version = _text(version_label, "Version label", 80, required=False)
@@ -826,10 +828,13 @@ def add_feedback(module: Module, text: str, rating: int | None = None, source: s
     existing = module.metadata.get("feedback", [])
     if not isinstance(existing, list):
         raise ValidationError("metadata.feedback must be a list to append feedback.", "FEEDBACK_INVALID")
+    from .comments import place as checked_place
+    where = checked_place(module, place)
     moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(microsecond=0)
     result = copy.deepcopy(module)
-    result.metadata["feedback"] = [*copy.deepcopy(existing), {
-        "text": text, "rating": rating, "source": source, "version": version,
-        "recorded_at": moment.isoformat().replace("+00:00", "Z"),
-    }]
+    entry = {"text": text, "rating": rating, "source": source, "version": version,
+             "recorded_at": moment.isoformat().replace("+00:00", "Z")}
+    if where is not None:
+        entry["place"] = where
+    result.metadata["feedback"] = [*copy.deepcopy(existing), entry]
     return result

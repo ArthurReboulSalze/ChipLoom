@@ -183,6 +183,27 @@ def _request(kind: str, names: tuple = ()) -> Callable[[Call, dict], dict]:
     return call
 
 
+def _comments(c: Call, p: dict) -> dict:
+    return {"comments": c.session.comments(**_params(p, (), ("status",)))}
+
+
+def _comment(c: Call, p: dict) -> dict:
+    _params(p, ("text",), ("place",))
+    return {"comment": c.session.add_comment(p["text"], p.get("place"), WEB_AUTHOR)}
+
+
+def _reply(c: Call, p: dict) -> dict:
+    _params(p, ("id", "text"))
+    return {"comment": c.session.reply_comment(p["id"], p["text"], WEB_AUTHOR)}
+
+
+def _resolve(c: Call, p: dict) -> dict:
+    _params(p, ("id",), ("text", "reopen"))
+    if "reopen" in p and type(p["reopen"]) is not bool:
+        raise ValidationError("reopen: true or false expected.", "LIVE_PARAMS")
+    return {"comment": c.session.resolve_comment(p["id"], WEB_AUTHOR, p.get("text"), bool(p.get("reopen")))}
+
+
 def _render(c: Call, p: dict) -> Binary:
     _params(p, (), ("order", "row", "seconds", "audible", "proposal", "take"))
     if "proposal" in p and "take" in p:
@@ -225,4 +246,5 @@ WEB_API: dict[str, Callable[[Call, dict], Any]] = {
     "play": _request("play", ("order",)), "stop": _request("stop"),
     "select": _request("select", ("pattern", "row", "rows", "channel", "channels")),
     "render": _render, "devices": _devices,
+    "comments": _comments, "comment": _comment, "reply": _reply, "resolve": _resolve,
 }

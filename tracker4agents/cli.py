@@ -173,7 +173,9 @@ def record_feedback(args: argparse.Namespace) -> dict:
     output = args.output.resolve()
     if output == args.project.resolve() or output.suffix.lower() != ".json":
         raise ValidationError("Feedback is written to a new .json project, distinct from the input.", "OUTPUT_PATH")
-    module = add_feedback(load(args.project), args.text, args.rating, args.source, args.version)
+    place = None if args.pattern is None else {"pattern": args.pattern, "row": args.row, "rows": args.rows,
+                                               "channel": args.channel, "channels": args.channels}
+    module = add_feedback(load(args.project), args.text, args.rating, args.source, args.version, place=place)
     project.write_json(output, project.to_dict(module))
     return {"ok": True, "output": str(output), "feedback": module.metadata["feedback"][-1],
             "feedback_count": len(module.metadata["feedback"])}
@@ -446,6 +448,12 @@ def build_parser() -> argparse.ArgumentParser:
     feedback.add_argument("--rating", type=int, help="1 to 5.")
     feedback.add_argument("--source", default="owner", help="Who gave the feedback (default owner).")
     feedback.add_argument("--version", help="Version label the feedback refers to.")
+    feedback.add_argument("--pattern", type=int, help="Tie the note to a block: its pattern (then --row, --rows, "
+                                                       "--channel, --channels).")
+    feedback.add_argument("--row", type=int, default=0)
+    feedback.add_argument("--rows", type=int, default=1)
+    feedback.add_argument("--channel", type=int, default=0)
+    feedback.add_argument("--channels", type=int, default=1)
     feedback.add_argument("--output", type=Path, required=True)
     convert_parser = commands.add_parser(
         "convert", help="Convert between MOD and XM (a MOD to XM keeps notes, effects and PCM; XM to MOD only when it fits).")

@@ -56,6 +56,25 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     take.add_argument("path", type=Path)
     take.add_argument("--label", required=True)
     command("takes", "List takes.")
+    comments = command("comments", "Comments attached to places in the score (open ones by default).")
+    comments.add_argument("--status", choices=("open", "resolved", "all"), default="open")
+    comment = command("comment", "Attach a comment to a block of the score (or to the whole song).")
+    comment.add_argument("text")
+    comment.add_argument("--pattern", type=int, help="Pattern of the block; omit for the whole song.")
+    comment.add_argument("--row", type=int, default=0)
+    comment.add_argument("--rows", type=int, default=1)
+    comment.add_argument("--channel", type=int, default=0)
+    comment.add_argument("--channels", type=int, default=1)
+    comment.add_argument("--author", default="agent", help="Who is writing (default: agent).")
+    reply = command("reply", "Reply to a comment.")
+    reply.add_argument("id", help="Comment id such as c1.")
+    reply.add_argument("text")
+    reply.add_argument("--author", default="agent")
+    resolve = command("resolve", "Mark a comment resolved (or --reopen it), with an optional closing reply.")
+    resolve.add_argument("id")
+    resolve.add_argument("--text", help="A closing reply, such as what you changed.")
+    resolve.add_argument("--reopen", action="store_true")
+    resolve.add_argument("--author", default="agent")
     open_ = command("open", "Ask the window to open a file or a take.")
     open_.add_argument("path", nargs="?", type=Path)
     open_.add_argument("--take", help="Take id such as t1.")
@@ -194,6 +213,17 @@ def run(args: argparse.Namespace, stop: threading.Event | None = None,
         return client.call("take", path=str(args.path.resolve()), label=args.label)
     if name == "takes":
         return client.call("takes")
+    if name == "comments":
+        return client.call("comments", status=args.status)
+    if name == "comment":
+        place = None if args.pattern is None else {"pattern": args.pattern, "row": args.row, "rows": args.rows,
+                                                   "channel": args.channel, "channels": args.channels}
+        return client.call("comment", text=args.text, place=place, author=args.author)
+    if name == "reply":
+        return client.call("reply", id=args.id, text=args.text, author=args.author)
+    if name == "resolve":
+        return client.call("resolve", id=args.id, text=args.text, reopen=True if args.reopen else None,
+                           author=args.author)
     if name == "open":
         if (args.path is None) == (args.take is None):
             raise ValidationError("Give exactly one of a PATH or --take ID.", "LIVE_OPEN")
