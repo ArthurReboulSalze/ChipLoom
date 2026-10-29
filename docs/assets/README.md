@@ -1,5 +1,7 @@
 # ChipLoom visual assets
 
+`chiploom-explainer-card.svg` sits above the Copper Skies card in the README: the last frame of the owner's explainer video (`docs/listen/media/chiploom-explainer.mp4`, 1:42, re-encoded at 720p to stay under 10 MB) with a play button. It links to the video in the listening room, because GitHub does not play a video stored in the repository inside a README.
+
 `copper-skies-card.svg` is the listening card at the top of the README: the Copper Skies title, a play button and the song's waveform (120 RMS bars of the libopenmpt render) with an SMIL playhead that crosses it in the song's 1:42. It links to the listening room, because GitHub does not play audio inside a README. It is generated text, not a capture.
 
 `chiploom-desktop-08.png`, `chiploom-agent-tab.png` and `chiploom-browser-studio.png` are the current README screenshots (version 0.8.1). The two window captures were rendered by Qt at 1680×1000 from the Windows window (Violet theme, English controls, Segoe UI); the browser studio was captured at 1440×900 by headless Microsoft Edge from `chiploom live serve --web`. They show Pixel Rush arranged on eight channels for the screenshots (channels 5 to 8 repeat channels 1 to 4 three rows later at volume 20), with an agent edit, a proposal and a take sent through the live API. Only the published example song appears.

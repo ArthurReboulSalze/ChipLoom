@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BLOCKED_PARTS = {".venv", ".tools", "__pycache__", ".playwright-mcp", "exports", "private"}
-BLOCKED_EXTENSIONS = {".mod", ".xm", ".it", ".zip", ".wav", ".mp3", ".pcm", ".dll", ".exe", ".pyc"}
+BLOCKED_EXTENSIONS = {".mod", ".xm", ".it", ".zip", ".wav", ".mp3", ".mp4", ".mov", ".webm", ".pcm", ".dll", ".exe", ".pyc"}
 BLOCKED_NAMES = {"library.json", "provenance.json"}
 # Owner-approved original compositions only, pinned to the reviewed bytes.
 PUBLIC_DEMOS = {
@@ -17,6 +17,7 @@ PUBLIC_DEMOS = {
     "docs/listen/media/voltage_odyssey_v2.mod": "a4822a56be18d66145dac91706a096e6efbfcfa97b9e5a392c3d79f128234197",
     "docs/listen/media/voltage_odyssey_v2.mp3": "2b2d18c7370e5e42877edf87c5c8eae7f5b496bb347cc48bd3563f83b9ada4dc",
     "docs/listen/media/copper_skies.xm": "77547086ed2d94f627ee1a8be54c3fda3d8f19c794064f14ac2b2ea704a78247",
+    "docs/listen/media/chiploom-explainer.mp4": "592813e2de9e7f421aa23cd79d04d2f9f98b8f173140676784f8ada2eb8afb1b",
     "docs/listen/media/copper_skies.mp3": "f5f931436c10b232ca18af1f9c953051df096266f5101c03588d19b299b407d1",
 }
 SECRET = re.compile(rb"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")

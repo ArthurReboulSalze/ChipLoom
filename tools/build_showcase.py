@@ -15,7 +15,9 @@ def build(output: Path) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     files = {'docs/listen/index.html': 'index.html',
              'docs/assets/chiploom-logo.png': 'assets/chiploom-logo.png',
-             'docs/listen/media/manifest.json': 'media/manifest.json'}
+             'docs/listen/media/manifest.json': 'media/manifest.json',
+             'docs/listen/media/chiploom-explainer.mp4': 'media/chiploom-explainer.mp4',
+             'docs/listen/media/chiploom-explainer.jpg': 'media/chiploom-explainer.jpg'}
     for stem, module in (('pixel_rush', '.mod'), ('voltage_odyssey_v2', '.mod'), ('copper_skies', '.xm')):
         for suffix in (module, '.mp3', '.project.json'):
             files[f'docs/listen/media/{stem}{suffix}'] = f'media/{stem}{suffix}'

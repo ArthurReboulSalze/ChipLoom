@@ -25,6 +25,12 @@
 </p>
 
 <p align="center">
+  <a href="https://arthurreboulsalze.github.io/ChipLoom/#explainer"><img src="docs/assets/chiploom-explainer-card.svg" alt="What is ChipLoom? Watch the 1:42 explainer video" width="820"></a>
+  <br>
+  <sub><a href="https://arthurreboulsalze.github.io/ChipLoom/#explainer">▶ Watch the explainer</a> · <a href="docs/listen/media/chiploom-explainer.mp4">MP4, 9.6 MB</a></sub>
+</p>
+
+<p align="center">
   <a href="https://arthurreboulsalze.github.io/ChipLoom/#copper-skies"><img src="docs/assets/copper-skies-card.svg" alt="Copper Skies, the new ten-channel XM demo: play it in the listening room" width="820"></a>
   <br>
   <sub><a href="https://arthurreboulsalze.github.io/ChipLoom/#copper-skies">▶ Play Copper Skies</a> · <a href="docs/listen/media/copper_skies.xm">XM</a> · <a href="docs/listen/media/copper_skies.mp3">MP3</a> · <a href="docs/listen/media/copper_skies.project.json">editable project</a> · <a href="tools/compose_copper_skies.py">the script that wrote it</a></sub>

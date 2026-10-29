@@ -61,5 +61,22 @@
         }
       ]
     }
+  ],
+  "videos": [
+    {
+      "title": "ChipLoom explainer",
+      "files": [
+        {
+          "name": "chiploom-explainer.mp4",
+          "sha256": "592813e2de9e7f421aa23cd79d04d2f9f98b8f173140676784f8ada2eb8afb1b",
+          "bytes": 9564018
+        },
+        {
+          "name": "chiploom-explainer.jpg",
+          "sha256": "4910dd836c0721e8d18d82a239c1925162b772e79f80725c0ddbf45ff20e65f5",
+          "bytes": 65445
+        }
+      ]
+    }
   ]
 }
