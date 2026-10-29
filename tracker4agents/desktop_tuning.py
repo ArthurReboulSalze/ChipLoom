@@ -20,7 +20,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from . import sample_intake
-from .model import NOTE_TO_PERIOD, NOTES, XM_KEY_OFF, XM_NOTES, Cell, Sample, ValidationError
+from .model import NOTE_TO_PERIOD, NOTES, XM_KEY_OFF, XM_NOTES, Cell, Sample, ValidationError, playback_plan
 from .sample_library import playback_rate
 
 STEPS = (-12, -1, 1, 12)
@@ -36,12 +36,25 @@ def retune_between(slot_sample: Sample, fmt: str, entry_sample: Sample, origin: 
 
 
 def transpose_slot_notes(module, slot: int, semitones: int) -> int:
-    """Move every note that plays `slot` by `semitones`, in place; returns how many cells moved."""
+    """Move every note that plays `slot` by `semitones`, in place; returns how many cells moved. A note without a
+    sample number plays its channel's last one, so the channels are followed along the playback timeline; patterns
+    the timeline never reaches count only the notes that name the slot."""
     xm = module.format == "xm"
     moved = 0
-    for pattern in module.patterns:
+    playing: set[tuple[int, int, int]] = set()
+    current = [0] * module.channels
+    reached = set()
+    for item in playback_plan(module)["timeline"]:
+        reached.add(item["pattern"])
+        for channel in range(module.channels):
+            value = module.patterns[item["pattern"]].get(item["row"], channel)
+            if value.sample:
+                current[channel] = value.sample
+            if value.period and current[channel] == slot:
+                playing.add((item["pattern"], item["row"], channel))
+    for index, pattern in enumerate(module.patterns):
         for (row, channel), old in list(pattern.cells.items()):
-            if old.sample != slot:
+            if (index, row, channel) not in playing and not (index not in reached and old.sample == slot):
                 continue
             if xm:
                 if not old.period or old.period == XM_KEY_OFF:

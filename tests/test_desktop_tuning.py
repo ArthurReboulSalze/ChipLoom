@@ -52,6 +52,23 @@ class TransposeSlotNotesTests(unittest.TestCase):
         self.assertEqual(transpose_slot_notes(xm_song, 3, -12), 1)
         self.assertEqual(xm_song.patterns[0].get(1, 1).note, "F-3")
 
+    def test_a_note_without_a_sample_number_follows_its_channel(self):
+        from tracker4agents.model import Module, Pattern, Sample, cell
+        loop = (40,) * 16 + (-40,) * 16
+        first, second = Pattern(), Pattern()
+        first.put(0, 0, cell("C-2", 1))
+        first.put(4, 0, cell("E-2", 0))          # still slot 1
+        first.put(8, 0, cell("G-2", 2))
+        first.put(12, 0, cell("A-2", 0))         # now slot 2
+        second.put(0, 0, cell("D-2", 0))         # pattern 1 follows pattern 0: slot 2 is still playing
+        second.put(4, 0, cell("F-2", 1))
+        second.put(8, 0, cell("B-2", 0))         # slot 1 again
+        module = Module("Follow", [Sample("a", loop, 40, 0, 0, 32), Sample("b", loop, 40, 0, 0, 32)],
+                        [first, second], [0, 1])
+        self.assertEqual(transpose_slot_notes(module, 1, 2), 4)
+        self.assertEqual([module.patterns[0].get(row, 0).note for row in (0, 4, 8, 12)], ["D-2", "F#2", "G-2", "A-2"])
+        self.assertEqual([module.patterns[1].get(row, 0).note for row in (0, 4, 8)], ["D-2", "G-2", "C#3"])
+
     def test_retune_between_reads_playback_rates(self):
         entry = Sample("Entry", (0, 0, 60, -60), 64)
         found = retune_between(Sample("Slot", (0, 0, 60, -60), 64, 4), "mod", entry, "mod")   # ProTracker's +4 period
