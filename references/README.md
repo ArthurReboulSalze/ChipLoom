@@ -5,6 +5,7 @@ These reports document musical construction for agents to consult while composin
 - [Initial two references](ANALYSIS.md): repetition, small samples and in-note sample changes used as inspiration for Pixel Rush.
 - [Fifteen-module selection](SELECTION.md): a per-module study, with arrangement, channel variation, effects and implications for the importer.
 - [Machine-readable selection report](selection-analysis.json): neutral reference IDs, aggregate measurements and strict editing compatibility.
+- [Articulation norms](NORMS.md) and [norms.json](norms.json): arpeggio runs, note lengths and endings, rests, density and tempo measured with `chiploom norms` on the owner's 49-module MOD and XM selection; durations and proportions only.
 
 The selection has 13 four-channel and 2 two-channel modules, 101 occupied sample slots and 33,330 PCM bytes in total. Seventy occupied slots are at most 128 bytes. Six modules pass the current strict editor profile; all fifteen were structurally analyzed without modifying the supplied archive.
 

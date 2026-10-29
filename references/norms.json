@@ -1,0 +1,462 @@
+{
+  "schema": "chiploom.norms.v1",
+  "selection": "The owner's local selection of tracker modules (MOD and XM), measured with `chiploom norms`; the modules themselves are not published.",
+  "all": {
+    "schema": "chiploom.norms.v1",
+    "modules": {
+      "measured": 49,
+      "skipped": {
+        "NOTE_RANGE": 1,
+        "EFFECT_UNSUPPORTED": 2,
+        "IT_UNSUPPORTED": 2
+      },
+      "formats": {
+        "mod": 12,
+        "xm": 37
+      },
+      "channels": {
+        "2": 2,
+        "3": 1,
+        "4": 24,
+        "5": 1,
+        "6": 1,
+        "8": 8,
+        "10": 3,
+        "12": 4,
+        "16": 2,
+        "18": 1,
+        "22": 1,
+        "32": 1
+      }
+    },
+    "arpeggio": {
+      "run_rows": {
+        "count": 6467,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 1.0,
+        "p75": 2.0,
+        "p90": 4.0
+      },
+      "run_seconds": {
+        "count": 6467,
+        "p10": 0.067,
+        "p25": 0.08,
+        "p50": 0.101,
+        "p75": 0.16,
+        "p90": 0.3103
+      },
+      "run_ticks": {
+        "count": 6467,
+        "p10": 3.0,
+        "p25": 3.0,
+        "p50": 5.0,
+        "p75": 8.0,
+        "p90": 16.0
+      },
+      "run_rows_module_median": {
+        "count": 36,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 2.0,
+        "p75": 16.0,
+        "p90": 16.0
+      },
+      "modules_with_arpeggios": 36,
+      "channel_note_share": {
+        "count": 46,
+        "p10": 0.1623,
+        "p25": 0.2492,
+        "p50": 0.5654,
+        "p75": 0.9855,
+        "p90": 1.0
+      }
+    },
+    "notes": {
+      "seconds": {
+        "count": 114408,
+        "p10": 0.08,
+        "p25": 0.1,
+        "p50": 0.12,
+        "p75": 0.1754,
+        "p90": 0.32
+      },
+      "seconds_module_median": {
+        "count": 49,
+        "p10": 0.08,
+        "p25": 0.1,
+        "p50": 0.12,
+        "p75": 0.16,
+        "p90": 0.24
+      },
+      "endings_module_median": {
+        "next_note": 0.9411,
+        "key_off": 0.0,
+        "cut": 0.005,
+        "song_end": 0.0026
+      }
+    },
+    "channels": {
+      "sounding_fraction": {
+        "count": 349,
+        "p10": 0.0938,
+        "p25": 0.3086,
+        "p50": 0.5833,
+        "p75": 0.8744,
+        "p90": 1.0
+      },
+      "longest_run_seconds": {
+        "count": 349,
+        "p10": 0.303,
+        "p25": 1.0965,
+        "p50": 12.64,
+        "p75": 40.1575,
+        "p90": 78.8597
+      },
+      "rests_per_minute": {
+        "count": 349,
+        "p10": 0.0,
+        "p25": 1.172,
+        "p50": 12.5,
+        "p75": 64.082,
+        "p90": 162.4114
+      },
+      "notes_per_second": {
+        "count": 349,
+        "p10": 0.1527,
+        "p25": 0.599,
+        "p50": 2.2498,
+        "p75": 4.788,
+        "p90": 6.9949
+      }
+    },
+    "crowded_sustain_seconds": {
+      "count": 49,
+      "p10": 0.0,
+      "p25": 0.205,
+      "p50": 0.5,
+      "p75": 9.92,
+      "p90": 26.56
+    },
+    "tempo": {
+      "speed": {
+        "count": 49,
+        "p10": 3.0,
+        "p25": 4.0,
+        "p50": 4.0,
+        "p75": 6.0,
+        "p90": 6.0
+      },
+      "bpm": {
+        "count": 49,
+        "p10": 122.8,
+        "p25": 125.0,
+        "p50": 125.0,
+        "p75": 125.0,
+        "p90": 131.4
+      }
+    },
+    "method": "Measured along each module's first playback cycle (as report). An arpeggio run is the rows (and ticks: rows x speed, comparable across speeds) one note keeps an 0xy effect before a new note, a key off or a cut (C00, XM volume 10, ECx); a note lasts until the next note, a key off or a cut on its channel (one-shot sample ends and envelopes are not modelled here); sounding, rests and the crowded-sustain stretch come from report. Percentiles pool every run, note or channel of the selection; the *_module_median lines take one median per module, so long songs do not outweigh short ones. arpeggio.channel_note_share covers channels where at least 10% of note starts carry an arpeggio.",
+    "privacy": "Aggregate durations and proportions only: no file names, titles, notes, sequences or patterns."
+  },
+  "mod": {
+    "schema": "chiploom.norms.v1",
+    "modules": {
+      "measured": 12,
+      "skipped": {
+        "NOTE_RANGE": 1,
+        "EFFECT_UNSUPPORTED": 2
+      },
+      "formats": {
+        "mod": 12
+      },
+      "channels": {
+        "2": 2,
+        "4": 10
+      }
+    },
+    "arpeggio": {
+      "run_rows": {
+        "count": 633,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 1.0,
+        "p75": 1.0,
+        "p90": 3.0
+      },
+      "run_seconds": {
+        "count": 633,
+        "p10": 0.06,
+        "p25": 0.1,
+        "p50": 0.1,
+        "p75": 0.1,
+        "p90": 0.3
+      },
+      "run_ticks": {
+        "count": 633,
+        "p10": 3.0,
+        "p25": 5.0,
+        "p50": 5.0,
+        "p75": 5.0,
+        "p90": 15.0
+      },
+      "run_rows_module_median": {
+        "count": 10,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 3.0,
+        "p75": 16.0,
+        "p90": 17.6
+      },
+      "modules_with_arpeggios": 10,
+      "channel_note_share": {
+        "count": 11,
+        "p10": 0.25,
+        "p25": 0.3125,
+        "p50": 0.8545,
+        "p75": 1.0,
+        "p90": 1.0
+      }
+    },
+    "notes": {
+      "seconds": {
+        "count": 5863,
+        "p10": 0.08,
+        "p25": 0.1,
+        "p50": 0.1,
+        "p75": 0.16,
+        "p90": 0.24
+      },
+      "seconds_module_median": {
+        "count": 12,
+        "p10": 0.082,
+        "p25": 0.1,
+        "p50": 0.11,
+        "p75": 0.18,
+        "p90": 0.24
+      },
+      "endings_module_median": {
+        "next_note": 0.9869,
+        "key_off": 0.0,
+        "cut": 0.0,
+        "song_end": 0.0075
+      }
+    },
+    "channels": {
+      "sounding_fraction": {
+        "count": 43,
+        "p10": 0.5315,
+        "p25": 0.8584,
+        "p50": 1.0,
+        "p75": 1.0,
+        "p90": 1.0
+      },
+      "longest_run_seconds": {
+        "count": 43,
+        "p10": 0.5731,
+        "p25": 8.8,
+        "p50": 20.48,
+        "p75": 25.8,
+        "p90": 31.744
+      },
+      "rests_per_minute": {
+        "count": 43,
+        "p10": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 3.741,
+        "p90": 193.7496
+      },
+      "notes_per_second": {
+        "count": 43,
+        "p10": 0.6901,
+        "p25": 2.0833,
+        "p50": 4.1667,
+        "p75": 8.2814,
+        "p90": 10.0
+      }
+    },
+    "crowded_sustain_seconds": {
+      "count": 12,
+      "p10": 0.0,
+      "p25": 0.0302,
+      "p50": 0.3834,
+      "p75": 3.0324,
+      "p90": 20.972
+    },
+    "tempo": {
+      "speed": {
+        "count": 12,
+        "p10": 4.0,
+        "p25": 4.0,
+        "p50": 5.0,
+        "p75": 5.25,
+        "p90": 7.8
+      },
+      "bpm": {
+        "count": 12,
+        "p10": 125.0,
+        "p25": 125.0,
+        "p50": 125.0,
+        "p75": 125.0,
+        "p90": 125.0
+      }
+    },
+    "method": "Measured along each module's first playback cycle (as report). An arpeggio run is the rows (and ticks: rows x speed, comparable across speeds) one note keeps an 0xy effect before a new note, a key off or a cut (C00, XM volume 10, ECx); a note lasts until the next note, a key off or a cut on its channel (one-shot sample ends and envelopes are not modelled here); sounding, rests and the crowded-sustain stretch come from report. Percentiles pool every run, note or channel of the selection; the *_module_median lines take one median per module, so long songs do not outweigh short ones. arpeggio.channel_note_share covers channels where at least 10% of note starts carry an arpeggio.",
+    "privacy": "Aggregate durations and proportions only: no file names, titles, notes, sequences or patterns."
+  },
+  "xm": {
+    "schema": "chiploom.norms.v1",
+    "modules": {
+      "measured": 37,
+      "skipped": {
+        "IT_UNSUPPORTED": 2
+      },
+      "formats": {
+        "xm": 37
+      },
+      "channels": {
+        "3": 1,
+        "4": 14,
+        "5": 1,
+        "6": 1,
+        "8": 8,
+        "10": 3,
+        "12": 4,
+        "16": 2,
+        "18": 1,
+        "22": 1,
+        "32": 1
+      }
+    },
+    "arpeggio": {
+      "run_rows": {
+        "count": 5834,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 1.0,
+        "p75": 2.0,
+        "p90": 4.0
+      },
+      "run_seconds": {
+        "count": 5834,
+        "p10": 0.067,
+        "p25": 0.08,
+        "p50": 0.1027,
+        "p75": 0.1772,
+        "p90": 0.3103
+      },
+      "run_ticks": {
+        "count": 5834,
+        "p10": 3.0,
+        "p25": 3.0,
+        "p50": 5.0,
+        "p75": 9.0,
+        "p90": 16.0
+      },
+      "run_rows_module_median": {
+        "count": 26,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p50": 2.0,
+        "p75": 4.0,
+        "p90": 16.0
+      },
+      "modules_with_arpeggios": 26,
+      "channel_note_share": {
+        "count": 35,
+        "p10": 0.1614,
+        "p25": 0.246,
+        "p50": 0.5594,
+        "p75": 0.9533,
+        "p90": 1.0
+      }
+    },
+    "notes": {
+      "seconds": {
+        "count": 108545,
+        "p10": 0.08,
+        "p25": 0.1,
+        "p50": 0.12,
+        "p75": 0.1754,
+        "p90": 0.32
+      },
+      "seconds_module_median": {
+        "count": 37,
+        "p10": 0.08,
+        "p25": 0.1095,
+        "p50": 0.1263,
+        "p75": 0.16,
+        "p90": 0.24
+      },
+      "endings_module_median": {
+        "next_note": 0.8748,
+        "key_off": 0.0029,
+        "cut": 0.0287,
+        "song_end": 0.002
+      }
+    },
+    "channels": {
+      "sounding_fraction": {
+        "count": 306,
+        "p10": 0.0833,
+        "p25": 0.2509,
+        "p50": 0.5427,
+        "p75": 0.81,
+        "p90": 0.9787
+      },
+      "longest_run_seconds": {
+        "count": 306,
+        "p10": 0.2456,
+        "p25": 1.015,
+        "p50": 10.75,
+        "p75": 49.885,
+        "p90": 84.3
+      },
+      "rests_per_minute": {
+        "count": 306,
+        "p10": 0.1395,
+        "p25": 1.8902,
+        "p50": 16.7535,
+        "p75": 67.8758,
+        "p90": 161.9535
+      },
+      "notes_per_second": {
+        "count": 306,
+        "p10": 0.1468,
+        "p25": 0.4313,
+        "p50": 2.1494,
+        "p75": 4.4385,
+        "p90": 6.5374
+      }
+    },
+    "crowded_sustain_seconds": {
+      "count": 37,
+      "p10": 0.0263,
+      "p25": 0.24,
+      "p50": 0.5544,
+      "p75": 12.2759,
+      "p90": 31.9972
+    },
+    "tempo": {
+      "speed": {
+        "count": 37,
+        "p10": 3.0,
+        "p25": 3.0,
+        "p50": 4.0,
+        "p75": 6.0,
+        "p90": 6.0
+      },
+      "bpm": {
+        "count": 37,
+        "p10": 113.2,
+        "p25": 125.0,
+        "p50": 125.0,
+        "p75": 125.0,
+        "p90": 138.2
+      }
+    },
+    "method": "Measured along each module's first playback cycle (as report). An arpeggio run is the rows (and ticks: rows x speed, comparable across speeds) one note keeps an 0xy effect before a new note, a key off or a cut (C00, XM volume 10, ECx); a note lasts until the next note, a key off or a cut on its channel (one-shot sample ends and envelopes are not modelled here); sounding, rests and the crowded-sustain stretch come from report. Percentiles pool every run, note or channel of the selection; the *_module_median lines take one median per module, so long songs do not outweigh short ones. arpeggio.channel_note_share covers channels where at least 10% of note starts carry an arpeggio.",
+    "privacy": "Aggregate durations and proportions only: no file names, titles, notes, sequences or patterns."
+  }
+}

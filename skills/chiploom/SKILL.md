@@ -77,9 +77,13 @@ music made with that PCM local unless the user explicitly requests publication.
    judgments and actual listening. Revise from the user's feedback.
 
 **Play arpeggios on the rhythm.** A tracker arpeggio (`037`, `047`, any `0xy`) is struck,
-not held: retrigger the chord on a grid (eighths or sixteenths), let each hit play two or
-three rows, then drop it to a quiet tail (volume about 6/64: `C06` in a MOD, `16` in an XM
-volume column) or cut it, and leave the last row of the bar silent. Shape the hits with
+not held: retrigger the chord on a grid (eighths or sixteenths). In the owner's 49 reference
+modules ([references/NORMS.md](../../references/NORMS.md)) a note keeps its arpeggio for 1 row
+in the median, 2 rows at p75 and 4 at p90 (about 0.1 to 0.3 s), and 94% of notes end because
+the next note comes, not with a cut: strike again every row or two, let the sample's decay
+or an envelope do the rest, and use a quiet tail (volume about 6/64: `C06` in a MOD, `16`
+in an XM volume column) or a cut only where you want a gap; leave the last row of the bar
+silent when the groove needs air. Shape the hits with
 accents (a 3-3-2 groove on the eighths works well). Never hold one note with `0xy` on
 every row for bars: the constant buzz tires the ear and covers the lead. Channel 2 of the
 Pixel Rush example shows the articulation (a hit, two rows, a `C0E` tail, a `C00` cut).
@@ -195,6 +199,13 @@ are in [references/live.md](references/live.md). The procedure:
    under `not_synced` what needs a reload.
 6. Announce a finished alternative with `live take FILE --label "..."`.
 7. `live save --output FILE` writes a copy; the owner's window keeps its own file.
+
+**Measured references.** `references/NORMS.md` holds articulation norms measured on the
+owner's selection: arpeggio runs, note lengths and how notes end, how much each channel
+sounds and rests, note density and tempo (speed 4, 125 BPM is typical). Compare a draft
+with them (`norms` on your own file gives the same measures) and depart from them on
+purpose. `chiploom norms SOURCES` measures another selection; it keeps durations and
+proportions only, never notes, so it cannot clone a reference.
 
 ## Deliver
 
