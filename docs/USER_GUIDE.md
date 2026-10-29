@@ -247,7 +247,7 @@ python -m tracker4agents preview examples/pixel_rush.project.json --output expor
 
 Open `exports/pixel-review/preview.html`. The folder also contains the MOD, the project, the WAV, the optional MP3, the samples and a report. Choose a new folder for each revision; to share, copy the whole folder. Without `--language fr`, the HTML controls are in English. The preview works without Qt and complements the native window.
 
-`compare A B --output folder` creates a blind A/B listening page (X and Y in random order). It is an informal test: the answer is in `comparison.json` and, encoded, in the page, and the volume is not equalized. The page is listen-only.
+`compare A B --output folder` creates a blind A/B listening page (X and Y in random order). It is an informal test: the answer is in `answer_key.json`, in `comparison.json` and, encoded, in the page, and the command prints it only with `--show-answer`. The volumes of the two versions are not equalized. The page is listen-only.
 
 If your browser restricts audio from local pages, serve the folder with a local server:
 
@@ -295,7 +295,7 @@ chiploom live serve exports/song/project.json --web --lan
 
 ## Planning, editing and measuring with an agent
 
-The starting file is `examples/first_light.project.json`. An agent can read and edit that JSON, then use these commands:
+The starting file is `examples/first_light.project.json`. A new song starts from `chiploom new --output exports/song/project.json` (`--channels 2` to `32`, `--format xm` with `--rows` for an XM), or from `chiploom synth palette` for a song made only with created samples. An agent can read and edit that JSON, then use these commands:
 
 ```powershell
 python -m tracker4agents validate examples/first_light.project.json
@@ -309,6 +309,8 @@ For a render with libxmp:
 ```powershell
 python -m tracker4agents render exports/custom.mod --engine xmp --output exports/custom.libxmp.wav
 ```
+
+Both engines render at the same level: libxmp's volume is set to libopenmpt's for the module's format and channel count. libopenmpt plays an XM about 6 dB below a four-channel MOD and lowers the level as channels are added, so compare loudness between songs of the same format and width.
 
 Successful commands return JSON. Data and render errors write an object `{"ok": false, "error", "code", "message"}` to stderr (with `message_fr` for the original French text of translated core diagnostics) and exit with code 2. Scripts must rely on `code`, never on the wording; the list of codes is in the [CLI reference](CLI.md#error-contract-and-codes). An export validates the data before replacing its destination; a render uses a temporary file before replacing its output.
 

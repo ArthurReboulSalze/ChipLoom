@@ -120,6 +120,9 @@ Open the checkout in Codex, or give Hermes terminal and file access to it. Ask t
 # Plan first: eight full orders at speed 6 / 160 BPM = 48 seconds
 python -m tracker4agents estimate --orders 8 --speed 6 --bpm 160
 
+# Start a blank project: a MOD with 2 to 32 channels, or an XM with --format xm --rows 48
+python -m tracker4agents new --output exports/my-song/project.json --channels 4 --bpm 160 --patterns 4
+
 # Read a pattern as tracker text, then validate before exporting
 python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --grid --rows 8
 python -m tracker4agents validate exports/my-song/project.json --report
@@ -168,7 +171,8 @@ and role tags are editable suggestions that need listening; IDs differ between b
 In the window, open the bottom **Sample library** tab, choose the bank **Folder**,
 then search by name, ID or tag and filter by type, role or MOD compatibility. Select
 a note and **Listen**, then **Add to song**. Insertion supports undo/redo; replacing
-an occupied slot requires an explicit choice. The chosen bank folder is remembered
+an occupied slot requires an explicit choice. An XM song takes the sample converted
+as `convert` does, in up to 128 instruments. The chosen bank folder is remembered
 locally. Projects and exported MODs embed their samples and reopen without the bank.
 
 The bank, original labels, private provenance, source lists, auditions and music made
@@ -183,6 +187,8 @@ Library samples are the default. On request, an agent can make a song from sampl
 python -m tracker4agents synth palette --output exports/synth-song/project.json --title "Synth Song"
 python -m tracker4agents validate exports/synth-song/project.json --sample-source synthesized
 ```
+
+The palette also starts wider songs: `--channels 8` for an eight-channel MOD, `--format xm --channels 6` for an XM. Converting a synthesized MOD to XM keeps its recipes, so it stays synthesized.
 
 [Synth commands →](docs/CLI.md) · [Agent guide →](docs/AGENT_GUIDE.md)
 
@@ -206,11 +212,12 @@ Without the window, `chiploom live serve SONG.json` hosts the same session headl
 
 ## New in 0.8
 
+- **0.8.3, XM and wide songs for agents:** `chiploom new` starts a blank MOD with 2 to 32 channels or an XM. Library samples and created sounds go into an XM from the CLI, the MCP adapter and the window. New patch operations (`pattern_length`, `xm_header`) cover what only an XM has. libxmp now renders at libopenmpt's level, so changing engines no longer changes the volume. These and other fixes come from a ten-song test run by agents. [Changelog →](CHANGELOG.md)
 - **Sound workshop:** shape the song's samples in the window (loop, trim, fades, gain, volume, levels against your bank), create sounds from recipes or by drawing, and save instruments, each as one undoable step. [User guide →](docs/USER_GUIDE.md#sound-workshop)
 - **Keyboard audition:** the piano keys play the current sound, a library entry, a recipe or an instrument, over the song when it plays. [User guide →](docs/USER_GUIDE.md#keyboard-audition)
 - **Browser studio:** a tablet or second screen edits the same live session, opened from **Agent → Open in a browser…** or by pasting the printed address, with no code to type. It stays on this computer unless you allow your local network (plain HTTP). [User guide →](docs/USER_GUIDE.md#open-in-a-browser)
 - **More formats:** MOD with 2 to 32 channels, the `E6x` and `EEx` effects, a first FastTracker 2 XM profile and `convert` between MOD and XM in the command line. [CLI reference →](docs/CLI.md#multi-channel-mod-and-xm)
-- **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 45 MCP tools. [Changelog →](CHANGELOG.md)
+- **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 46 MCP tools. [Changelog →](CHANGELOG.md)
 - **Standalone builds:** each GitHub release has a Windows `.zip` and, since 0.8.1, a Linux x86-64 `.tar.gz`, with no Python to install.
 
 <p align="center">
@@ -221,7 +228,7 @@ Without the window, `chiploom live serve SONG.json` hosts the same session headl
 
 ## Measure, compare, give feedback
 
-`report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. The A/B page is a casual test: its answer key sits in a file next to it, and loudness is not equalized.
+`report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. `report` leaves percussion out of its key estimate. The A/B page is a casual test: its answer key sits in `answer_key.json` next to it (printed only with `--show-answer`), and the loudness of the two versions is not equalized.
 
 ```sh
 python -m tracker4agents compare exports/my-song/v1.project.json exports/my-song/v2.project.json --output exports/my-song-compare --seconds 30 --mp3
@@ -236,7 +243,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 - **Work with blocks:** **Ctrl+C / X / V** copy, cut and paste. The clipboard holds the same grid text the agent prints, so you can paste what the agent wrote. **Alt+arrows** move the block, **Ctrl+↑/↓** transpose by a semitone and **Ctrl+Shift+↑/↓** by an octave.
 - **Edit the arrangement:** the order editor offers Insert, New, Duplicate, Remove, ↑/↓ and Rename….
 - **Follow outside changes:** when the file changes on disk, the window reloads it. Without local edits that is one undoable "Agent changes" step; with unsaved edits it does a three-way merge, lists conflicts in the status bar and keeps the file's version. Changed cells flash. **F5** still reloads by hand.
-- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt, so small differences between the two engines are possible. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows and Linux builds bundle libxmp.
+- **Hear edits at once:** with libxmp available the window plays in real time, so edits, mutes and solos are heard without re-rendering. Exports and listening copies still render with FFmpeg and libopenmpt. libxmp is set to libopenmpt's level for each format and channel count, so only small differences in sound remain between the two engines. Real-time audio runs in its own thread, so moving the window or opening a dialog does not interrupt it; **Playback → Audio buffer** sets the latency (80, 150, 300 or 600 ms, default 150). Without libxmp the window falls back to rendered playback. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, install `libxmp4`. The standalone Windows and Linux builds bundle libxmp.
 
 **HTML:** `preview` creates a portable folder with the MOD, project, audio, samples and pattern view; `compare` creates a blind A/B page. Both are listen-only: editing in a browser goes through the [browser studio](docs/USER_GUIDE.md#browser-studio) of a live session. Copy the whole folder to share it. Use `--language fr` for French controls. If local audio is restricted, serve the bundle with `python tools/serve_previews.py --directory exports/my-song-review --port 8765`. The optional local server binds to loopback. The public demo players are a separate static GitHub Pages site.
 

@@ -30,6 +30,8 @@ Version 0.8 groups what was proposed after 0.7 as four releases (0.8 to 1.0).
 | Wider formats | `E6x` pattern loops and `EEx` pattern delays, more four-channel MOD variants, MOD with 2 to 32 channels, and a first XM profile with its own validation, all editable in the window |
 | Playing by ear | Keyboard audition of the current instrument, sample, recipe or instrument, up to 6 notes mixed with the song in the real-time stream |
 
+Patch releases followed: 0.8.1 fixed a playback freeze and added the Linux build, 0.8.2 fixed the MCP tools in the standalone builds, and 0.8.3 made XM and wide MOD songs workable for agents from start to export (blank projects, sample insertion in the CLI, MCP and window, XM pattern length and header, engines at the same level), with the fixes from a ten-song test run by agents.
+
 ## After 0.8
 
 These are proposals. Each still needs the owner's agreement.

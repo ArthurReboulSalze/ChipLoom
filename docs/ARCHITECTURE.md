@@ -32,7 +32,7 @@ flowchart LR
 - **MCP adapter:** `mcp_server.py` speaks MCP over stdio and maps tools to CLI commands, each run in a child process. See below.
 - **Desktop:** optional PySide6 Widgets, Qt Multimedia playback, and a level meter that reads the rendered audio at the playback position (or takes the real-time engine's levels). It depends on the core, not the other way around. The window can host a live session, shows the agent's live edits as they arrive, and lets the owner accept or reject proposals.
 - **HTML:** static score and sample display with relative media links. It is generated on demand and needs no Qt.
-- **Replay:** actual exported MOD decoded by FFmpeg/libopenmpt; optional libxmp gives a separate implementation for regression checks.
+- **Replay:** actual exported MOD or XM decoded by FFmpeg/libopenmpt; optional libxmp gives a separate implementation for regression checks and the window's real-time playback. libxmp's master volume comes from a table measured per format and channel count (`_xmp_worker.LEVEL_TO_OPENMPT`, `tools/calibrate_xmp_level.py`), so both engines render at libopenmpt's level.
 - **Reference study:** a separate read-only parser for a bounded set of historical layouts. Analyzable does not imply editable or round-trip safe.
 - **Sample library:** a standard-library local bank preserving exact PCM and playback variants. The CLI and optional bottom Qt browser share `SampleLibrary`. `Document.insert_library_sample` wraps insertion in the same validated undo history as pattern edits. Qt auditions use local audio caches and the existing media player/meter; bank searches run through the window's worker pool.
 

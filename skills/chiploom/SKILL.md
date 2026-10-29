@@ -1,6 +1,6 @@
 ---
 name: chiploom
-description: Compose and revise tracker music (MOD with 4 to 32 channels, XM) with ChipLoom, including live co-composition with the owner's open window, or build a local sample bank from a user-provided selection of MOD files and ZIP archives. Use its CLI or Python API for extraction, neutral labeling, sample search, audition, validated batch editing (patch), measurement and MOD export.
+description: Compose and revise tracker music (MOD with 2 to 32 channels, XM) with ChipLoom, including live co-composition with the owner's open window, or build a local sample bank from a user-provided selection of MOD files and ZIP archives. Use its CLI or Python API for extraction, neutral labeling, sample search, audition, validated batch editing (patch), measurement and MOD or XM export.
 ---
 
 # ChipLoom
@@ -125,6 +125,8 @@ and a cell is `NOTE II VV EEE`.
 4. Header: `xm_header` sets `restart_position`, `default_speed`, `default_bpm`,
    `frequency_table`. Read `warnings` for loops that come back at another tempo.
 5. Validate (with `--sample-source` for a declared mode), `export --output song.xm`, render.
+   Both engines render at libopenmpt's level, which is about 6 dB lower for an XM than for a
+   four-channel MOD and drops as channels are added: compare loudness within one format and width.
 
 ## Created samples only (on the owner's request)
 
