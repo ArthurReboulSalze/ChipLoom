@@ -21,8 +21,9 @@ _LIVE_HOME = tempfile.mkdtemp(prefix="chiploom-home-")
 os.environ.setdefault("CHIPLOOM_HOME", _LIVE_HOME)
 atexit.register(shutil.rmtree, _LIVE_HOME, True)
 try:
-    from PySide6.QtCore import QObject, QThread, QTimer, Signal
+    from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal
     from PySide6.QtGui import QFontDatabase
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from tracker4agents import desktop_playback
     from tracker4agents.desktop import TrackerWindow
@@ -335,6 +336,23 @@ class RealtimePlaybackTests(unittest.TestCase):
         written = self.sink().writes[-3:]
         self.assertEqual(peak(b"".join(data for _, data in written)), 0)
         self.assertTrue(rt.playing)
+
+    def test_ctrl_click_on_a_track_button_makes_every_track_audible_in_the_engine(self):
+        window, rt = self.window, self.window.rt
+        window.toggle_play()
+        self.pause(.2)
+        reloads = rt.reloads
+        window.mutes[0].click()
+        window.solos[2].click()
+        self.assertEqual(rt.audible, (False, False, True, False))
+        QTest.mouseClick(window.solos[1], Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier)
+        self.assertEqual(rt.audible, (True, True, True, True))
+        self.assertFalse(window.solos[1].isChecked())
+        self.assertTrue(rt.wait_idle())
+        self.assertEqual(rt.core.engine.audible, (True, True, True, True))
+        self.assertEqual(rt.reloads, reloads)
+        self.assertTrue(rt.playing)
+        window.cache.prepare.assert_not_called()
 
     def test_the_loop_checkbox_controls_the_engine_and_a_finished_song_rests_at_the_start(self):
         window, rt = self.window, self.window.rt

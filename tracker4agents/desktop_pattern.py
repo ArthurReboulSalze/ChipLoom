@@ -6,6 +6,7 @@ Every musical change is a `Document.patch` transaction issued through
 
 from __future__ import annotations
 
+import math
 import time
 
 from PySide6.QtCore import (QAbstractTableModel, QItemSelection, QItemSelectionModel, QModelIndex, QRect, Qt,
@@ -25,6 +26,22 @@ MIN_WIDTH = {"note": 58, "sample": 42, "volume": 42, "effect": 64}   # px; wider
 WEIGHT = {"note": 1.25, "sample": 1.0, "volume": 1.0, "effect": 1.25}
 DRAG_SCROLL_MS = 45      # auto-scroll step while a dragged block waits near the top or bottom edge
 DRAG_EDGE = 24           # px from the viewport edge where that scrolling starts
+# Ctrl+wheel zooms the track columns sideways: a factor on the fitted widths, ZOOM_STEP per wheel notch,
+# from ZOOM_NOTCHES[0] to ZOOM_NOTCHES[1] notches (about 0.5x to 2.4x).
+ZOOM_STEP, ZOOM_NOTCHES = 1.1, (-7, 9)
+ZOOM_MIN, ZOOM_MAX = ZOOM_STEP ** ZOOM_NOTCHES[0], ZOOM_STEP ** ZOOM_NOTCHES[1]
+ZOOM_FLOOR = 0.75        # a zoomed-out column keeps this share of its natural width, so its text stays readable
+
+
+def snap_zoom(zoom: float) -> float:
+    """The nearest whole number of notches within the range: a way back always lands on exactly 1.0."""
+    notches = round(math.log(zoom, ZOOM_STEP)) if zoom > 0 else ZOOM_NOTCHES[0]
+    return ZOOM_STEP ** max(ZOOM_NOTCHES[0], min(ZOOM_NOTCHES[1], notches))
+
+
+def valid_zoom(value) -> float:
+    """A remembered column zoom, or 1.0 when the session holds something else."""
+    return snap_zoom(value) if type(value) in (int, float) and math.isfinite(value) else 1.0
 
 
 def input_locale_name() -> str:
@@ -284,9 +301,10 @@ class PatternView(QTableView):
 
     Any channel count and both cell shapes (MOD, XM) are shown: the columns keep their natural width and the
     grid scrolls sideways when the channels do not fit; `columnsChanged` tells the track headers above it
-    where the channels are."""
+    where the channels are. Ctrl+wheel widens or narrows the columns (`column_zoom`, announced by `zoomChanged`)."""
 
     columnsChanged = Signal()
+    zoomChanged = Signal(float)
 
     def __init__(self, window):
         super().__init__()
@@ -302,6 +320,8 @@ class PatternView(QTableView):
         self._drag_timer = QTimer(self)
         self._drag_timer.setInterval(DRAG_SCROLL_MS)
         self._drag_timer.timeout.connect(self._drag_autoscroll)
+        self.column_zoom = 1.0
+        self._wheel_rest = 0   # wheel delta below one notch, from touchpads that scroll in small steps
 
     def setModel(self, model):
         super().setModel(model)
@@ -309,12 +329,22 @@ class PatternView(QTableView):
 
     # --- columns ---------------------------------------------------------------------
     def fit_columns(self):
-        """Columns at their natural width, widened to fill the viewport when the channels fit."""
+        """Columns at their natural width, widened to fill the viewport when the channels fit, then zoomed."""
+        widths = self.column_widths(self.column_zoom)
+        if not widths:
+            return
+        header = self.horizontalHeader()
+        for column, width in enumerate(widths):
+            if header.sectionSize(column) != width:
+                header.resizeSection(column, max(1, width))
+        self.columnsChanged.emit()
+
+    def column_widths(self, zoom: float) -> list[int]:
         model = self.model()
         parts = model.parts if model else ()
         count = model.columnCount() if model else 0
         if not count:
-            return
+            return []
         natural = sum(MIN_WIDTH[part] for part in parts) * model.channels
         available = self.viewport().width()
         equal, extra = divmod(available, count)
@@ -327,11 +357,39 @@ class PatternView(QTableView):
             widths = [round(MIN_WIDTH[parts[column % len(parts)]] * scale) for column in range(count)]
             if scale > 1.0:   # the last column takes the rounding error: the channels end at the viewport's edge
                 widths[-1] += available - sum(widths)
-        header = self.horizontalHeader()
-        for column, width in enumerate(widths):
-            if header.sectionSize(column) != width:
-                header.resizeSection(column, max(1, width))
-        self.columnsChanged.emit()
+        if zoom != 1.0:
+            widths = [max(round(width * zoom), round(MIN_WIDTH[parts[column % len(parts)]] * ZOOM_FLOOR))
+                      for column, width in enumerate(widths)]
+        return widths
+
+    def set_column_zoom(self, zoom: float, anchor: int | None = None) -> bool:
+        """Zoom the columns, keeping the grid point under `anchor` (a viewport x) in place. False if nothing changed."""
+        zoom = snap_zoom(zoom)
+        if zoom == self.column_zoom:
+            return False
+        if zoom < self.column_zoom and self.column_widths(zoom) == self.column_widths(self.column_zoom):
+            return False   # every column is at its floor: zooming out further would only store dead notches
+        bar, header = self.horizontalScrollBar(), self.horizontalHeader()
+        anchor = self.viewport().width() // 2 if anchor is None else anchor
+        point, before = bar.value() + anchor, max(1, header.length())
+        self.column_zoom = zoom
+        self.fit_columns()
+        self.updateGeometries()   # the scroll range follows the new widths before the grid is moved back
+        bar.setValue(round(point * header.length() / before) - anchor)
+        self.zoomChanged.emit(zoom)
+        return True
+
+    def wheelEvent(self, event):
+        if not event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            super().wheelEvent(event)
+            return
+        delta = event.angleDelta()
+        self._wheel_rest += delta.y() or delta.x()
+        steps = int(self._wheel_rest / 120)
+        if steps:
+            self._wheel_rest -= steps * 120
+            self.set_column_zoom(self.column_zoom * ZOOM_STEP ** steps, round(event.position().x()))
+        event.accept()
 
     def scroll_to_row(self, row: int):
         """Bring a row into view without moving the grid sideways (the follow-playback scroll)."""
@@ -784,6 +842,19 @@ class PatternView(QTableView):
         return True
 
 
+class TrackButton(QPushButton):
+    """A Mute or Solo button. Ctrl+click does not toggle it: it emits `clearAll` (every track audible again)."""
+
+    clearAll = Signal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            event.accept()
+            self.clearAll.emit()
+            return
+        super().mousePressEvent(event)
+
+
 class ChannelStrip(QWidget):
     """The track headers above the grid: a Mute and a Solo button per channel, lined up with the channel's columns.
 
@@ -802,8 +873,10 @@ class ChannelStrip(QWidget):
         self.groups: list[QWidget] = []
         table.columnsChanged.connect(self.relayout)
 
-    def rebuild(self, count: int, states: list[tuple[bool, bool]], callback) -> tuple[list[QPushButton], list[QPushButton]]:
-        """Replace the buttons by `count` pairs, restoring `states` (muted, soloed) of the channels kept."""
+    def rebuild(self, count: int, states: list[tuple[bool, bool]], callback,
+                clear_all=None) -> tuple[list[QPushButton], list[QPushButton]]:
+        """Replace the buttons by `count` pairs, restoring `states` (muted, soloed) of the channels kept.
+        `clear_all` is called on a Ctrl+click on any of them."""
         for group in self.groups:
             group.setParent(None)
             group.deleteLater()
@@ -813,7 +886,7 @@ class ChannelStrip(QWidget):
             row = QHBoxLayout(group)
             row.setContentsMargins(1, 2, 1, 2)   # the group is exactly as wide as the channel's columns
             row.setSpacing(2)
-            mute, solo = QPushButton(), QPushButton()
+            mute, solo = TrackButton(), TrackButton()
             mute.setObjectName(f"muteTrack{channel + 1}")
             solo.setObjectName(f"soloTrack{channel + 1}")
             solo.setFixedWidth(self.SOLO_WIDTH)
@@ -828,6 +901,8 @@ class ChannelStrip(QWidget):
                 solo.setChecked(states[channel][1])
             for control in (mute, solo):
                 control.toggled.connect(callback)
+                if clear_all is not None:
+                    control.clearAll.connect(clear_all)
             group.show()
             self.groups.append(group)
             mutes.append(mute)

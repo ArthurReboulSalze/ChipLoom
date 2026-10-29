@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add `chiploom lint` and the MCP tool `lint` (`chiploom.lint.v1`): cells whose effect does nothing or not what the score suggests, along the playback timeline, each with its pattern, row, channel, grid text and the reason. Rules: `offset_without_note`, `offset_past_end`, `finetune_without_note`, XM `instrument_without_note`, XM `retrig_volume_ignored`, XM `key_off_k00`, `slide_both_nibbles`, `tick_effect_after_row`, `portamento_without_note` and `held_arpeggio`. `--strict` exits 1 on any finding; `validate --report` adds a `lint` summary. The published songs lint clean; the first version of Copper Skies would have shown its 100 held arpeggios. The skill and the agent guide run it before delivery.
+- Window: the library panel folds away again when its divider is dragged to the left edge (and reopens when dragged back); `Ctrl` + wheel over the pattern widens or narrows the track columns from about 0.5× to 2.4×, in whole wheel notches, with the Mute/Solo strip aligned; `Ctrl`+click on any Mute or Solo button makes every track audible again, in the real-time engine and the rendered playback alike. The window remembers the folded panel and the zoom; the "?" shortcut list, the button tooltips and the About text name both gestures, in English and French.
 
 ## 0.8.4 — 2026-10-29
 

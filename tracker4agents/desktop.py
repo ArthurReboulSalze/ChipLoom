@@ -27,7 +27,7 @@ from .desktop_input import LAYOUTS, resolve_layout, valid_layout
 from .desktop_jam import JamController
 from .desktop_orders import OrderEditor
 from .desktop_playback import (BUFFER_CHOICES, LIBXMP_HINT, RealtimeTransport, unavailable_reason, valid_buffer)
-from .desktop_pattern import ChannelStrip, PatternModel, PatternView, input_locale_name
+from .desktop_pattern import ChannelStrip, PatternModel, PatternView, input_locale_name, valid_zoom
 from .desktop_samples import SampleBrowser
 from .desktop_services import AppState, AudioCache
 from .desktop_sync import DiskSync, changed_cells, mark_clean
@@ -53,12 +53,13 @@ ABOUT_TEXT = (
     "Ctrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · "
     "Ctrl+Up/Down: transpose (Shift: octave).\n"
     "The file reloads by itself when the agent saves it; F5 forces a reload.\n"
-    "Click a track header to mute or unmute it; the grid scrolls sideways when the channels do not fit.\n"
+    "Click a track header to mute or unmute it, Ctrl+click Mute or Solo to hear every track again; the grid scrolls sideways when the channels do not fit and Ctrl+wheel widens or narrows the tracks.\n"
     "An XM adds a volume column and key off (key 1, the key before 2, in Edit mode; === in a cell).\n"
     "Space in patterns: play/pause · Ctrl+Z: undo.\n"
     "Real-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\n"
     "Four-channel ProTracker MOD, MOD with 2 to 32 channels and the FastTracker II XM profile; IT is planned.")
 PATTERN_HINT = "Piano keys play the current instrument · Ctrl+E: Edit mode · Ctrl+C/X/V: blocks · Alt+arrows: move · Double-click: edit"
+CLEAR_MONITOR_TIP = "Ctrl+click: every track audible again"
 XM_PATTERN_HINT = "XM: Vol is the volume byte in hex (40 = full), effects run 0-9 then A-Z · key 1 enters key off (===)"
 # The key reference behind the "?" button: (keys, what they do). The descriptions are translated when shown.
 SHORTCUTS = (
@@ -70,6 +71,8 @@ SHORTCUTS = (
     ("Ctrl+↑ / ↓", "Transpose the selection (Shift: an octave)"),
     ("Double-click", "Edit a cell"),
     ("Row number", "Click to seek there"),
+    ("Ctrl+wheel", "Widen or narrow the track columns, to see more or fewer channels"),
+    ("Ctrl+click Mute / Solo", "Make every track audible again (clears all mutes and solos)"),
     ("Space", "Play / pause"),
     ("Ctrl+Z", "Undo"),
 )
@@ -127,6 +130,7 @@ class TrackerWindow(QMainWindow):
         self._setup_realtime()
         self.sync = DiskSync(self)
         self._restore_edit_settings()
+        self._restore_layout()
         self._connect_live()
         self.apply_theme()
         self.retranslate()
@@ -207,7 +211,8 @@ class TrackerWindow(QMainWindow):
                                  loop=self.loop.isChecked(), follow=self.follow.isChecked(),
                                  keyboard=self.keyboard_combo.currentData(), edit_octave=self.edit_octave.value(),
                                  edit_step=self.edit_step.value(), live=self.live.enabled,
-                                 audio_buffer=self.audio_buffer)
+                                 audio_buffer=self.audio_buffer, library_hidden=self.library_hidden(),
+                                 column_zoom=self.table.column_zoom)
         try:
             self.state.save()
         except OSError as exc:
@@ -279,13 +284,14 @@ class TrackerWindow(QMainWindow):
         for channel, control in enumerate(self.mutes):
             muted = control.isChecked()
             control.setText(self.t("Track {number} · MUTED" if muted else "Track {number}", number=channel + 1))
-            control.setToolTip(self.t("Click to unmute track {number}" if muted else "Click to mute track {number}", number=channel + 1))
+            control.setToolTip(self.t("Click to unmute track {number}" if muted else "Click to mute track {number}", number=channel + 1)
+                               + "\n" + self.t(CLEAR_MONITOR_TIP))
             control.setAccessibleName(control.text())
             control.setProperty("trackMuted", not audible[channel])
             color = self.channel_color(channel) if audible[channel] else self.palette_colors["disabled"]
             control.setStyleSheet(f"border-left:3px solid {color};color:{color};padding:3px 6px")
             self.solos[channel].setText(self.t("Solo"))
-            self.solos[channel].setToolTip(self.t("Solo track {number}", number=channel + 1))
+            self.solos[channel].setToolTip(self.t("Solo track {number}", number=channel + 1) + "\n" + self.t(CLEAR_MONITOR_TIP))
         self.pattern_model.refresh_colors()
 
     def _build_ui(self):
@@ -673,10 +679,14 @@ class TrackerWindow(QMainWindow):
         center.splitterMoved.connect(lambda *_: setattr(self, "_split_moved", True))
 
         horizontal.setChildrenCollapsible(False)
+        horizontal.setCollapsible(0, True)   # drag the divider to the left edge to hide the library, back to reopen it
         horizontal.setHandleWidth(9)
         horizontal.setSizes([210, 1175])
         horizontal.setStretchFactor(0, 0)
         horizontal.setStretchFactor(1, 1)
+        self.workspace = horizontal
+        horizontal.splitterMoved.connect(self._library_moved)
+        self.table.zoomChanged.connect(lambda *_: self._save_preferences())
         self.message("Ready")
         self.play_action = QAction(self)
         self.play_action.setShortcut("Space")
@@ -918,7 +928,7 @@ class TrackerWindow(QMainWindow):
         if len(self.mutes) == count:
             return
         states = [(mute.isChecked(), solo.isChecked()) for mute, solo in zip(self.mutes, self.solos)]
-        self.mutes, self.solos = self.channel_strip.rebuild(count, states, self.monitor_changed)
+        self.mutes, self.solos = self.channel_strip.rebuild(count, states, self.monitor_changed, self.clear_monitor)
 
     @property
     def module_format(self) -> str:
@@ -1295,6 +1305,22 @@ class TrackerWindow(QMainWindow):
         for control in controls:
             control.blockSignals(False)
 
+    def _restore_layout(self):
+        """The library panel hidden or shown and the zoom of the track columns, as the owner left them."""
+        values = self.state.values
+        self.table.column_zoom = valid_zoom(values.get("column_zoom"))
+        self.table.fit_columns()
+        if values.get("library_hidden") is True:
+            self.workspace.setSizes([0, sum(self.workspace.sizes()) or 1385])
+
+    def library_hidden(self) -> bool:
+        return self.workspace.sizes()[0] == 0
+
+    def _library_moved(self, *_):
+        # The divider moves continuously while dragged: the session is written only when the panel closes or opens.
+        if self.library_hidden() != (self.state.values.get("library_hidden") is True):
+            self._save_preferences()
+
     def update_keys_hint(self, *_):
         """The visible reminder of what the piano keys play: octave and keyboard layout."""
         octave, layout = self.edit_octave.value(), self.keyboard_layout()
@@ -1626,6 +1652,17 @@ class TrackerWindow(QMainWindow):
         play = self._want_play if self._loading_audio else self.is_playing()
         position = self._resume_ms if self._loading_audio else self.playback_ms()
         self.prepare_audio(play, position)
+
+    def clear_monitor(self):
+        """Ctrl+click on any Mute or Solo: every track audible again, as one change for the engine or the render."""
+        checked = [control for control in self.mutes + self.solos if control.isChecked()]
+        for control in checked:
+            control.blockSignals(True)
+            control.setChecked(False)
+            control.blockSignals(False)
+        if checked:
+            self.monitor_changed()
+            self.message("Every track is audible again")
 
     def _save_path(self, suffix, caption):
         directory = ROOT / "exports/edited"

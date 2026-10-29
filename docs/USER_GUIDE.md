@@ -57,7 +57,7 @@ The window is a **Qt Widgets / PySide6** application, with no HTML page. It lets
 
 - find **First Light**, **Pixel Rush** and recent files; open a MOD or a JSON project, including by drag and drop;
 - listen, pause, move the playback position in the song or to a pattern row, and follow the four channels; the loop respects the module's restart position;
-- mute or unmute a channel by clicking its large **Track 1-4** button above the pattern, or hear it alone with **Solo**; inaudible channels are dimmed, without changing the score;
+- mute or unmute a channel by clicking its large **Track 1-4** button above the pattern, or hear it alone with **Solo**; inaudible channels are dimmed, without changing the score. `Ctrl`+click on any **Track** or **Solo** button clears every mute and solo at once, so all channels are heard again;
 - follow the sound level on an **animated stereo meter**, which measures the average level and the peaks of the audio being played, also while a sample is being auditioned;
 - choose among four themes (**Midnight**, **Amber**, **Violet**, **Light**) and switch between **English** and **Français** with the menus at the top right; English is the default;
 - show the samples and their loops, listen to them separately, and edit, create and level them in the [sound workshop](#sound-workshop);
@@ -67,7 +67,7 @@ The window is a **Qt Widgets / PySide6** application, with no HTML page. It lets
 - set the title, the starting tempo and speed, undo/redo and save the project;
 - export the **MOD**, a WAV or an optional MP3. Audio export uses the currently audible channels; the MOD keeps all channels.
 
-The Smp and Effect columns and the row and order numbers are in hexadecimal. Transposition applies to the whole channel of the displayed pattern, including its other occurrences in the order list. Effects are edited directly in the table. The song settings, the WAV/MP3 exports and the meter are at the top of the window: the tracker takes the full width to the right of the library. The tempo setting refuses to erase other effects if two columns are not free on the first row.
+The Smp and Effect columns and the row and order numbers are in hexadecimal. Transposition applies to the whole channel of the displayed pattern, including its other occurrences in the order list. Effects are edited directly in the table. The song settings, the WAV/MP3 exports and the meter are at the top of the window: the tracker takes the full width to the right of the library. Drag the divider between the library and the tracker all the way to the left to hide the library; drag it back from the left edge to show it again. Over the pattern, `Ctrl` + mouse wheel widens or narrows the track columns, to see fewer or more channels at once (the grid point under the pointer stays in place and the **Mute**/**Solo** strip follows); the plain wheel still scrolls the rows. The tempo setting refuses to erase other effects if two columns are not free on the first row.
 
 `Ctrl+S` saves an already open JSON project; for a MOD it offers a new JSON project. `Ctrl+Shift+S` saves under another name. `Ctrl+Z` undoes, `Ctrl+Shift+Z` redoes (`Ctrl+Y` also works) and Space starts and stops playback when the pattern table has focus. **F5** reloads the file, for example after a change by the agent. A confirmation protects unsaved edits when you change file or close the window.
 
@@ -81,7 +81,7 @@ Real-time audio runs in its own thread, so moving the window or opening a dialog
 
 ### Session, themes and languages
 
-The session and the cache stay in the local data folder chosen by Qt (`AppData/Local/tracker4agents/tracker4agents` on Windows). The window remembers the last file, recent files, volume, follow and loop options, theme, language and the sample library folder. Theme and language apply immediately, without interrupting playback or clearing an entry in progress. Titles and sample names keep their original text. `--state-dir` selects another folder.
+The session and the cache stay in the local data folder chosen by Qt (`AppData/Local/tracker4agents/tracker4agents` on Windows). The window remembers the last file, recent files, volume, follow and loop options, theme, language, the sample library folder, whether the library panel is hidden and the zoom of the track columns. Theme and language apply immediately, without interrupting playback or clearing an entry in progress. Titles and sample names keep their original text. `--state-dir` selects another folder.
 
 ### Keyboard entry, blocks and orders
 
@@ -228,7 +228,7 @@ While at least one browser is connected, the status bar shows **Browsers: N**. A
 
 The window opens, plays, edits and exports MOD files with 2 to 32 channels and XM files of the `fasttracker2-xm-v1` profile, as the command line does. The header line shows the format and the channel count, for example *MOD · 8 CHANNELS · PAL* or *XM · 6 CHANNELS*.
 
-- **Grid.** One group of columns per channel (Note, Smp, Effect; Note, Ins, Vol, Effect for an XM), with a separator between channels and a thicker one every four. When the channels do not fit, the grid scrolls horizontally and the **Mute** and **Solo** strip above it follows the scroll; following playback only scrolls vertically. Each pattern keeps its own row count.
+- **Grid.** One group of columns per channel (Note, Smp, Effect; Note, Ins, Vol, Effect for an XM), with a separator between channels and a thicker one every four. When the channels do not fit, the grid scrolls horizontally and the **Mute** and **Solo** strip above it follows the scroll; `Ctrl` + wheel narrows the columns to show more channels at once; following playback only scrolls vertically. Each pattern keeps its own row count.
 - **Channel colours** are the same as in the browser studio: the theme's four colours, then lighter and darker variants of them for channels 5 and up.
 - **XM entry.** The octave goes from 0 to 7 (4 by default), instrument numbers go from 01 to 80, the Vol column takes the volume-column byte in hex (40 is full volume) and effects take 0-9 then A-Z. In Edit mode, the key before 2 on the top row (1 on QWERTY, & on AZERTY) enters a key off (`===`). The help line under the grid repeats this.
 - **Blocks.** Copy, cut, paste, move and transpose work on any channel count; pasting between a MOD and an XM is refused with a message, because their cells differ.

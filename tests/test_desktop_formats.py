@@ -215,7 +215,7 @@ class EightChannelTests(FormatCase):
         window.mutes[7].click()
         self.assertEqual(window.audible(), (True,) * 7 + (False,))
         self.assertEqual(window.mutes[7].text(), "Track 8 · MUTED")
-        self.assertEqual(window.mutes[7].toolTip(), "Click to unmute track 8")
+        self.assertEqual(window.mutes[7].toolTip(), "Click to unmute track 8\nCtrl+click: every track audible again")
         self.wait_until(lambda: session.context()["audible"] == [True] * 7 + [False])
         window.mutes[7].click()
         window.solos[6].click()
