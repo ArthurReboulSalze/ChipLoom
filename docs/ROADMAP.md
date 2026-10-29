@@ -44,11 +44,11 @@ the owner's ear is no longer the first check.
 
 | Theme | Proposal |
 | --- | --- |
-| Behaviour over time | `report` measures, per channel, how much of the song it sounds without a rest, the longest run of identical cells whatever the effect, and when too many channels sustain at once; `held_arpeggio` becomes one warning among several of this kind |
-| Sounding pitch | `report` computes the frequency each channel is heard at (recipe frequency or sample pitch estimate, plus `relative_note` and `finetune`) and flags a bass below 40 Hz or a lead above 3 kHz |
+| Behaviour over time | **Done (unreleased), except the run of identical cells:** `report` measures, per channel, how much of the song it sounds without a rest, the longest run of identical cells whatever the effect, and when too many channels sustain at once; `held_arpeggio` becomes one warning among several of this kind |
+| Sounding pitch | **Done (unreleased):** `report` computes the frequency each channel is heard at (recipe frequency or sample pitch estimate, plus `relative_note` and `finetune`) and flags a bass below 40 Hz or a lead above 3 kHz |
 | Tracker lint | **Started in 0.8.5, effect memory rules unreleased:** `chiploom lint` and its summary in `validate --report` list inert or misleading cells with the reason (`9xx`, `E5x` and an XM instrument number without a note, a `9xx` past the sample's end, `Rxy` cancelled by the volume column, `K00`, slides with both nibbles, `E9x`/`ECx`/`EDx` past the row's ticks, portamento with no note, held `0xy`). The effect memory rules (`effect_memory_empty`, MOD `zero_parameter`, `900` repeating an offset past the sample) followed |
 | Measured norms | `analyze` extracts articulation statistics from the owner's references (how long an arpeggio runs before a retrigger, the sounding fraction of each channel, how often chords are cut) and publishes them as neutral numbers the skill can cite instead of the agent's taste |
-| Generator to window | `chiploom live sync PROJECT.json`: diff a project file against the open session and apply the differences as one undoable patch per pattern, so a script-written song can be reworked live without hand-made patches |
+| Generator to window | **Done (unreleased):** `chiploom live sync PROJECT.json`: diff a project file against the open session and apply the differences as one undoable patch per pattern, so a script-written song can be reworked live without hand-made patches |
 | Feedback with a place | The owner attaches a comment to a selection in the window (or the browser studio); the agent reads it with `live changes`, and `feedback` stores it with its pattern, rows and channels. These placed comments feed the taste profile below |
 | Delivery hygiene | **Done (unreleased):** the skill names every delivered file with its version (`song-v3.mp3`) and versions published media links, and `compare --equalize` matches both renders' loudness so the louder take no longer wins by default |
 

@@ -84,7 +84,10 @@ accents (a 3-3-2 groove on the eighths works well). Never hold one note with `0x
 every row for bars: the constant buzz tires the ear and covers the lead. Channel 2 of the
 Pixel Rush example shows the articulation (a hit, two rows, a `C0E` tail, a `C00` cut).
 `report` flags an arpeggio held on one note for more than 1.2 s (`held_arpeggio`): fix
-every one before delivering.
+every one before delivering. After each draft also read `channel_never_rests` (held material:
+one note per bar under an arpeggio, a held continuo), `crowded_sustain`, `pitch_too_low`
+and `pitch_too_high` (a bass or a bell pitched out of the useful range, often an octave
+setting or a `relative_note`), and fix them with key offs, cuts, rests or another octave.
 A second arpeggio channel locks to the same grid and answers in the first one's gaps
 (for example the eighth before each accent) with the same articulation; it never sits on
 unrelated sixteenth offsets or doubles the first channel continuously. The same goes for
