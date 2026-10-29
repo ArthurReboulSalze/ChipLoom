@@ -85,6 +85,7 @@ def _status(c: Call, p: dict) -> dict:
     context = c.session.context()
     path = context.pop("path", None)
     context.pop("last_change", None)
+    context.pop("bank", None)   # a folder of the owner's machine: the page never learns paths
     return {**context, "file": os.path.basename(path) if path else None, **_header(c),
             "device": c.session.web.view(c.device), "lan": c.server.lan_enabled,
             "render": {"engine": renderer.engine_name(), "max_seconds": renderer.MAX_SECONDS,

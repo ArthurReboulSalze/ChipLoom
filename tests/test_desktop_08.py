@@ -88,7 +88,9 @@ class WindowCase(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)   # Windows frees media files a little late
         self.directory = Path(self.temporary.name)
         self.home = self.directory / "home"
-        self.patches = [patch.dict(os.environ, {"CHIPLOOM_HOME": str(self.home)})]
+        # An empty bank of its own: a window test never builds the starter bank (slow on CI) nor reads the owner's.
+        self.patches = [patch.dict(os.environ, {"CHIPLOOM_HOME": str(self.home),
+                                                "CHIPLOOM_BANK": str(self.directory / "no-bank")})]
         if self.playback == "rendered":
             self.patches.append(patch.dict(os.environ, {"CHIPLOOM_PLAYBACK": "rendered"}))
         self.patches += self.extra_patches()
