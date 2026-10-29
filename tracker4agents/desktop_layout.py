@@ -34,6 +34,7 @@ from .desktop_orders import OrderEditor
 from .desktop_pattern import ChannelStrip, PatternModel, PatternView
 from .desktop_samples import SampleBrowser
 from .desktop_source import SampleModeSwitch
+from .desktop_tab_icons import apply_tab_icons
 from .desktop_widgets import ASSETS, ElidedLabel, ShortcutPopup, Waveform, label, separator
 from .desktop_workshop import SampleWorkshop
 from .level_meter import LevelMeter
@@ -53,6 +54,7 @@ SHORTCUTS = (
     ("Ctrl+wheel", "Widen or narrow the track columns, to see more or fewer channels"),
     ("Ctrl+click Mute / Solo", "Make every track audible again (clears all mutes and solos)"),
     ("Ctrl+M", "Comment on the selected cells (listed in the Agent tab)"),
+    ("Ctrl+F1", "Open the ChipLoom help: short cards on every part of the window"),
     ("Space", "Play / pause"),
     ("Ctrl+Z", "Undo"),
 )
@@ -392,6 +394,7 @@ class WindowLayoutMixin:
                                     (self.agent_panel, "Agent", self.agent_panel)):
             self.sample_tabs.addTab(page, self.t(title))
             self.tab_titles[page] = title
+        apply_tab_icons(self)   # a drawn icon per tab, in the theme's colours
         self.comment_panel = CommentPanel(self)   # the Agent tab's COMMENTS column, the grid's comment markers
         self.live_status = status_label()
         self.statusBar().addPermanentWidget(self.live_status)

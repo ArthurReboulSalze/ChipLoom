@@ -56,6 +56,9 @@ class PreferencesMixin:
     def apply_theme(self):
         self.palette_colors = THEMES[self.theme]
         self.setStyleSheet(stylesheet(self.theme, ui_icons(self.theme)))
+        if hasattr(self, "sample_tabs"):
+            from .desktop_tab_icons import apply_tab_icons
+            apply_tab_icons(self)
         palette = QPalette()
         for role, key in ((QPalette.ColorRole.Window, "bg"), (QPalette.ColorRole.WindowText, "text"),
                           (QPalette.ColorRole.Base, "panel"), (QPalette.ColorRole.Text, "text"),

@@ -1,4 +1,4 @@
-"""The menu bar of the ChipLoom window: File, Edit, Playback, Bank, Agent and Help.
+"""The menu bar of the ChipLoom window: File, Edit, Playback, Bank, Agent and Help (the help window is desktop_help).
 
 `MenuBarMixin._build_menus` runs first in `_build_ui`. It creates the window's actions (open_action, save_action,
 export_action, undo_action, redo_action, edit_action, cut/copy/paste/clear_action, instrument_action, realtime_action,
@@ -15,6 +15,7 @@ from __future__ import annotations
 from PySide6.QtGui import QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMessageBox
 
+from .desktop_help import show_help
 from . import __version__
 from .desktop_playback import BUFFER_CHOICES
 ABOUT_TEXT = (
@@ -128,5 +129,6 @@ class MenuBarMixin:
         self.browser_action = self._menu_action(agent_menu, "Open in a browser\u2026", self.open_browser)
         self._menu_action(agent_menu, "Compare a take with the current song", lambda: self.agent_panel.toggle_compare(),
                           "Ctrl+B")
+        self.help_action = self._menu_action(help_menu, "ChipLoom help", lambda: show_help(self), "Ctrl+F1")
         self._menu_action(help_menu, "About", lambda: QMessageBox.information(
             self, "ChipLoom", f"ChipLoom {__version__}\n" + self.t(ABOUT_TEXT)))

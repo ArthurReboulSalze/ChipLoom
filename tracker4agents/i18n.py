@@ -573,6 +573,11 @@ FR.update({
         "Agent : rien pour l'instant. Demande à ton agent de rejoindre cette fenêtre (il la trouve avec `chiploom "
         "live`) ; ce qu'il fait s'affichera ici, et tu peux lui écrire dans la case à droite.",
     "Agent ({author}), revision {revision}: {label}": "Agent ({author}), révision {revision} : {label}",
+    # The help window (texts of the cards are in help_content).
+    "ChipLoom help": "Aide de ChipLoom", "Search the help…": "Rechercher dans l'aide…",
+    "Keyboard shortcuts": "Raccourcis clavier", "Nothing matches this search.": "Rien ne correspond à cette recherche.",
+    "Open the ChipLoom help: short cards on every part of the window":
+        "Ouvrir l'aide de ChipLoom : des fiches courtes sur chaque partie de la fenêtre",
 })
 
 
