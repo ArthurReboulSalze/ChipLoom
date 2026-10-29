@@ -24,7 +24,7 @@
   <a href="docs/CLI.md">CLI reference</a>
 </p>
 
-https://github.com/user-attachments/assets/78bbd653-5df9-451f-93fe-e33b34f9bbe6
+https://github.com/user-attachments/assets/30343ae0-b703-4d84-a89e-243d8362e3f6
 
 <p align="center">
   <sub>What is ChipLoom? · 1:42 · also in <a href="https://arthurreboulsalze.github.io/ChipLoom/#explainer">the listening room</a> · <a href="docs/listen/media/chiploom-explainer.mp4">MP4, 9.6 MB</a></sub>

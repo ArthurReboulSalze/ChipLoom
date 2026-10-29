@@ -68,13 +68,13 @@
       "files": [
         {
           "name": "chiploom-explainer.mp4",
-          "sha256": "592813e2de9e7f421aa23cd79d04d2f9f98b8f173140676784f8ada2eb8afb1b",
-          "bytes": 9564018
+          "sha256": "3e18c72f856df595a157500522a7ac6bfe1f3264a120e092b4c550de56def18c",
+          "bytes": 9566199
         },
         {
           "name": "chiploom-explainer.jpg",
-          "sha256": "4910dd836c0721e8d18d82a239c1925162b772e79f80725c0ddbf45ff20e65f5",
-          "bytes": 65445
+          "sha256": "84315d378ace1e913b71e4e623b2ebddcdd4576991442cc37fd315bcd6c67513",
+          "bytes": 65130
         }
       ]
     }
