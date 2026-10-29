@@ -50,6 +50,15 @@ journaled as `human-web` and count as the owner's. `live web` prints the studio 
 8. **Save.** `live save` writes the session's own project file. `live save --output PATH`
    writes a copy (`"copy": true`); the session and the owner's window keep their file.
 
+## Syncing a regenerated song
+
+When a script rewrites the whole project while the window is open, send it with
+`live sync PROJECT.json` (`--dry-run` first). It plans the differences, simulates them with
+the session's checks, then sends samples, structure and one patch per changed pattern, each
+with the revision it read as base: a newer owner edit stops it with `LIVE_CONFLICT` and the
+error lists what was applied. Read `verified` and `not_synced` (non-recipe PCM, XM envelopes,
+metadata), and reload the file with `live open` only for those.
+
 ## Rules of thumb
 
 - The owner's edits win; never repeat a refused patch unchanged.

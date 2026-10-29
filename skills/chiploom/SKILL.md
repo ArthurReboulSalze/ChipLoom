@@ -183,8 +183,12 @@ are in [references/live.md](references/live.md). The procedure:
    owner's edits win. Adapt, then resubmit with the new revision.
 4. For large rewrites ("redo the bass") use `live patch --propose`: the owner previews
    and accepts in the window. You cannot accept for them or act as `human`.
-5. Announce a finished alternative with `live take FILE --label "..."`.
-6. `live save --output FILE` writes a copy; the owner's window keeps its own file.
+5. When you regenerate the whole song with a script while the window is open, run
+   `live sync PROJECT.json` (try `--dry-run` first) instead of reopening the file: it sends
+   only the differences as undoable patches, stops on the owner's newer edits, and lists
+   under `not_synced` what needs a reload.
+6. Announce a finished alternative with `live take FILE --label "..."`.
+7. `live save --output FILE` writes a copy; the owner's window keeps its own file.
 
 ## Deliver
 

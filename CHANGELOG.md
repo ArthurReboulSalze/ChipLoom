@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `chiploom live sync PROJECT.json` and the MCP tool `live_sync`: a regenerated project goes into the open window as small undoable patches (samples, structure, then one per changed pattern), each checked against the revision read first, so the owner's newer edits stop the sync instead of being overwritten. `--dry-run` shows the plan, `verified` says whether the session now matches the project, and what patches cannot carry (non-recipe PCM, XM envelopes, metadata) is listed under `not_synced`. The live API gains a read-only `module` method that returns the whole song.
 - `lint` follows effect memory: `effect_memory_empty` flags an effect with parameter `00` (repeat the last value) before any value was given on the channel (XM: every effect with a memory, `5xy` and `6xy` sharing the `Axy` value; MOD: `3xx`, `4xy`, `7xy`, `9xx`), `zero_parameter` flags MOD `100`, `200`, `A00`, `E10`, `E20`, `EA0`, `EB0`, which ProTracker does not remember, and `offset_past_end` now counts a `900` with its remembered offset.
 - `compare --equalize` (MCP `equalize`) turns the louder render down to the integrated loudness of the quieter one before the MP3 copies are made; the page says so, and the result and `comparison.json` record the target and each side's gain.
 - The skill puts the version in every delivered file name and versions published media links, since a cached file under the same name plays an older version.
