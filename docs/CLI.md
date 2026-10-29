@@ -15,6 +15,7 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | `render` | MOD, XM or JSON project | WAV from the actual module file (a project is encoded to a temporary module first), with level and loudness measurements; optional MP3 |
 | `preview` | Strict MOD or JSON | New portable HTML/media directory |
 | `analyze` | Reference MOD or ZIP | Read-only aggregate report; broader than editable profile |
+| `norms` | Reference MOD/XM files, folders or ZIPs | Articulation norms: arpeggio runs, note lengths and endings, rests, density; percentiles only |
 | `lint` | Project, MOD or XM | Cells whose effect does nothing, or not what the score suggests, with the reason |
 | `report` | Project or MOD | Measurements of the played score: density, ranges, gaps, repetition, estimated key |
 | `compare` | Two projects or MODs | New directory with a blind A/B listening page |
@@ -484,6 +485,21 @@ Warnings, factual with the threshold in the message:
 - `channel_never_rests` (`channel`, `seconds`, `start_played_row`, `note_starts`, `notes_per_second`): a channel holds slow material, a run without a rest that is both longer than 16 s and has fewer than 1.0 note starts per second (one note per bar under an arpeggio, a held continuo or pad). A busy legato line (a bass in eighth notes) is measured but not flagged, and runs made only of percussion one-shots do not count. A rest needs a key off, a cut, `C00` / XM volume `10`, or a one-shot that runs out.
 - `crowded_sustain` (`seconds`, `threshold_channels`, `start_played_row`): `global.sustain` lasts more than 16 s.
 - `pitch_too_low` / `pitch_too_high` (`channel`, `note`, `slot`, `hz`): a channel's lowest heard fundamental is below 40 Hz, or its highest above 3000 Hz. A bass recipe at 130.8 Hz with `relative_note` −24 played at XM `C-3` is heard at about 16.5 Hz.
+
+### norms
+
+```sh
+python -m tracker4agents norms path/to/selection.zip path/to/xm-folder --output exports/norms.json [--details]
+```
+
+`norms` measures how the owner's reference modules *play*, never what they play: every MOD and XM in the given files, folders (recursive) and ZIP archives that the importer accepts is followed along its first playback cycle (as `report`), and the result (`chiploom.norms.v1`) holds percentiles (p10, p25, p50, p75, p90) of:
+
+- `arpeggio`: `run_rows`, `run_ticks` (rows × speed, comparable across speeds) and `run_seconds` of every arpeggio run (the rows one note keeps an `0xy` before a new note, a key off or a cut), `run_rows_module_median` (one median per module), `modules_with_arpeggios`, and `channel_note_share` (the share of note starts carrying an arpeggio, on channels where it is at least 10%);
+- `notes`: `seconds` (until the next note, a key off or a cut on the channel), `seconds_module_median`, and `endings_module_median` (the share of notes ended by the next note, a key off, a cut or the song's end);
+- `channels`: `sounding_fraction`, `longest_run_seconds`, `rests_per_minute`, `notes_per_second`, one value per playing channel;
+- `crowded_sustain_seconds` and `tempo` (`speed`, `bpm` of the first row).
+
+`modules` counts what was measured (by format and channel count) and what was skipped (by error code: unsupported variants, unreadable files, files over 8 MiB). Nothing in the aggregate names a file or keeps a note, a sequence or a pattern, so it can be published without exposing or cloning a reference; `--details` adds per-module measures with file names for local inspection only. The skill cites the published norms as measured references (see `references/`). Errors: `NORMS_INPUT` (a missing source, an unreadable archive, nothing measurable).
 
 ### compare
 

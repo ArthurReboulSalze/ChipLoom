@@ -418,6 +418,12 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--label", default="Patch", help="Label for the change history.")
     patch.add_argument("--in-place", action="store_true", help="Allow --output to be the source project.")
     patch.add_argument("--overwrite", action="store_true", help="Allow --output to replace an existing file other than the source.")
+    norms_parser = commands.add_parser("norms", help="Measure articulation norms (arpeggio runs, note lengths, rests, "
+                                                     "density) on reference MOD/XM files, folders or ZIPs; aggregates only.")
+    norms_parser.add_argument("sources", type=Path, nargs="+")
+    norms_parser.add_argument("--details", action="store_true",
+                              help="Also list per-module measures with file names (local use only; do not publish).")
+    norms_parser.add_argument("--output", type=Path, help="Also write the JSON to this file.")
     lint = commands.add_parser("lint", help="List cells whose effect does nothing, or not what the score suggests "
                                             "(FastTracker II / ProTracker rules along the playback timeline).")
     lint.add_argument("source", type=Path)
@@ -618,6 +624,12 @@ def main(argv: list[str] | None = None) -> int:
             result = patch_project(args)
         elif args.command == "new":
             result = new_project(args)
+        elif args.command == "norms":
+            from .norms import norms
+            result = {"ok": True, **norms(args.sources, details=args.details)}
+            if args.output:
+                project.write_json(args.output, result)
+                result = {**result, "output": str(args.output.resolve())}
         elif args.command == "lint":
             from .lint import lint
             result = {"ok": True, **lint(load(args.source))}
