@@ -780,9 +780,10 @@ class SampleLibrary:
             provenance = self._provenance()
             palettes = read_palettes(self.path) if self._path("palettes.json").exists() else []
             known = {tuple(entry[key] for key in SETTINGS): entry for entry in manifest["samples"]}
-            # Verify existing PCM before updating an existing bank.
+            # Verify existing PCM before updating an existing bank, and refresh the stored compatibility
+            # (an older bank's entries lack its `adapt` list).
             for entry in manifest["samples"]:
-                self._pcm(entry)
+                entry["compatibility"] = _compatibility(entry, self._pcm(entry))
             next_id = max((int(entry["id"][4:]) for entry in manifest["samples"]), default=0) + 1
             start_count = len(manifest["samples"])
             payloads: dict[tuple[str, int], bytes] = {}
