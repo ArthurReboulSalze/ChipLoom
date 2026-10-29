@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime, timezone
 import json
 import os
@@ -9,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from tracker4agents import mod, project, synth
+from tracker4agents import mod, project, synth, xm
 from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell, playback_plan
 from tracker4agents.report import (
     KK_MAJOR, KK_MINOR, PITCH_CLASS_NAMES, add_feedback, analyze, estimate_key, loudness_reference,
@@ -502,6 +503,177 @@ class FeedbackTests(unittest.TestCase):
         updated = add_feedback(tiny_module(), "Keep the intro.", rating=4, now=self.NOW)
         restored = project.from_dict(json.loads(json.dumps(project.to_dict(updated))))
         self.assertEqual(restored.metadata["feedback"], updated.metadata["feedback"])
+
+
+ROW = 0.12  # seconds per row at speed 6 / 125 BPM
+SONG = 3 * 64 * ROW  # orders [0, 1, 1]: 23.04 s
+
+
+def held_song(sample: Sample, *cells: tuple[int, int, object], channels: int = 4) -> Module:
+    """Pattern 0 holds `cells`, then an empty pattern played twice: 23.04 s in all."""
+    return Module("Held", [sample], [pattern(*cells), Pattern()], [0, 1, 1], channels=channels)
+
+
+def codes(report: dict, code: str) -> list[dict]:
+    return [item for item in report["warnings"] if item["code"] == code]
+
+
+class SoundingTests(unittest.TestCase):
+    """When each channel is heard: note starts, cuts, key offs and one-shot lengths along the timeline."""
+
+    def test_a_held_looped_note_never_rests_and_a_struck_one_does(self):
+        report = analyze(held_song(LEAD, (0, 0, cell("C-2", 1))))
+        sounding = report["channels"][0]["sounding"]
+        self.assertAlmostEqual(report["timing"]["duration_seconds"], SONG)
+        self.assertEqual(sounding["fraction"], 1.0)
+        self.assertAlmostEqual(sounding["longest_run_seconds"], SONG)
+        self.assertEqual((sounding["longest_run"]["start_played_row"], sounding["longest_run"]["rows"],
+                          sounding["longest_run"]["percussion_only"], sounding["rests"]), (0, 192, False, 0))
+        warning = codes(report, "channel_never_rests")
+        self.assertEqual([(item["channel"], item["seconds"]) for item in warning], [(0, round(SONG, 6))])
+        self.assertIn("23.04 s", warning[0]["message"])
+        self.assertIn("16 s", warning[0]["message"])
+        # the same looped sample struck every 8 rows, with C00 four rows after each note
+        struck = []
+        for row in range(0, 64, 8):
+            struck += [(row, 0, cell("C-2", 1)), (row + 4, 0, cell(None, 0, "C00"))]
+        report = analyze(Module("Struck", [LEAD], [pattern(*struck)] * 3, [0, 1, 2]))
+        sounding = report["channels"][0]["sounding"]
+        self.assertAlmostEqual(sounding["longest_run_seconds"], 4 * ROW)
+        self.assertAlmostEqual(sounding["fraction"], 0.5)
+        self.assertEqual(sounding["rests"], 24)
+        self.assertEqual(codes(report, "channel_never_rests"), [])
+
+    def test_cuts_and_volume_bring_a_voice_back(self):
+        # ECx cuts at tick x; a later Cxx brings back a looped voice that is still playing
+        report = analyze(Module("Cut", [LEAD], [pattern((0, 0, cell("C-2", 1, "EC3")), (4, 0, cell(None, 0, "C20")),
+                                                         (8, 0, cell(None, 0, "D00")))], [0]))
+        sounding = report["channels"][0]["sounding"]
+        self.assertAlmostEqual(sounding["seconds"], 0.06 + 5 * ROW)  # half of row 0, then rows 4 to 8
+        self.assertEqual(sounding["rests"], 1)
+
+    def test_a_one_shot_stops_when_it_runs_out(self):
+        blip = Sample("Blip", (0, 0) + (60, -60) * 499)  # 1000 frames, unlooped
+        blip_song = Module("Blip", [blip], [pattern((0, 0, cell("C-2", 1)), (32, 0, cell("C-3", 1)),
+                                                    (63, 3, cell(None, 0, "D00")))], [0])
+        sounding = analyze(blip_song)["channels"][0]["sounding"]
+        at_c2 = 1000 / (3_546_895 / 428)  # 0.1207 s at period 428
+        self.assertAlmostEqual(sounding["seconds"], at_c2 + at_c2 / 2, places=4)  # C-3 plays twice as fast
+        self.assertAlmostEqual(sounding["longest_run_seconds"], at_c2, places=5)
+        self.assertEqual((sounding["longest_run"]["rows"], sounding["rests"]), (2, 2))
+        self.assertTrue(sounding["longest_run"]["percussion_only"])  # one-shot PCM: percussion by heuristic
+
+    def test_percussion_one_shots_never_count_as_a_channel_that_never_rests(self):
+        crash = Sample("Crash", (0, 0) + (60, -60) * 29_999)  # 60000 frames: 7.2 s at C-2, struck every 4 rows
+        hits = pattern(*[(row, 0, cell("C-2", 1)) for row in range(0, 64, 4)])
+        report = analyze(Module("Crash", [crash], [hits] * 3, [0, 1, 2]))
+        sounding = report["channels"][0]["sounding"]
+        self.assertGreater(sounding["longest_run_seconds"], 16)
+        self.assertTrue(sounding["longest_run"]["percussion_only"])
+        self.assertIsNone(sounding["longest_non_percussion_run"])
+        self.assertEqual(codes(report, "channel_never_rests"), [])
+        # the same sample recorded as a pad counts
+        song = Module("Crash", [crash], [hits] * 3, [0, 1, 2])
+        song.metadata["sample_sources"] = {"1": {"role": "texture"}}
+        self.assertEqual(len(codes(analyze(song), "channel_never_rests")), 1)
+
+    def test_crowded_sustain(self):
+        report = analyze(held_song(LEAD, *[(0, channel, cell("C-2", 1)) for channel in range(4)]))
+        sustain = report["global"]["sustain"]
+        self.assertEqual((sustain["threshold_channels"], sustain["start_played_row"], sustain["rows"]), (4, 0, 192))
+        self.assertAlmostEqual(sustain["longest_seconds"], SONG)
+        warning = codes(report, "crowded_sustain")
+        self.assertEqual(len(warning), 1)
+        self.assertIn("4 of 4 channels", warning[0]["message"])
+        # three channels held, one struck: never four at once for long
+        cells = [(0, channel, cell("C-2", 1)) for channel in range(3)]
+        cells += [(row, 3, cell("C-2", 1, "EC3")) for row in range(0, 64, 4)]
+        report = analyze(held_song(LEAD, *cells))
+        self.assertAlmostEqual(report["global"]["sustain"]["longest_seconds"], 0.06)
+        self.assertEqual(codes(report, "crowded_sustain"), [])
+        # eight channels need max(4, ceil(0.6 x 8)) = 5 of them
+        self.assertEqual(analyze(held_song(LEAD, channels=8))["global"]["sustain"]["threshold_channels"], 5)
+
+    def test_xm_key_off_and_an_envelope_that_falls_to_zero(self):
+        module = xm.blank("Keys", 4)
+        module.samples = [dataclasses.replace(LEAD, name="Pad"), dataclasses.replace(LEAD, name="Pluck")]
+        module.metadata["xm"]["instruments"] = {"2": {"volume_envelope": {"points": [[0, 64], [30, 0]], "type": 1}}}
+        for row, channel, value in ((0, 0, cell("C-4", 1, fmt="xm")), (8, 0, cell("===", fmt="xm")),
+                                    (0, 1, cell("C-4", 2, fmt="xm")), (63, 3, cell(None, 0, "D00", fmt="xm"))):
+            module.patterns[0].put(row, channel, value)
+        channels = analyze(module)["channels"]
+        self.assertAlmostEqual(channels[0]["sounding"]["seconds"], 8 * ROW)
+        self.assertAlmostEqual(channels[1]["sounding"]["seconds"], 30 * 2.5 / 125)  # 30 ticks
+
+
+class SoundingPitchTests(unittest.TestCase):
+    """Heard fundamentals: the slot's pitch at its reference note, moved by the note, relative note and finetune."""
+
+    def bass_song(self, relative_note: int) -> Module:
+        module = xm.blank("Bass", 4)
+        bass = synth.from_recipe("Bass", {"type": "wave", "shape": "pulse", "frequency": 130.8})
+        module.samples = [dataclasses.replace(bass, relative_note=relative_note)]
+        module.patterns[0].put(0, 0, cell("C-3", 1, fmt="xm"))
+        return module
+
+    def test_a_recipe_bass_two_octaves_down_is_too_low(self):
+        report = analyze(self.bass_song(-24))
+        slot = report["samples"]["slots"][0]["pitch"]
+        self.assertEqual((slot["estimated"], slot["method"], slot["reference_note"]), (True, "recipe", "C-4"))
+        # 130.8 Hz at 8287 Hz (C-2 finetune 0) is 132.0 Hz at XM C-4 (8363 Hz); -24 then C-3: three octaves down
+        self.assertAlmostEqual(slot["hz_at_reference"], 130.8 * 8363 / 8287 / 4, delta=0.2)
+        lowest = report["channels"][0]["pitch"]["lowest"]
+        self.assertEqual((lowest["note"], lowest["slot"]), ("C-3", 1))
+        self.assertAlmostEqual(lowest["hz"], 130.8 * 8363 / 8287 / 8, delta=0.1)
+        warning = codes(report, "pitch_too_low")
+        self.assertEqual([(item["channel"], item["note"], item["slot"]) for item in warning], [(0, "C-3", 1)])
+        self.assertIn("below 40 Hz", warning[0]["message"])
+
+    def test_a_normal_recipe_bass_is_not_flagged(self):
+        report = analyze(self.bass_song(0))
+        self.assertAlmostEqual(report["channels"][0]["pitch"]["highest"]["hz"], 130.8 * 8363 / 8287 / 2, delta=0.2)
+        self.assertEqual(codes(report, "pitch_too_low") + codes(report, "pitch_too_high"), [])
+
+    def test_mod_estimate_finetune_and_too_high(self):
+        # LEAD loops 8 cycles in 32 frames: 8287 / 4 = 2071.8 Hz at C-2, raised by finetune 4 (half a semitone)
+        lead = dataclasses.replace(LEAD, finetune=4)
+        report = analyze(Module("Lead", [lead], [pattern((0, 0, cell("C-1", 1)), (4, 0, cell("C-3", 1)))], [0]))
+        slot = report["samples"]["slots"][0]["pitch"]
+        self.assertEqual((slot["method"], slot["reference_note"]), ("estimate", "C-2"))
+        self.assertAlmostEqual(slot["hz_at_reference"], 3_546_895 / 428 / 4 * 2 ** (4 / 96), delta=0.5)
+        pitch = report["channels"][0]["pitch"]
+        self.assertEqual((pitch["lowest"]["note"], pitch["highest"]["note"], pitch["note_starts_measured"]),
+                         ("C-1", "C-3", 2))
+        self.assertEqual([item["note"] for item in codes(report, "pitch_too_high")], ["C-3"])
+        self.assertEqual(codes(report, "pitch_too_low"), [])
+
+    def test_percussion_and_noise_are_left_out(self):
+        report = analyze(drums_and_melody())
+        self.assertIsNone(report["channels"][0]["pitch"]["lowest"])  # the kick channel
+        self.assertEqual(report["samples"]["slots"][0]["pitch"]["reason"], "percussion slot: not measured")
+        noise = synth.from_recipe("Wind", {"type": "wave", "shape": "noise"})
+        report = analyze(Module("Wind", [noise], [pattern((0, 0, cell("C-2", 1)))], [0]))
+        self.assertEqual(report["channels"][0]["pitch"]["note_starts_without_estimate"], 1)
+        self.assertEqual(report["samples"]["slots"][0]["pitch"]["estimated"], False)
+
+
+class PublishedSongTests(unittest.TestCase):
+    NEW_CODES = ("channel_never_rests", "crowded_sustain", "pitch_too_low", "pitch_too_high")
+    SONGS = ("docs/listen/media/copper_skies.project.json", "docs/listen/media/pixel_rush.project.json",
+             "docs/listen/media/voltage_odyssey_v2.project.json", "examples/first_light.project.json",
+             "examples/pixel_rush.project.json")
+
+    def test_published_songs_raise_no_time_or_pitch_warning(self):
+        for name in self.SONGS:
+            with self.subTest(name):
+                report = analyze(project.load(ROOT / name))
+                found = [item for item in report["warnings"] if item["code"] in self.NEW_CODES]
+                if "copper_skies" in name:
+                    # Its pulse bass (channel 2) and two legato leads (5, 6) really play without a rest for 25-66 s
+                    # (looped samples, sustained envelopes, no key off or cut); only that flag is accepted here.
+                    found = [item for item in found if item["code"] != "channel_never_rests"]
+                self.assertEqual(found, [])
+                json.dumps(report, allow_nan=False)
 
 
 if __name__ == "__main__":

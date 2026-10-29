@@ -2,19 +2,26 @@
 
 Everything in :func:`analyze` is a measurement of the symbolic score, taken along
 the actual playback timeline (repeated orders, jumps and tempo changes count as
-played). Nothing here is an aesthetic verdict. The only estimate is the musical
-key, which is labelled as such.
+played). Nothing here is an aesthetic verdict. Two values are estimates and are
+labelled as such: the musical key, and the PCM pitch estimate behind the heard
+pitch of slots without a recipe. When a channel sounds (note starts, cuts, key
+offs, one-shot lengths) is computed with the simplifications in SOUNDING_NOTE.
 """
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 import copy
+import dataclasses
 from datetime import datetime, timezone
 import math
 from pathlib import Path
 
 from . import loudness, sample_source
-from .model import EFFECT_DIGITS, NOTES, PITCHES, XM_KEY_OFF, XM_NOTES, Module, ValidationError, playback_plan, xm_profile
+from .model import (
+    EFFECT_DIGITS, NOTES, PAL_CLOCK, PITCHES, REFERENCE_PERIOD, SAMPLE_RATE, XM_KEY_OFF, XM_NOTES, Module, Sample,
+    ValidationError, playback_plan, xm_profile,
+)
 
 SCHEMA = "chiploom.report.v1"
 LONG_SILENCE_SECONDS = 2.0
@@ -22,6 +29,40 @@ LEVEL_WARNING_DB = 6.0
 # One note held under an arpeggio (0xy) for longer than this buzzes without pause; struck arpeggios
 # (a new note every few rows, or a cut) stay well below it.
 HELD_ARPEGGIO_SECONDS = 1.2
+# Behaviour over time. A silence shorter than MIN_REST_SECONDS (a retrigger, a one-shot ending just before the
+# next note) does not count as a rest; runs longer than NEVER_RESTS_SECONDS are flagged.
+MIN_REST_SECONDS = 0.05
+NEVER_RESTS_SECONDS = 16.0
+SUSTAIN_MIN_CHANNELS = 4
+SUSTAIN_CHANNEL_FRACTION = 0.6
+# Heard fundamentals outside this range are flagged (a bass two octaves too low, a lead in the whistle range).
+PITCH_LOW_HZ = 40.0
+PITCH_HIGH_HZ = 3000.0
+XM_C4_RATE = 8363.0  # FastTracker II plays an XM sample at note C-4 (number 49) at 8363 Hz
+XM_REFERENCE_NUMBER = 49
+PITCHED_RECIPES = ("wave", "draw", "pluck")
+SOUNDING_NOTE = (
+    "A channel sounds from a note start until it is silenced: a key off (XM ===, or Kxx at its tick; with or "
+    "without a volume envelope the key off is taken as the end, release and fadeout are ignored), a note cut "
+    "ECx at its tick, C00 or XM volume column 10 (a later Cxx, volume-column volume or sample number brings a "
+    "voice that is still playing back), or a one-shot (unlooped) sample running out: its length in frames "
+    "(minus a 9xx offset) at its playback rate at the written note (MOD: PAL clock / period with finetune; XM: "
+    "8363 Hz x 2^((note - 49 + relative_note) / 12 + finetune / 1536), the linear table). A looped sample sounds "
+    "until silenced or replaced. An XM volume envelope (no loop) that falls to 0 before any sustain point ends "
+    "the note there, counted in ticks at the BPM of the note start. Volume slides, other envelope shapes, "
+    "fadeout, note delays and pitch effects are not applied, and a one-shot counts until its last frame, quiet "
+    "tail included. The XM Amiga frequency table is read as linear. A rest is a silence of at least "
+    f"{MIN_REST_SECONDS} s after the channel's first note; shorter gaps join the runs on both sides. The song "
+    "ends at the end of the first replay cycle."
+)
+PITCH_NOTE = (
+    "Heard fundamental of each pitched note start (percussion slots left out): the slot's frequency at its "
+    "reference note (MOD C-2, XM C-4, with its own finetune and relative_note) moved by the written note. "
+    "samples.slots[].pitch says where that frequency comes from: 'recipe' (the frequency of a wave, draw or "
+    "pluck recipe, heard at C-2 finetune 0, i.e. at 8287 Hz) or 'estimate' (the PCM pitch estimate of "
+    "'samples inspect'). Slots without an estimate are skipped (estimated: false, with a reason). Portamento, "
+    "arpeggio and vibrato are not applied, and an estimate can land on an octave of the fundamental."
+)
 MAX_FEEDBACK_TEXT = 2000
 MAX_TEMPO_EVENTS = 32
 BLOCK_SIZES = (4, 8, 16)
@@ -51,7 +92,10 @@ SCOPE = (
     "repeated orders, jumps and tempo changes). A note start is a cell with a note that is not a "
     "tone-portamento target (3xx/5xx). Sustained or looped samples can still sound where no note "
     "starts, so 'rows without a note start' is not audible silence. These numbers describe the "
-    "score; they are not judgments of musical quality. Channels are numbered from 0, as in patch operations."
+    "score; they are not judgments of musical quality. Channels are numbered from 0, as in patch operations. "
+    "channels[].sounding follows when each channel is heard (note starts, cuts, key offs, one-shot lengths) "
+    "with stated simplifications (global.sounding_note); channels[].pitch gives heard fundamentals in Hz from "
+    "recipe frequencies or PCM pitch estimates (global.pitch_note)."
 )
 
 
@@ -132,6 +176,77 @@ def _block_stats(signatures: list, size: int, empty_row: object) -> dict:
             "repeated_fraction": _round(1 - len(distinct) / non_empty) if non_empty else None}
 
 
+def _playback_rate(sample: Sample, period: int, xm: bool) -> float:
+    """Frames per second a sample plays at a written note: an XM note number (linear table) or a MOD period."""
+    if xm:
+        return XM_C4_RATE * 2 ** ((period - XM_REFERENCE_NUMBER + sample.relative_note) / 12 + sample.finetune / 1536)
+    return PAL_CLOCK / period * 2 ** (sample.finetune / 96)
+
+
+def _slot_pitch(sample: Sample, xm: bool) -> tuple[dict, float | None]:
+    """(the slot's `pitch` block, cycles per PCM frame or None) for a slot that is not percussion."""
+    from .sample_library import estimate_pitch
+    from .synth import recipe_facts
+    block = {"estimated": False, "method": None, "reference_note": "C-4" if xm else "C-2",
+             "hz_at_reference": None, "reason": None}
+    recipe = sample.recipe if isinstance(sample.recipe, dict) else None
+    per_frame = None
+    if recipe is not None and recipe.get("type") in PITCHED_RECIPES and recipe.get("shape") != "noise":
+        if recipe["type"] == "pluck":
+            per_frame = float(recipe.get("frequency", 261.625565)) / SAMPLE_RATE
+        else:  # a tuned loop: whole cycles over the loop, within 2 cents of the recipe frequency
+            heard = recipe_facts(sample).get("heard_hz_at_c2")
+            per_frame = heard / SAMPLE_RATE if heard else None
+        method = "recipe"
+        block["reason"] = None if per_frame else "the recipe has no tuned loop"
+    elif recipe is not None and recipe.get("shape") == "noise":
+        method, block["reason"] = None, "unpitched noise recipe"
+    else:
+        estimate = estimate_pitch(dataclasses.replace(sample, finetune=0))
+        if estimate["estimated_hz_at_c2"]:
+            per_frame = estimate["estimated_hz_at_c2"] / estimate["playback_rate_hz"]
+        method, block["reason"] = "estimate", estimate["reason"]
+    if per_frame:
+        reference = XM_REFERENCE_NUMBER if xm else REFERENCE_PERIOD
+        block.update(estimated=True, method=method,
+                     hz_at_reference=_round(per_frame * _playback_rate(sample, reference, xm), 3))
+    return block, per_frame
+
+
+def _envelope_ends(module: Module) -> dict[int, int]:
+    """Ticks after which an XM instrument's volume envelope has fallen to 0 for good, by slot: only enabled
+    envelopes without a loop whose zero tail starts before any sustain point (a note held at a sustain point
+    waits for its key off)."""
+    instruments = xm_profile(module).get("instruments")
+    ends: dict[int, int] = {}
+    for key, instrument in (instruments.items() if isinstance(instruments, dict) else ()):
+        envelope = instrument.get("volume_envelope") if isinstance(instrument, dict) else None
+        if not isinstance(envelope, dict) or not str(key).isdigit():
+            continue
+        kind, points = envelope.get("type", 0), envelope.get("points") or []
+        if not kind & 1 or kind & 4 or not points:
+            continue
+        zero = len(points)
+        while zero and points[zero - 1][1] == 0:
+            zero -= 1
+        if zero < len(points) and (not kind & 2 or zero <= envelope.get("sustain", 0)):
+            ends[int(key)] = points[zero][0]
+    return ends
+
+
+def _sounding_runs(segments: list[list], gap: float) -> list[list]:
+    """Join sounding segments [start, end, percussion one-shot] separated by less than `gap` seconds into runs
+    [start, end, percussion only]."""
+    runs: list[list] = []
+    for start, end, percussive in segments:
+        if runs and start - runs[-1][1] < gap - 1e-9:
+            runs[-1][1] = max(runs[-1][1], end)
+            runs[-1][2] = runs[-1][2] and percussive
+        else:
+            runs.append([start, end, percussive])
+    return runs
+
+
 def library_mode(module: Module) -> str | None:
     """Why `module` counts as a library-mode project, or None: a declared source or recorded library IDs."""
     metadata = module.metadata if isinstance(module.metadata, dict) else {}
@@ -194,6 +309,26 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     loop_start_seconds = plan["loop_start_seconds"]
     loop_start_played_row = next(index for index, item in enumerate(timeline) if item["seconds"] == loop_start_seconds)
 
+    # The role of every slot (recorded, recipe, bank category or loop heuristic), shared by the key
+    # estimate and the sounding pitch (percussion is left out of both), the sounding runs and the loudness
+    # comparison.
+    sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
+    sources = sources if isinstance(sources, dict) else {}
+    roles: dict[int, tuple[str, str]] = {}
+    for slot, sample in enumerate(module.samples, 1):
+        if sample.pcm:
+            roles[slot] = loudness.slot_role(sample, sources.get(str(slot)), bank)
+    percussion = {slot for slot, (role, _) in roles.items() if loudness.is_percussion(role)}
+    envelope_ticks = _envelope_ends(module) if xm else {}
+    # Slot pitches are measured on demand: only slots that a pitched note start plays (an estimate costs time).
+    slot_pitches: dict[int, dict] = {}
+    cycles_per_frame: dict[int, float | None] = {}
+
+    def slot_cycles(slot: int) -> float | None:
+        if slot not in cycles_per_frame:
+            slot_pitches[slot], cycles_per_frame[slot] = _slot_pitch(module.samples[slot - 1], xm)
+        return cycles_per_frame[slot]
+
     # One pass over the played rows: cells, note starts and the sample each note uses.
     signatures: list[list[tuple[int, ...]]] = [[] for _ in range(count)]
     note_flags = [[False] * rows for _ in range(count)]
@@ -210,6 +345,29 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     # Arpeggio runs: played rows where one note keeps an 0xy effect without a new note or a cut.
     arpeggio_run: list[list | None] = [None] * count   # [start played row, rows, seconds]
     held_arpeggios: list[list[list]] = [[] for _ in range(count)]
+    # Sounding state: when the playing voice runs out (inf when looped, None without a voice), whether the
+    # channel volume is above 0, the open segment's start and whether it plays a percussion one-shot.
+    voice_end: list[float | None] = [None] * count
+    audible = [False] * count
+    segment_start: list[float | None] = [None] * count
+    segment_percussive = [False] * count
+    segments: list[list[list]] = [[] for _ in range(count)]
+    lowest_pitch: list[dict | None] = [None] * count
+    highest_pitch: list[dict | None] = [None] * count
+    pitch_counts = [[0, 0] for _ in range(count)]  # pitched note starts: measured, slot without an estimate
+
+    def close_segment(channel: int, moment: float) -> None:
+        start, end = segment_start[channel], voice_end[channel]
+        if start is not None and end is not None and min(moment, end) > start + 1e-9:
+            segments[channel].append([start, min(moment, end), segment_percussive[channel]])
+        segment_start[channel] = None
+
+    def set_volume(channel: int, moment: float, positive: bool) -> None:
+        if not positive:
+            close_segment(channel, moment)
+        elif not audible[channel] and voice_end[channel] is not None and voice_end[channel] > moment:
+            segment_start[channel] = moment
+        audible[channel] = positive
 
     def close_arpeggio(channel: int) -> None:
         run = arpeggio_run[channel]
@@ -246,6 +404,51 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                 else:
                     run[1] += 1
                     run[2] += row_seconds[index]
+            # Sounding: key off, note start, volume set at tick 0, then a cut or key off at a later tick.
+            moment, tick, speed = item["seconds"], 2.5 / item["bpm"], item["speed"]
+            if xm and value.period == XM_KEY_OFF:
+                close_segment(channel, moment)
+                voice_end[channel] = None
+            if starts_note:
+                close_segment(channel, moment)
+                voice_end[channel] = None
+                slot = current_sample[channel]
+                sample = module.samples[slot - 1] if 0 < slot <= len(module.samples) else None
+                if sample is not None and sample.pcm:
+                    rate = _playback_rate(sample, value.period, xm)
+                    offset = value.param * 256 if value.command == 9 else 0
+                    if sample.loop_length:
+                        voice_end[channel] = math.inf
+                    elif len(sample.pcm) > offset:
+                        voice_end[channel] = moment + (len(sample.pcm) - offset) / rate
+                    if slot in envelope_ticks and voice_end[channel] is not None:
+                        voice_end[channel] = min(voice_end[channel], moment + envelope_ticks[slot] * tick)
+                    segment_percussive[channel] = slot in percussion and not sample.loop_length
+                    if slot not in percussion:
+                        per_frame = slot_cycles(slot)
+                        pitch_counts[channel][per_frame is None] += 1
+                        if per_frame:
+                            heard = {"hz": _round(per_frame * rate, 3), "note": value.note, "slot": slot}
+                            if lowest_pitch[channel] is None or heard["hz"] < lowest_pitch[channel]["hz"]:
+                                lowest_pitch[channel] = heard
+                            if highest_pitch[channel] is None or heard["hz"] > highest_pitch[channel]["hz"]:
+                                highest_pitch[channel] = heard
+                if value.sample:
+                    audible[channel] = False  # reopened below by the sample's default volume
+                elif audible[channel] and voice_end[channel] is not None:
+                    segment_start[channel] = moment  # a note without a sample number keeps the channel volume
+            if value.sample and 0 < value.sample <= len(module.samples):
+                # A sample number resets the volume to the sample's default, with or without a note.
+                set_volume(channel, moment, module.samples[value.sample - 1].volume > 0)
+            if xm and 0x10 <= value.volume <= 0x50:
+                set_volume(channel, moment, value.volume > 0x10)
+            if value.command == 0xC:
+                set_volume(channel, moment, value.param > 0)
+            if value.command == 14 and value.param >> 4 == 0xC and (value.param & 15) < speed:
+                set_volume(channel, moment + (value.param & 15) * tick, False)
+            if xm and value.command == 20 and value.param < speed:
+                close_segment(channel, moment + value.param * tick)
+                voice_end[channel] = None
             if not starts_note:
                 if value.sample:
                     sample_changes[value.sample] = sample_changes.get(value.sample, 0) + 1
@@ -264,11 +467,38 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
 
     for channel in range(count):
         close_arpeggio(channel)
+        close_segment(channel, duration)
+    row_starts = [item["seconds"] for item in timeline]
+
+    def run_entry(run: list | None) -> dict | None:
+        if run is None:
+            return None
+        first = bisect_right(row_starts, run[0] + 1e-9) - 1
+        last = bisect_left(row_starts, run[1] - 1e-9) - 1
+        return {"start_played_row": first, "start_seconds": _round(run[0]), "rows": last - first + 1,
+                "seconds": _round(run[1] - run[0]), "percussion_only": run[2]}
+
+    channel_runs = [_sounding_runs(segments[channel], MIN_REST_SECONDS) for channel in range(count)]
     channels = []
     for channel in range(count):
         notes = channel_notes[channel]
         gap = _longest_run(note_flags[channel], row_seconds)
         held = max(held_arpeggios[channel], key=lambda run: run[2], default=None)
+        runs = channel_runs[channel]
+        longest = max(runs, key=lambda run: run[1] - run[0], default=None)
+        counted = max((run for run in runs if not run[2]), key=lambda run: run[1] - run[0], default=None)
+        sounding_seconds = sum(end - start for start, end, _ in segments[channel])
+        sounding = {
+            "fraction": _round(min(1.0, sounding_seconds / duration)) if duration else 0.0,
+            "seconds": _round(sounding_seconds),
+            "longest_run_seconds": _round(longest[1] - longest[0]) if longest else 0.0,
+            "longest_run": run_entry(longest),
+            "longest_non_percussion_run": run_entry(counted),
+            "rests": max(0, len(runs) - 1) + (1 if runs and duration - runs[-1][1] >= MIN_REST_SECONDS else 0),
+        }
+        measured, unmeasured = pitch_counts[channel]
+        pitch = {"lowest": lowest_pitch[channel], "highest": highest_pitch[channel],
+                 "note_starts_measured": measured, "note_starts_without_estimate": unmeasured}
         entry = {
             "channel": channel, "note_ons": len(notes),
             "notes_per_second": _round(len(notes) / duration) if duration else 0.0,
@@ -286,8 +516,36 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             "held_arpeggios": {"count": len(held_arpeggios[channel]),
                                "longest": {"start_played_row": held[0], "rows": held[1],
                                            "seconds": _round(held[2])} if held else None},
+            "sounding": sounding,
+            "pitch": pitch,
         }
         channels.append(entry)
+
+    # The longest stretch during which at least `threshold` channels sound together (runs, short gaps joined).
+    threshold = max(SUSTAIN_MIN_CHANNELS, math.ceil(SUSTAIN_CHANNEL_FRACTION * count))
+    changes: dict[float, int] = {}
+    for runs in channel_runs:
+        for start, end, _ in runs:
+            changes[start] = changes.get(start, 0) + 1
+            changes[end] = changes.get(end, 0) - 1
+    crowded: list | None = None
+    level, since = 0, None
+    for moment in sorted(changes):  # every change at one moment at once: a hand-over is not a break
+        level += changes[moment]
+        if level >= threshold and since is None:
+            since = moment
+        elif level < threshold and since is not None:
+            if crowded is None or moment - since > crowded[1] - crowded[0] + 1e-9:
+                crowded = [since, moment, False]
+            since = None
+    crowded_entry = run_entry(crowded)
+    sustain = {"threshold_channels": threshold, "channels": count,
+               "longest_seconds": crowded_entry["seconds"] if crowded_entry else 0.0,
+               "start_played_row": crowded_entry["start_played_row"] if crowded_entry else None,
+               "start_seconds": crowded_entry["start_seconds"] if crowded_entry else None,
+               "rows": crowded_entry["rows"] if crowded_entry else 0,
+               "rule": f"At least max({SUSTAIN_MIN_CHANNELS}, ceil({SUSTAIN_CHANNEL_FRACTION} x channels)) channels "
+                       "sounding at the same time (see sounding_note)."}
 
     any_note = [any(note_flags[channel][index] for channel in range(count)) for index in range(rows)]
     no_note = _longest_run(any_note, row_seconds)
@@ -297,15 +555,6 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             histogram[number % 12] += 1
     total_notes = sum(histogram)
 
-    # The role of every slot (recorded, recipe, bank category or loop heuristic), shared by the key
-    # estimate (percussion is left out) and the loudness comparison below.
-    sources = module.metadata.get("sample_sources", {}) if isinstance(module.metadata, dict) else {}
-    sources = sources if isinstance(sources, dict) else {}
-    roles: dict[int, tuple[str, str]] = {}
-    for slot, sample in enumerate(module.samples, 1):
-        if sample.pcm:
-            roles[slot] = loudness.slot_role(sample, sources.get(str(slot)), bank)
-    percussion = {slot for slot, (role, _) in roles.items() if loudness.is_percussion(role)}
     key_histogram = [0] * 12
     excluded_counts: dict[int, int] = {}
     for slot, number in note_slots:
@@ -416,7 +665,12 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                         "role": key, "role_source": role_source,
                         "loudness_db": level, "peak_db": facts["peak_db"], "group": group,
                         "reference_db": wanted, "deviation_db": round(level - wanted, 2),
-                        "reachable_db": reachable, "limited_by_peak": wanted > reachable + 0.05})
+                        "reachable_db": reachable, "limited_by_peak": wanted > reachable + 0.05,
+                        "pitch": slot_pitches.get(slot) or {
+                            "estimated": False, "method": None, "reference_note": "C-4" if xm else "C-2",
+                            "hz_at_reference": None,
+                            "reason": "percussion slot: not measured" if slot in percussion
+                                      else "no note start plays this slot: not measured"}})
         if not count_played and not changes:
             never_played.append(slot)
     found = sample_source.counts(module)
@@ -455,6 +709,32 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                         f"{longest['seconds']:.2f} s ({longest['rows']} rows from played-row index "
                                         f"{longest['start_played_row']}). Struck arpeggios (a new note every few "
                                         "rows, or a cut between hits) do not trigger this."})
+        run = entry["sounding"]["longest_non_percussion_run"]
+        if run and run["seconds"] > NEVER_RESTS_SECONDS:
+            warnings.append({"code": "channel_never_rests", "channel": entry["channel"], "seconds": run["seconds"],
+                             "start_played_row": run["start_played_row"],
+                             "message": f"Channel {entry['channel']} sounds for {run['seconds']:.2f} s without a rest "
+                                        f"of {MIN_REST_SECONDS} s or more ({run['rows']} rows from played-row index "
+                                        f"{run['start_played_row']}), above {NEVER_RESTS_SECONDS:.0f} s. A rest needs "
+                                        "a key off, a note cut (ECx), C00 or XM volume 10, or a one-shot sample "
+                                        "that runs out; runs of percussion one-shots only are not counted."})
+        for code, end, compare, limit in (("pitch_too_low", "lowest", float.__lt__, PITCH_LOW_HZ),
+                                          ("pitch_too_high", "highest", float.__gt__, PITCH_HIGH_HZ)):
+            heard = entry["pitch"][end]
+            if heard and compare(float(heard["hz"]), limit):
+                warnings.append({"code": code, "channel": entry["channel"], "note": heard["note"],
+                                 "slot": heard["slot"], "hz": heard["hz"],
+                                 "message": f"Channel {entry['channel']} plays {heard['note']} on slot {heard['slot']} "
+                                            f"with a heard fundamental of {heard['hz']:.1f} Hz, "
+                                            f"{'below' if end == 'lowest' else 'above'} {limit:.0f} Hz (the slot's "
+                                            "frequency at its reference note, moved by the written note; see "
+                                            "global.pitch_note)."})
+    if sustain["longest_seconds"] > NEVER_RESTS_SECONDS:
+        warnings.append({"code": "crowded_sustain", "seconds": sustain["longest_seconds"],
+                         "threshold_channels": threshold, "start_played_row": sustain["start_played_row"],
+                         "message": f"At least {threshold} of {count} channels sound together for "
+                                    f"{sustain['longest_seconds']:.2f} s ({sustain['rows']} rows from played-row index "
+                                    f"{sustain['start_played_row']}), above {NEVER_RESTS_SECONDS:.0f} s."})
     for slot in never_played:
         warnings.append({"code": "sample_never_played", "slot": slot,
                          "message": f"Sample slot {slot} ({module.samples[slot - 1].name!r}) holds audio but no cell of "
@@ -498,6 +778,9 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                 f"note name ({'C-0' if xm else 'C-1'} = lowest). The key estimate counts only the "
                                 "note starts in key_estimate.pitch_classes_counted.",
             "key_estimate": key_estimate,
+            "sustain": sustain,
+            "sounding_note": SOUNDING_NOTE,
+            "pitch_note": PITCH_NOTE,
         },
         "repetition": repetition,
         "samples": sample_usage,
