@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 29 October 2026, after the 0.8.5 release. Earlier planning notes (translated from the original French) are kept in
+Updated 29 October 2026, after the 0.9.0 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together
@@ -32,7 +32,7 @@ Version 0.8 groups what was proposed after 0.7 as four releases (0.8 to 1.0).
 
 Patch releases followed: 0.8.1 fixed a playback freeze and added the Linux build, 0.8.2 fixed the MCP tools in the standalone builds, and 0.8.3 made XM and wide MOD songs workable for agents from start to export (blank projects, sample insertion in the CLI, MCP and window, XM pattern length and header, engines at the same level), with the fixes from a ten-song test run by agents. 0.8.4 added Copper Skies, a ten-channel XM demo reworked live with the owner, and turned what that session taught into the agent skill and a `report` warning for held arpeggios. 0.8.5 shipped the first 0.9 piece, `chiploom lint`, with window gestures the owner asked for (folding the library panel, `Ctrl`+wheel column zoom, `Ctrl`+click to clear every mute and solo).
 
-## 0.9: hear what the agent cannot
+## 0.9.0: hear what the agent cannot, and a bank the owner manages
 
 The Copper Skies session (0.8.4) set the direction. Every fault the owner heard was a fault of
 *behaviour over time*: arpeggios held for bars, a pad retriggered until it pumped, a bass that never
@@ -44,13 +44,14 @@ the owner's ear is no longer the first check.
 
 | Theme | Proposal |
 | --- | --- |
-| Behaviour over time | **Done (unreleased):** `report` measures, per channel, how much of the song it sounds without a rest (XM releases after a key off included), the longest run of identical cells whatever the effect, and when too many channels sustain at once; `held_arpeggio` becomes one warning among several of this kind |
-| Sounding pitch | **Done (unreleased):** `report` computes the frequency each channel is heard at (recipe frequency or sample pitch estimate, plus `relative_note` and `finetune`) and flags a bass below 40 Hz or a lead above 3 kHz |
-| Tracker lint | **Started in 0.8.5, effect memory rules unreleased:** `chiploom lint` and its summary in `validate --report` list inert or misleading cells with the reason (`9xx`, `E5x` and an XM instrument number without a note, a `9xx` past the sample's end, `Rxy` cancelled by the volume column, `K00`, slides with both nibbles, `E9x`/`ECx`/`EDx` past the row's ticks, portamento with no note, held `0xy`). The effect memory rules (`effect_memory_empty`, MOD `zero_parameter`, `900` repeating an offset past the sample) followed |
-| Measured norms | `analyze` extracts articulation statistics from the owner's references (how long an arpeggio runs before a retrigger, the sounding fraction of each channel, how often chords are cut) and publishes them as neutral numbers the skill can cite instead of the agent's taste |
-| Generator to window | **Done (unreleased):** `chiploom live sync PROJECT.json`: diff a project file against the open session and apply the differences as one undoable patch per pattern, so a script-written song can be reworked live without hand-made patches |
-| Feedback with a place | **Done (unreleased):** the owner attaches a comment to a selection in the window (or the browser studio); the agent reads it with `live changes`, and `feedback` stores it with its pattern, rows and channels. These placed comments feed the taste profile below |
-| Delivery hygiene | **Done (unreleased):** the skill names every delivered file with its version (`song-v3.mp3`) and versions published media links, and `compare --equalize` matches both renders' loudness so the louder take no longer wins by default |
+| Behaviour over time | **Done in 0.9.0:** `report` measures, per channel, how much of the song it sounds without a rest (XM releases after a key off included), the longest run of identical cells whatever the effect, and when too many channels sustain at once; `held_arpeggio` becomes one warning among several of this kind |
+| Sounding pitch | **Done in 0.9.0:** `report` computes the frequency each channel is heard at (recipe frequency or sample pitch estimate, plus `relative_note` and `finetune`) and flags a bass below 40 Hz or a lead above 3 kHz |
+| Tracker lint | **Done (0.8.5, effect memory rules in 0.9.0):** `chiploom lint` and its summary in `validate --report` list inert or misleading cells with the reason (`9xx`, `E5x` and an XM instrument number without a note, a `9xx` past the sample's end, `Rxy` cancelled by the volume column, `K00`, slides with both nibbles, `E9x`/`ECx`/`EDx` past the row's ticks, portamento with no note, held `0xy`). The effect memory rules (`effect_memory_empty`, MOD `zero_parameter`, `900` repeating an offset past the sample) followed |
+| Measured norms | **Done in 0.9.0:** `chiploom norms` measures, and `references/NORMS.md` publishes; originally: `analyze` extracts articulation statistics from the owner's references (how long an arpeggio runs before a retrigger, the sounding fraction of each channel, how often chords are cut) and publishes them as neutral numbers the skill can cite instead of the agent's taste |
+| Generator to window | **Done in 0.9.0:** `chiploom live sync PROJECT.json`: diff a project file against the open session and apply the differences as one undoable patch per pattern, so a script-written song can be reworked live without hand-made patches |
+| Feedback with a place | **Done in 0.9.0:** the owner attaches a comment to a selection in the window (or the browser studio); the agent reads it with `live changes`, and `feedback` stores it with its pattern, rows and channels. These placed comments feed the taste profile below |
+| Delivery hygiene | **Done in 0.9.0:** the skill names every delivered file with its version (`song-v3.mp3`) and versions published media links, and `compare --equalize` matches both renders' loudness so the louder take no longer wins by default |
+| Owner-managed bank (added during 0.9) | **Done in 0.9.0:** a shared active bank, one-sample import from songs, modules and WAVs with the owner's name and role, measured tuning and its correction kept in the bank, palette retuning, a 62-sound starter bank built on first use, the window's Bank menu, Tuning and Palettes pages, drops, the sample-mode switch, a clearer Agent tab and an in-app help |
 
 ## After 0.9
 

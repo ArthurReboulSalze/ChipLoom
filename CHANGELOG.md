@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-10-29
 
 - Created loops no longer click when a note retriggers them: the `start` recipe parameter (`wave`, `draw`) set to `"zero"` starts the loop on its rising zero crossing, and every tool that creates a sound sets it (a pulse bass in eighth notes buzzed, since each new note jumped to a full-level first byte). Recipes already stored, such as the published demos, keep their bytes.
 - Owner-managed sample banks. The active bank is shared by the window and the agent (`samples bank`, `--set`, `--new`; `live status` reports it). `samples slots SONG` lists a song's samples with their scored role, measured tuning and bank entry; `samples import-slot` and `samples import-wav` add one sample with the owner's name, role, category and tags, without duplicates. Entries keep the sample's own name and a readable `source`; the local bank is the owner's data and is no longer anonymized (`samples relabel` renames older entries); published material keeps neutral IDs.
