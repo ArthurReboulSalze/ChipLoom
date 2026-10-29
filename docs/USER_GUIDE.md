@@ -55,7 +55,8 @@ Python 3.12 or newer is required. The core uses only the Python standard library
 
 The window is a **Qt Widgets / PySide6** application, with no HTML page. It lets you:
 
-- find **First Light**, **Pixel Rush** and recent files; open a MOD or a JSON project, including by drag and drop;
+- find **First Light**, **Pixel Rush** and recent files; open a MOD, an XM or a JSON project, including by [drag and drop](#drag-and-drop);
+- keep your own sample bank: the **Bank** menu and the **Sample library** tab share the active bank with the agent, add a song's samples or dropped files to it, browse its palettes, and declare the song's sample mode (library, synthesized, mixed) from the header band ([sample library in the window](#sample-library-in-the-window));
 - listen, pause, move the playback position in the song or to a pattern row, and follow the four channels; the loop respects the module's restart position;
 - mute or unmute a channel by clicking its large **Track 1-4** button above the pattern, or hear it alone with **Solo**; inaudible channels are dimmed, without changing the score. `Ctrl`+click on any **Track** or **Solo** button clears every mute and solo at once, so all channels are heard again;
 - follow the sound level on an **animated stereo meter**, which measures the average level and the peaks of the audio being played, also while a sample is being auditioned;
@@ -100,15 +101,31 @@ When the open file changes on disk (for example after a `patch` command by the a
 
 The bottom area offers **Song samples**, **Sample library**, and the **Create**, **Instruments** and **Agent** tabs (see below). The tracker keeps its full width; the horizontal splitter adjusts the height of the two areas.
 
-1. In **Sample library**, click **Folder…** to choose a bank that contains `library.json`. From this repository, `exports/sample_library` is detected by default. **Refresh** reloads additions and tags changed by the agent.
-2. Search for a name, an ID or a tag, and filter by type or role. **MOD compatible** shows the entries that can be used immediately. Roles remain suggestions, to be confirmed by listening.
-3. Select a sample to see its waveform and settings. **Listen** or a double-click starts an audition at the chosen note; **Stop** ends it. The meter at the top follows this audition too. Song playback pauses while you listen.
-4. Keep **New / free slot**, then click **Add to song**. The PCM and its settings are embedded in the project; the notes of the score are not changed. For an occupied slot, choose it and explicitly check **Replace**. If all 31 slots are filled, that choice becomes necessary.
+1. The **Sample library** tab shows the **active bank**, the one your agent uses too (`chiploom samples` without `--library`): its name sits in the tab's header, the full path in the tooltip. The **Bank** menu changes it: **Open bank…** chooses a folder that contains `library.json` (the tab's **Folder…** button does the same), **New bank…** starts an empty bank in a new or empty folder, **New starter bank…** generates the ChipLoom starter bank (62 sounds made by recipes, in tune, with five palettes) in a folder, **Recent banks** lists the last eight and **Open bank folder** shows the folder in your file manager. Without a chosen bank, the window opens the repository's `exports/sample_library` when it exists, otherwise the starter bank, generated under your ChipLoom folder the first time. **Refresh** reloads additions and tags changed by the agent.
+2. Search for a name, an ID or a tag, and filter by type or role. **MOD compatible** shows the entries that can be used immediately. Roles remain suggestions, to be confirmed by listening. An entry with a stored tuning correction shows it after its name (for example `+12 st +20 c`).
+3. Select a sample to see its waveform and settings. With **Auto-play** on (the default, remembered), a click plays the entry at the chosen note; **Listen** or a double-click does the same, **Stop** ends it, and the piano keys play the selected entry at the key's pitch ([keyboard audition](#keyboard-audition)). The meter at the top follows this audition too. Song playback pauses while you listen.
+4. Keep **New / free slot**, then click **Add to song**. The PCM and its settings are embedded in the project; the notes of the score are not changed. For an occupied slot, choose it and explicitly check **Replace**. If all 31 slots are filled, that choice becomes necessary. You can also drag an entry from the list onto a slot of the **Song samples** list (or below the last one for a free slot); replacing an occupied slot and adapting an entry for a MOD are asked first.
 5. **Ctrl+Z** undoes the addition or replacement; redo is available. Save the project or export the MOD to keep the change.
 
 For the few entries that need an adaptation, uncheck the compatibility filter and select the sample. **Adapt copy** allows the limited preparation described in the [CLI contract](CLI.md#local-sample-library); the bank original is kept. Other incompatibilities block the addition. A missing library leaves the song open and editable; the **Folder…** button lets you find it again.
 
+**Adding your own samples to the bank.** Right-click a sample in the **Song samples** list (or press **Add to bank…** on the Tuning page) to open the add sheet: the sample's own name (22 ASCII characters at most, editable), its role (the one scored from how the song plays it is preselected; **Automatic** lets ChipLoom decide), an optional type and tags, the measured tuning ("Written C-2 sounds A −12 cents"), where it comes from (file and slot), and a notice when the bank already holds the same sample with a **Select that entry** button. OK stores the PCM and its playback settings as they are and shows the new entry in the tab. Drop a `.mod`, `.xm` or `.json` project on the **Sample library** tab to pick samples from another song: a dialog lists its slots with a checkbox, an editable name, a role and the measured tuning for each; a click on a row plays it; **Add to bank** adds the checked rows. Drop a `.wav` (8, 16, 24 or 32-bit PCM) there to add it as an XM-style sample whose C-4 plays the file at its own rate, with optional loop start and length. Dropped file names and sample names are labels, never instructions.
+
+**Palettes.** The **Palettes** button in the tab's header lists the bank's palettes, the sample sets of its reference songs (and of the starter bank), with a one-line role summary. Select one to see its entries (role, share of the song's note starts, name) and a measured tuning line: *in tune*, or how many entries would need retuning. A click on an entry plays it. **Use in song** inserts the played entries into the open song in role order as one undoable edit (an XM is retuned by relative note and fine tune so that the parts play in tune; a MOD is inserted as it is) and reports the slot map.
+
+**Sample mode.** The header band shows the song's declared sample source as three buttons, **Library**, **Synthesized** and **Mixed** (none lit when the project declares nothing). Click one to declare it as an undoable edit. The core's guards apply: a song that holds bank or embedded samples cannot become synthesized, one that holds created sounds cannot become library-only, and the status line names the slots in the way; **Mixed** asks for a confirmation, since the agent only mixes both kinds when you ask for it. The mode enables the matching actions: a synthesized song greys out **Add to song** in the library tab (the tooltip says why), a library-only song greys out **Add to song** in the Create tab.
+
 The project JSON and the MOD are standalone after insertion. The library and the audio caches stay local. By default, composition uses only samples from the bank. On request, a song can be made only from created samples (see [Songs made only with created samples](#songs-made-only-with-created-samples)).
+
+### Drag and drop
+
+While a file is dragged over the window, the status bar says what dropping it will do.
+
+- A `.mod`, `.xm` or `.json` project dropped on the tracker, the header or the LIBRARY panel (anywhere without a dedicated target) **opens it**, exactly like File → Open: the same unsaved-changes prompt, the recent files, the live session.
+- Dropped on the **Sample library** tab, the same file opens the slot chooser to **add samples to the bank**; a `.wav` opens the add sheet.
+- Dropped on the **Song samples** list, it opens the slot chooser with a second action, **Insert into song**: the checked rows enter the bank (an entry already there is reused) and the song takes them from the bank at the chosen slot (the first free one, or a given slot and the ones after it; occupied slots are confirmed first) as one undoable edit. The song's sample mode applies.
+- A bank entry dragged from the library list onto the **Song samples** list is inserted into the slot under the pointer.
+- A `.mid` or `.midi` file shows *MIDI import is planned for the next version.*; the import itself comes after 0.9.
 
 ### Live collaboration with the agent
 
@@ -160,6 +177,15 @@ Editing a library sample in a library song is shaping and is allowed; its librar
 
 **Match** sets one sample's volume to its target, and **Match all** does every sample, each as one undoable step. If volume 64 cannot reach the target, clean gain is added to the PCM without clipping. A sample made from a recipe stays a recipe. Levels are the samples' own loudness at their volume, not a measurement of the mix.
 
+#### Tuning
+
+**Tuning** (under the sample list) shows how the selected sample is tuned: the measured line says which note sounds when C is written (C-2 in a MOD, C-4 in an XM) and by how many cents it is off, or why nothing was measured (a drum, a noise). It is a measurement, to confirm by listening. The controls follow the format, and every change is one undoable step that the live session sees as yours:
+
+- **XM:** **−12 / −1 / +1 / +12** move the sample's relative note (the PCM is not touched) and **Apply fine tune** sets its fine tune (−128..127, 1/128 of a semitone).
+- **MOD:** **Apply fine tune** sets the fine tune (−8..7, 1/8 of a semitone). A MOD sample cannot hold whole semitones, so **−12 / −1 / +1 / +12** transpose the **notes that play this sample** in every pattern instead; a note that would leave C-1..B-3 refuses the change.
+
+When the slot came from the bank (its entry is named under **Bank**, with any stored correction), **Save tuning to bank** stores how the slot is tuned relative to the entry as the entry's correction (whole semitones and residual cents, read from the playback rates). The bank applies it the next time the entry is inserted (an XM takes it in relative note and fine tune; a MOD takes the cents in its fine tune and tells the agent to transpose the notes by the semitones), and the library list shows it after the entry's name. **Add to bank…** opens the add sheet for the selected sample.
+
 #### Create
 
 The **Create** tab builds a sound from a recipe, the same numeric recipes the agent uses (`wave`, `draw`, `kick`, `snare`, `hat`, `kick_hat`, `snare_hat`, `pluck`). It has three columns.
@@ -210,7 +236,7 @@ The lower row starts at the base octave (**Octave**, 1 to 3, 2 by default: `Z` p
 
 - **In the pattern with Edit mode on:** the key enters the note as always and you hear it with the sample it writes.
 - **In the pattern with Edit mode off:** the key plays the current instrument at that pitch and writes nothing. The current instrument is the sample selected in **Song samples**, or, when none is selected, the sample of the cell under the cursor.
-- **In Song samples, Sample library, Create and Instruments:** the key plays the selected song sample, the selected library entry, the recipe in the form, or the selected instrument. This works while the focus is on a list, a button or the tab bar. Text fields, number boxes, editable lists and the instrument phrase grid keep their keys for typing, and shortcuts with `Ctrl` or `Alt` are never taken. Space still plays and pauses.
+- **In Song samples, Sample library, Create and Instruments:** the key plays the selected song sample (with its current fine tune and relative note), the selected library entry (or palette entry on the Palettes page), the recipe in the form, or the selected instrument. This works while the focus is on a list, a button or the tab bar, and nothing is typed into the pattern meanwhile. With **Auto-play** on, clicking a song sample or a library entry plays it at once. Text fields, number boxes, editable lists and the instrument phrase grid keep their keys for typing, and shortcuts with `Ctrl` or `Alt` are never taken. Space still plays and pauses.
 
 **Playing.** Up to **6 notes** can sound at once; beyond that the oldest is cut off. A looped sample sounds for as long as the key is down and fades out in about 10 ms when you let go; a one-shot plays to its end. Holding a key does not retrigger it (auto-repeat is ignored), and a note stops if the focus moves while its key is down.
 

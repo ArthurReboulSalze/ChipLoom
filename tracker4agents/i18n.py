@@ -418,6 +418,11 @@ FR = {
         "Commenter les cellules choisies (liste dans l'onglet Agent)",
     # --- the sample bank in the window: Bank menu, active bank, auditions, add to bank, drops (desktop_bank)
     "Bank": "Banque", "Open bank…": "Ouvrir une banque…", "New bank…": "Nouvelle banque…",
+    "New starter bank…": "Nouvelle banque de départ…",
+    "Choose a new or empty folder for the starter bank": "Choisir un dossier nouveau ou vide pour la banque de départ",
+    "Cannot build the starter bank here: {detail}": "Impossible de créer la banque de départ ici : {detail}",
+    "Starter bank built: {count} sounds and {palettes} palettes in {path}":
+        "Banque de départ créée : {count} sons et {palettes} palettes dans {path}",
     "Recent banks": "Banques récentes", "Open bank folder": "Ouvrir le dossier de la banque",
     "Open a sample bank folder": "Ouvrir un dossier de banque de samples",
     "Choose a new or empty folder for the bank": "Choisir un dossier nouveau ou vide pour la banque",

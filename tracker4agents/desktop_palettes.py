@@ -105,7 +105,8 @@ class PalettePanel(QWidget):
             self.list.clear()
             wanted = -1
             for index, row in enumerate(self.rows):
-                item = QListWidgetItem(f"{row['id']}  ·  {row['format'].upper()} {row['channels']}ch  ·  {row['summary']}")
+                name = f"{row['id']}  ·  {row['title']}" if row.get("title") else row["id"]
+                item = QListWidgetItem(f"{name}  ·  {row['format'].upper()} {row['channels']}ch  ·  {row['summary']}")
                 item.setData(Qt.ItemDataRole.UserRole, row["id"])
                 item.setToolTip(self.window.t("{played} of {entries} entries played · {bpm} BPM · {seconds:.0f} s",
                                               played=row["played"], entries=row["entries"], bpm=row["bpm"],
@@ -175,7 +176,7 @@ class PalettePanel(QWidget):
             self.use_button.setEnabled(False)
             return
         palette = self.palette
-        self.title.setText(palette["id"])
+        self.title.setText(f"{palette['id']} · {palette['title']}" if palette.get("title") else palette["id"])
         self.summary.setText(palette.get("summary") or "")
         total = sum(entry.get("note_starts", 0) for entry in palette["entries"]) or 1
         names = {}

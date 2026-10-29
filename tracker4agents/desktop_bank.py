@@ -2,9 +2,11 @@
 adding a song sample to the bank, and drag and drop between the bank and the song.
 
 `BankMixin` (mixed into `TrackerWindow`):
-- `_build_bank_menu(menu)`: Bank → Open bank…, New bank…, Recent banks, Open bank folder.
-- `open_bank(path)`, `choose_bank()`, `new_bank()`, `open_bank_folder()`: the active bank is shared with the agent
-  through `sample_intake.set_active_library`; `bank_changed()` refreshes what shows it.
+- `_build_bank_menu(menu)`: Bank → Open bank…, New bank…, New starter bank…, Recent banks, Open bank folder.
+- `open_bank(path)`, `choose_bank()`, `new_bank()`, `new_starter_bank()`, `open_bank_folder()`: the active bank is
+  shared with the agent through `sample_intake.set_active_library`; `bank_changed()` refreshes what shows it.
+  `initial_library(window)` picks the bank opened at start and `ensure_bank(path)` builds the starter bank
+  (`starter_bank.build`) when it is the active one and missing.
 - `make_autoplay(name)` / `set_autoplay(on)`: the "Auto-play" boxes (library tab and song samples), one remembered
   setting (`state.values["autoplay"]`, on by default).
 - `add_slot_to_bank(slot)`: the add-to-bank sheet for a song slot (`desktop_bank_dialogs.AddToBankDialog`).
@@ -39,17 +41,32 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def initial_library(window) -> Path:
     """The bank the window opens at start: the active bank when one was chosen (or `CHIPLOOM_BANK` is set),
-    otherwise the folder saved in the session, otherwise the repository's default bank."""
-    if os.environ.get("CHIPLOOM_BANK") or (sample_intake._home() / sample_intake.BANK_FILE).exists():
+    otherwise a folder the owner chose in an earlier session, otherwise the active bank by default (the
+    repository's bank, or the starter bank, which `SampleBrowser.reload` builds when it does not exist yet)."""
+    chosen = os.environ.get("CHIPLOOM_BANK") or (sample_intake._home() / sample_intake.BANK_FILE).exists()
+    saved = window.state.values.get("sample_library")
+    if not chosen and saved:
         try:
-            return sample_intake.active_library()
+            path = Path(saved).resolve()
+            if (path / "library.json").exists():
+                return path
         except (OSError, ValueError):
             pass
-    saved = window.state.values.get("sample_library")
     try:
-        return Path(saved).resolve() if saved else ROOT / DEFAULT_LIBRARY
+        return sample_intake.active_library()
     except (OSError, ValueError):
         return ROOT / DEFAULT_LIBRARY
+
+
+def ensure_bank(path: Path) -> Path:
+    """Build the starter bank when `path` is its place and it does not exist yet (called off the GUI thread)."""
+    if path == sample_intake.starter_path() and not (path / "library.json").exists():
+        from .starter_bank import build
+        try:
+            build(path)
+        except ValidationError:   # built meanwhile by the agent or another window
+            pass
+    return path
 
 
 def retune_text(entry: dict | None) -> str:
@@ -160,6 +177,7 @@ class BankMixin:
         self.bank_menu = menu
         self._menu_action(menu, "Open bank…", self.choose_bank)
         self._menu_action(menu, "New bank…", self.new_bank)
+        self._menu_action(menu, "New starter bank…", self.new_starter_bank)
         self.recent_banks_menu = self._bind(menu.addMenu(""), "Recent banks", "setTitle")
         menu.addSeparator()
         self._menu_action(menu, "Open bank folder", self.open_bank_folder)
@@ -218,6 +236,29 @@ class BankMixin:
             self.message("Cannot create a bank here: {detail}", True, detail=exc)
             return False
         return self.open_bank(path)
+
+    def new_starter_bank(self):
+        """Generate the ChipLoom starter bank (recipe sounds and palettes) in a folder and make it active."""
+        default = sample_intake.starter_path()
+        start = default if not default.exists() else self.bank_path().parent
+        folder = QFileDialog.getExistingDirectory(self, self.t("Choose a new or empty folder for the starter bank"),
+                                                  str(start), options=QFileDialog.Option.DontUseNativeDialog)
+        if folder:
+            self.create_starter_bank(Path(folder))
+
+    def create_starter_bank(self, path: Path) -> bool:
+        from .starter_bank import build
+        path = Path(path)
+        try:
+            result = build(path)
+        except (ValidationError, OSError) as exc:
+            self.message("Cannot build the starter bank here: {detail}", True, detail=exc)
+            return False
+        if not self.open_bank(path):
+            return False
+        self.message("Starter bank built: {count} sounds and {palettes} palettes in {path}", count=result["entries"],
+                     palettes=result["palettes"], path=str(path))
+        return True
 
     def open_bank_folder(self):
         path = self.bank_path()
@@ -350,4 +391,5 @@ class BankMixin:
         return browser.insert_entry(sample_id, slot, occupied, adapt)
 
 
-__all__ = ["BANK_MIME", "DROP_SUFFIXES", "BankList", "BankMixin", "SongSampleList", "initial_library", "retune_text"]
+__all__ = ["BANK_MIME", "DROP_SUFFIXES", "BankList", "BankMixin", "SongSampleList", "ensure_bank", "initial_library",
+           "retune_text"]

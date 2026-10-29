@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, Q
                                QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import sample_intake
-from .desktop_bank import BankList, initial_library, retune_text
+from .desktop_bank import BankList, ensure_bank, initial_library, retune_text
 from .desktop_drops import drop_kind
 from .desktop_palettes import PalettePanel
 from .desktop_widgets import ElidedLabel, media_call
@@ -270,6 +270,7 @@ class SampleBrowser(QWidget):
         self.count.setText(self.window.t("Loading…"))
 
         def operation():
+            ensure_bank(bank.path)   # the starter bank is generated on first use, off the GUI thread
             return bank.search(query, [role] if role else [], category, compatible, offset, self.PAGE_SIZE)
 
         def finished(result):

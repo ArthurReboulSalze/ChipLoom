@@ -81,6 +81,10 @@ class BankCase(base.WindowCase):
     def bank_entries(self) -> dict:
         return {entry["id"]: entry for entry in self.bank._manifest()["samples"]}
 
+    @staticmethod
+    def bank_entries_of(path: Path) -> dict:
+        return {entry["id"]: entry for entry in SampleLibrary(path)._manifest()["samples"]}
+
     def key(self, widget, kind, text):
         QApplication.sendEvent(widget, QKeyEvent(kind, ord(text.upper()), NOMOD, text, False))
 
@@ -135,6 +139,56 @@ class ActiveBankTests(BankCase):
         window.set_language("fr")
         self.assertIn("Banque", [action.text() for action in window.menuBar().actions()])
         self.assertTrue(self.browser.bank_label.text().startswith("Banque"))
+        self.assertIn("Nouvelle banque de départ…", [action.text() for action in window.bank_menu.actions()])
+
+    def test_new_starter_bank_generates_the_recipe_sounds_and_makes_them_active(self):
+        window = self.window
+        target = self.directory / "starter here"
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("CHIPLOOM_BANK")
+            with patch("tracker4agents.desktop_bank.QFileDialog.getExistingDirectory", return_value=str(target)) as ask:
+                window.new_starter_bank()
+            self.assertEqual(Path(ask.call_args.args[2]), sample_intake.starter_path())   # proposed while it is missing
+            self.wait_until(lambda: not self.browser._loading and self.browser.total > 0)
+            self.assertEqual(sample_intake.active_library(), target.resolve())
+        self.assertEqual(len(self.bank_entries_of(target)), 62)
+        self.assertEqual(self.browser.palettes.bank.palettes()["total"], 5)
+        self.assertIn("62", window.statusBar().currentMessage())
+        self.assertFalse(window.create_starter_bank(target))      # not twice into the same folder
+        panel = self.browser.palettes
+        window.sample_tabs.setCurrentIndex(1)
+        self.browser.show_page(1)
+        self.wait_until(lambda: panel.list.count() == 5)
+        self.assertIn("PAL-0001  ·  ", panel.list.item(0).text())  # the palette's title follows its ID
+        panel.list.setCurrentRow(0)
+        self.wait_until(lambda: panel.palette is not None)
+        self.assertEqual(panel.title.text(), f"PAL-0001 · {panel.palette['title']}")
+
+    def test_without_a_chosen_bank_the_window_builds_and_opens_the_starter_bank(self):
+        cwd = os.getcwd()
+        os.chdir(self.directory)                      # no exports/sample_library here: the starter bank is the default
+        try:
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("CHIPLOOM_BANK")
+                self.assertFalse(sample_intake.starter_path().exists())
+                second = base.TrackerWindow(self.path, self.directory / "state2", restore=False)
+                try:
+                    second.output.setMuted(True)
+                    second.sample_output.setMuted(True)
+                    browser = second.sample_browser
+                    self.assertEqual(browser.library_path, sample_intake.starter_path())
+                    self.wait_until(lambda: not browser._loading and browser.total > 0, 40)
+                    self.assertTrue((sample_intake.starter_path() / "library.json").is_file())
+                    self.assertEqual(browser.total, 62)
+                    self.assertIn("starter", browser.bank_label.text())
+                finally:
+                    second.close()
+                    second.pool.waitForDone(10000)
+                    self.app.processEvents()
+                    second.deleteLater()
+                    self.app.processEvents()
+        finally:
+            os.chdir(cwd)
 
 
 @unittest.skipUnless(base.TrackerWindow is not None and shutil.which("ffmpeg"), "PySide6 and FFmpeg required")
