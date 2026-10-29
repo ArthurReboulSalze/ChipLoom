@@ -401,7 +401,8 @@ class CompareRealtimeTests(WindowCase):
         window.agent_panel.toggle_compare()               # what the Ctrl+B menu action calls
         self.assertTrue(rt.playing)
         self.assertEqual(panel.compare["side"], "B")
-        action = next(item for item in window.menuBar().actions()[3].menu().actions() if "Compare" in item.text())
+        agent_menu = next(item.menu() for item in window.menuBar().actions() if item.text() == window.t("Agent"))
+        action = next(item for item in agent_menu.actions() if "Compare" in item.text())
         self.assertEqual(action.shortcut().toString(), "Ctrl+B")
         action.trigger()
         self.assertEqual(panel.compare["side"], "A")
