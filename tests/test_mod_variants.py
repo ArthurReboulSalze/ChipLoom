@@ -10,7 +10,7 @@ import struct
 import tempfile
 import unittest
 
-from tracker4agents import audio, mod, project
+from tracker4agents import audio, mod, project, xm
 from tracker4agents.realtime import XmpEngine, find_library
 from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell, playback_plan, validate
 
@@ -454,8 +454,10 @@ class ShippedFilesTests(unittest.TestCase):
                 self.assertEqual(mod.encode(module), payload)
                 self.assertEqual(mod.encode_for_replay(module), payload)
         for path in sorted((ROOT / "examples").glob("*.json")) + sorted((ROOT / "docs/listen/media").glob("*.project.json")):
+            module = project.load(path)
+            if module.format == "xm":   # Copper Skies: checked against its shipped XM below
+                continue
             with self.subTest(path=path.name):
-                module = project.load(path)
                 payload = mod.encode(module)
                 self.assertEqual(payload[1080:1084], b"M.K.")
                 self.assertEqual(payload[951], 0x7F)
@@ -464,6 +466,11 @@ class ShippedFilesTests(unittest.TestCase):
             with self.subTest(name=name):
                 shipped = (ROOT / f"docs/listen/media/{name}.mod").read_bytes()
                 self.assertEqual(mod.encode(project.load(ROOT / f"docs/listen/media/{name}.project.json")), shipped)
+        shipped = (ROOT / "docs/listen/media/copper_skies.xm").read_bytes()
+        copper = project.load(ROOT / "docs/listen/media/copper_skies.project.json")
+        self.assertEqual((copper.format, copper.channels, len(copper.samples)), ("xm", 10, 21))
+        self.assertEqual(xm.encode(copper), shipped)
+        self.assertEqual(xm.encode(xm.decode(shipped)), shipped)
 
 
 if __name__ == "__main__":

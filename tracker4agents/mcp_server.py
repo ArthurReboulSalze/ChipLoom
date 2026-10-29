@@ -101,11 +101,14 @@ TOOLS = [
                      *_flags(a, {"label": "--label", "overwrite": "--overwrite"})]),
     _tool("export", "Export a validated project to a real MOD file.", {"source": S, "output": S}, ["source", "output"],
           lambda a: ["export", a["source"], "--output", a["output"]]),
-    _tool("render", "Render a MOD or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 copy.",
-          {"source": S, "output": S, "seconds": N, "from_order": I, "engine": _enum("openmpt", "xmp"), "mp3_output": S},
+    _tool("render", "Render a MOD, XM or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 "
+          "listening copy; mp3_normalize scales the copy to a -1 dBFS peak (the WAV keeps the engine's level).",
+          {"source": S, "output": S, "seconds": N, "from_order": I, "engine": _enum("openmpt", "xmp"), "mp3_output": S,
+           "mp3_normalize": B},
           ["source", "output"],
           lambda a: ["render", a["source"], "--output", a["output"], *_flags(a, {
-              "seconds": "--seconds", "from_order": "--from-order", "engine": "--engine", "mp3_output": "--mp3-output"})]),
+              "seconds": "--seconds", "from_order": "--from-order", "engine": "--engine", "mp3_output": "--mp3-output",
+              "mp3_normalize": "--mp3-normalize"})]),
     _tool("preview", "Build a portable HTML listening bundle in a new directory.",
           {"source": S, "output": S, "mp3": B, "language": _enum("en", "fr")}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),

@@ -28,14 +28,16 @@
 
 ## Hear what ChipLoom can do
 
-Two original four-channel compositions made with ChipLoom, using newly synthesized samples. The MP3s are listening copies of the actual exported MOD files. **Open the listening room for audio players and downloads.** GitHub strips audio players from repository READMEs.
+Three original compositions made with ChipLoom, using only created samples: two four-channel MODs and a ten-channel FastTracker II XM. The MP3s are listening copies of the actual exported module files. **Open the listening room for audio players and downloads.** GitHub strips audio players from repository READMEs.
 
-| | Pixel Rush | Voltage Odyssey V2 |
-| :--- | :--- | :--- |
-| **The sound** | Quick melodic hooks, tiny pulse waves and an arcade beat | A full chiptune journey with a bigger drop and an expressive solo |
-| **The arrangement** | **0:48** · 160 BPM · 13 samples | **1:57** · 164 BPM · 28 samples |
-| **Play** | [▶ Listen to Pixel Rush](https://arthurreboulsalze.github.io/ChipLoom/#pixel-rush) | [▶ Listen to Voltage Odyssey V2](https://arthurreboulsalze.github.io/ChipLoom/#voltage-odyssey-v2) |
-| **Take it apart** | [MOD](docs/listen/media/pixel_rush.mod) · [MP3](docs/listen/media/pixel_rush.mp3) · [Project](docs/listen/media/pixel_rush.project.json) | [MOD](docs/listen/media/voltage_odyssey_v2.mod) · [MP3](docs/listen/media/voltage_odyssey_v2.mp3) · [Project](docs/listen/media/voltage_odyssey_v2.project.json) |
+| | Copper Skies | Pixel Rush | Voltage Odyssey V2 |
+| :--- | :--- | :--- | :--- |
+| **The sound** | A cracktro in ten channels: racing arpeggios, a square lead with its echo, bells, a detuned saw solo and a key change for the last chorus | Quick melodic hooks, tiny pulse waves and an arcade beat | A full chiptune journey with a bigger drop and an expressive solo |
+| **The arrangement** | **1:42** · 150 BPM · 21 instruments · XM | **0:48** · 160 BPM · 13 samples · MOD | **1:57** · 164 BPM · 28 samples · MOD |
+| **Play** | [▶ Listen to Copper Skies](https://arthurreboulsalze.github.io/ChipLoom/#copper-skies) | [▶ Listen to Pixel Rush](https://arthurreboulsalze.github.io/ChipLoom/#pixel-rush) | [▶ Listen to Voltage Odyssey V2](https://arthurreboulsalze.github.io/ChipLoom/#voltage-odyssey-v2) |
+| **Take it apart** | [XM](docs/listen/media/copper_skies.xm) · [MP3](docs/listen/media/copper_skies.mp3) · [Project](docs/listen/media/copper_skies.project.json) · [Generator](tools/compose_copper_skies.py) | [MOD](docs/listen/media/pixel_rush.mod) · [MP3](docs/listen/media/pixel_rush.mp3) · [Project](docs/listen/media/pixel_rush.project.json) | [MOD](docs/listen/media/voltage_odyssey_v2.mod) · [MP3](docs/listen/media/voltage_odyssey_v2.mp3) · [Project](docs/listen/media/voltage_odyssey_v2.project.json) |
+
+Copper Skies is written with the Python API by [`tools/compose_copper_skies.py`](tools/compose_copper_skies.py): it uses volume and panning envelopes, auto-vibrato, fadeout, ping-pong loops, relative notes, finetune, the volume column, patterns of 32 to 128 rows, a restart position and every XM effect ChipLoom accepts.
 
 ## Built for the agent, shared with the musician
 

@@ -1,5 +1,5 @@
 {
-  "provenance": "Original compositions and synthesized samples created for ChipLoom. MP3 listening copies rendered from these MOD files. No historical reference recordings or PCM included.",
+  "provenance": "Original compositions and synthesized samples created for ChipLoom. MP3 listening copies rendered from these MOD and XM files (Copper Skies' copy is peak-normalized to -1 dBFS). No historical reference recordings or PCM included.",
   "songs": [
     {
       "title": "Pixel Rush",
@@ -38,6 +38,26 @@
           "name": "voltage_odyssey_v2.project.json",
           "sha256": "a9caaef0a2746e1091681241b79ee2f482e28b48718b12f8082f8c469bc4ae73",
           "bytes": 690007
+        }
+      ]
+    },
+    {
+      "title": "Copper Skies",
+      "files": [
+        {
+          "name": "copper_skies.xm",
+          "sha256": "b4a0960854bcafcb001c2308fe5c5947e8356c30febd1216517ef0796db15387",
+          "bytes": 65501
+        },
+        {
+          "name": "copper_skies.mp3",
+          "sha256": "41b8a5d2bd1ce6f43b5fb6ba763f35d198f9c704f176ad43efa5484a78b1c2e5",
+          "bytes": 2429298
+        },
+        {
+          "name": "copper_skies.project.json",
+          "sha256": "666f5c610443e11829f419271ea0198b95f21eacdba09025bb1f4d23c8ba1f80",
+          "bytes": 362331
         }
       ]
     }

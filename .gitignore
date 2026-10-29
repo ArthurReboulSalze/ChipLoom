@@ -11,6 +11,8 @@ references/private/
 *.zip
 *.mod
 *.MOD
+*.xm
+*.XM
 *.wav
 *.mp3
 *.pcm
@@ -26,3 +28,5 @@ _site/
 !docs/listen/media/pixel_rush.mp3
 !docs/listen/media/voltage_odyssey_v2.mod
 !docs/listen/media/voltage_odyssey_v2.mp3
+!docs/listen/media/copper_skies.xm
+!docs/listen/media/copper_skies.mp3

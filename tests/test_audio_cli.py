@@ -111,6 +111,15 @@ class NativeAudioTests(unittest.TestCase):
         verify = subprocess.run([shutil.which("ffmpeg"), "-hide_banner", "-v", "error", "-i", str(mp3),
                                  "-f", "null", "-"], capture_output=True, text=True, timeout=20)
         self.assertEqual(verify.returncode, 0, verify.stderr)
+        self.assertIsNone(encoded["normalized"])
+        louder = audio.export_mp3(output, self.directory / "normalized.mp3", normalize=True)
+        gain = louder["normalized"]["gain_db"]
+        self.assertAlmostEqual(gain, -1.0 - result["audio"]["peak_dbfs"], places=2)
+        self.assertEqual(louder["normalized"]["source_peak_dbfs"], result["audio"]["peak_dbfs"])
+        decoded = self.directory / "normalized.wav"
+        subprocess.run([shutil.which("ffmpeg"), "-hide_banner", "-v", "error", "-y", "-i", str(louder["output"]),
+                        str(decoded)], check=True, capture_output=True, timeout=20)
+        self.assertAlmostEqual(audio.analyze_wav(decoded)["peak_dbfs"], -1.0, delta=0.6)   # MP3 framing moves the peak a little
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg indisponible")
     def test_render_accepts_a_project_and_reports_loudness(self):

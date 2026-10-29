@@ -40,7 +40,7 @@ There are 46 tools.
 | `inspect` | yes | `source` | `pattern`, `grid`, `row`, `rows` | Summarize a project or MOD. With pattern (and grid=true), show that pattern as tracker grid text. |
 | `patch` | no | `source`, `output` | `ops`, `ops_file`, `label`, `overwrite` | Apply patch operations to a project as one validated transaction and write the result to a new file. Read duration_seconds and warnings in the result. |
 | `export` | no | `source`, `output` | - | Export a validated project to a real MOD file. |
-| `render` | no | `source`, `output` | `seconds`, `from_order`, `engine`, `mp3_output` | Render a MOD or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 copy. |
+| `render` | no | `source`, `output` | `seconds`, `from_order`, `engine`, `mp3_output`, `mp3_normalize` | Render a MOD, XM or project to WAV (FFmpeg/libopenmpt), optionally an excerpt and an MP3 listening copy; mp3_normalize scales the copy to a -1 dBFS peak (the WAV keeps the engine's level). |
 | `preview` | no | `source`, `output` | `mp3`, `language` | Build a portable HTML listening bundle in a new directory. |
 | `report` | yes | `source` | `library` | Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, sample sources and loudness against the reference levels (exports/sample_library when it exists, unless library is given; else fixed levels). The key estimate leaves out percussion slots. Channels count from 0. |
 | `compare` | no | `first`, `second`, `output` | `mp3`, `language`, `seed`, `seconds` | Build a blind A/B listening page comparing two versions in a new directory. The X/Y answer is written to answer_key.json (path in answer_key_file), not returned; do not read it before the owner has listened. |

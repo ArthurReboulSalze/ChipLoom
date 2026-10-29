@@ -16,6 +16,8 @@ PUBLIC_DEMOS = {
     "docs/listen/media/pixel_rush.mp3": "d503741a5a83faa79940fb6513b129021c8cc10ae5e1f1b50e911ca6200c55c3",
     "docs/listen/media/voltage_odyssey_v2.mod": "a4822a56be18d66145dac91706a096e6efbfcfa97b9e5a392c3d79f128234197",
     "docs/listen/media/voltage_odyssey_v2.mp3": "2b2d18c7370e5e42877edf87c5c8eae7f5b496bb347cc48bd3563f83b9ada4dc",
+    "docs/listen/media/copper_skies.xm": "b4a0960854bcafcb001c2308fe5c5947e8356c30febd1216517ef0796db15387",
+    "docs/listen/media/copper_skies.mp3": "41b8a5d2bd1ce6f43b5fb6ba763f35d198f9c704f176ad43efa5484a78b1c2e5",
 }
 SECRET = re.compile(rb"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 

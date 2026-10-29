@@ -479,6 +479,8 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--ffmpeg")
             command.add_argument("--xmp-library", type=Path)
             command.add_argument("--mp3-output", type=Path, help="Also write an MP3 listening copy of the rendered WAV.")
+            command.add_argument("--mp3-normalize", action="store_true",
+                                 help="Scale the MP3 copy so its peak sits at -1 dBFS (the WAV is untouched).")
     return parser
 
 
@@ -624,7 +626,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.ffmpeg, args.xmp_library, from_order=args.from_order,
             )}
             if args.mp3_output:
-                result["optional_mp3"] = audio.export_mp3(args.output, args.mp3_output, args.ffmpeg)
+                result["optional_mp3"] = audio.export_mp3(args.output, args.mp3_output, args.ffmpeg,
+                                                          normalize=args.mp3_normalize)
         emit(result)
         return 0
     except (OSError, ValueError, RuntimeError) as exc:

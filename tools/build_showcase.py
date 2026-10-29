@@ -16,8 +16,8 @@ def build(output: Path) -> dict:
     files = {'docs/listen/index.html': 'index.html',
              'docs/assets/chiploom-logo.png': 'assets/chiploom-logo.png',
              'docs/listen/media/manifest.json': 'media/manifest.json'}
-    for stem in ('pixel_rush', 'voltage_odyssey_v2'):
-        for suffix in ('.mod', '.mp3', '.project.json'):
+    for stem, module in (('pixel_rush', '.mod'), ('voltage_odyssey_v2', '.mod'), ('copper_skies', '.xm')):
+        for suffix in (module, '.mp3', '.project.json'):
             files[f'docs/listen/media/{stem}{suffix}'] = f'media/{stem}{suffix}'
     with tempfile.TemporaryDirectory(prefix='.chiploom-site-', dir=output.parent) as temporary:
         stage = Path(temporary) / 'site'

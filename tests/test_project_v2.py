@@ -131,6 +131,10 @@ class ExamplesAndMigrationTests(unittest.TestCase):
         for path in sorted((ROOT / "examples").glob("*.json")) + sorted((ROOT / "docs" / "listen" / "media").glob("*.project.json")):
             with self.subTest(path=path.name):
                 data = project.read_json(path)
+                if path.name == "copper_skies.project.json":   # the XM demo is written as schema v2
+                    self.assertEqual(data["schema"], project.SCHEMA_V2)
+                    self.assertEqual(project.diagnose(data), [])
+                    continue
                 self.assertEqual(data["schema"], project.SCHEMA_V1)
                 self.assertEqual(project.diagnose(data), [])
                 mod.encode(project.from_dict(data))

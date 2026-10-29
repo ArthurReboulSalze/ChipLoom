@@ -12,7 +12,7 @@ import tempfile
 import unittest
 import wave
 
-from tracker4agents import loudness, mod, project, sample_source, synth, synth_tools
+from tracker4agents import loudness, mod, project, sample_source, synth, synth_tools, xm
 from tracker4agents.cli import main
 from tracker4agents.document import Document
 from tracker4agents.errors import error_code
@@ -131,6 +131,10 @@ class WaveTests(unittest.TestCase):
         for name in ("pixel_rush", "voltage_odyssey_v2"):
             built = mod.encode(project.load(ROOT / "docs/listen/media" / f"{name}.project.json"))
             self.assertEqual(built, (ROOT / "docs/listen/media" / f"{name}.mod").read_bytes())
+        copper = project.load(ROOT / "docs/listen/media/copper_skies.project.json")   # the synthesized XM demo
+        self.assertEqual(copper.metadata["sample_source"], "synthesized")
+        self.assertTrue(all(sample.recipe for sample in copper.samples))
+        self.assertEqual(xm.encode(copper), (ROOT / "docs/listen/media/copper_skies.xm").read_bytes())
 
     def test_recipe_catalog_names_only_accepted_parameters(self):
         types = {item["type"]: item for item in synth.recipe_types()}

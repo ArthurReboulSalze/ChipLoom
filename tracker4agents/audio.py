@@ -281,8 +281,12 @@ def sample_preview(sample: Sample, output: Path, fmt: str = "mod") -> None:
         audio.writeframes(values.tobytes())
 
 
-def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dict:
-    """Optional listening copy, always encoded from a rendered WAV."""
+MP3_PEAK_TARGET_DBFS = -1.0
+
+
+def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None, normalize: bool = False) -> dict:
+    """Optional listening copy, always encoded from a rendered WAV. With `normalize` the copy is scaled so its
+    sample peak sits at -1 dBFS (the WAV is untouched; a multi-channel XM renders well below full scale)."""
     source_wav, output = source_wav.resolve(), output.resolve()
     if output.suffix.lower() != ".mp3" or source_wav == output:
         raise ValidationError("La copie d'écoute doit avoir un chemin .mp3 distinct du WAV.", "OUTPUT_PATH")
@@ -296,10 +300,14 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dic
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.stem}.", suffix=".mp3", dir=output.parent)
     os.close(descriptor)
     temporary = Path(temporary_name)
+    gain_db = None
+    if normalize and metrics["peak_dbfs"] is not None:
+        gain_db = round(MP3_PEAK_TARGET_DBFS - metrics["peak_dbfs"], 3)
+    filters = ["-af", f"volume={gain_db}dB"] if gain_db else []
     try:
         result = subprocess.run(
             [executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
-             "-i", str(source_wav), "-map", "0:a:0", "-c:a", "libmp3lame", "-q:a", "2",
+             "-i", str(source_wav), "-map", "0:a:0", *filters, "-c:a", "libmp3lame", "-q:a", "2",
              "-metadata", "artist=ChipLoom", str(temporary)],
             capture_output=True, text=True, timeout=60,
             **SUBPROCESS_OPTIONS,
@@ -309,7 +317,9 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None) -> dic
         os.replace(temporary, output)
         return {"output": str(output), "codec": "MP3 / libmp3lame VBR quality 2",
                 "source_wav_sha256": metrics["sha256"], "sha256": sha256(output),
-                "bytes": output.stat().st_size}
+                "bytes": output.stat().st_size,
+                "normalized": {"gain_db": gain_db or 0.0, "target_peak_dbfs": MP3_PEAK_TARGET_DBFS,
+                               "source_peak_dbfs": metrics["peak_dbfs"]} if normalize else None}
     except subprocess.TimeoutExpired as exc:
         raise RenderError("L'export MP3 a dépassé sa limite de temps.", "RENDER_TIMEOUT") from exc
     finally:
