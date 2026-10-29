@@ -72,9 +72,19 @@ These are proposals. Each still needs the owner's agreement.
    each sample is corrected so written C sounds C. The result is an ordinary project the agent reads and
    reworks in the live session. `import-midi FILE --map ...` and an MCP tool for agents. Importing someone
    else's song reproduces it: fine for private work, never a source for published compositions.
-4. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
+4. **Effect styles** (proposed by the owner for after 0.9). A library of effect gestures applied to a
+   selection: level (fade in/out, rhythmic gate, accents, tremolo), echo (the note repeated quieter a few
+   rows later, same or free channel), pitch (slide into a note, fall-off, vibrato that widens, kick pitch
+   drop), rhythm (retrigger rolls that speed up before a downbeat, stutter, hard cuts), timbre (sample
+   offset sweeps, XM panning ping-pong) and struck arpeggio patterns, each with an intensity and a speed.
+   A gesture adapts to the song's speed/BPM, format (MOD or XM volume column) and effect memory, passes
+   `lint`, and is one undoable edit. In the window: select, right-click, "Apply FX style"; for agents
+   `fx apply STYLE --pattern --rows --channels`, a patch operation and an MCP tool, and the owner can ask
+   for one in a placed comment. Presets measured on the owner's references (which effect sequences recur
+   and with what settings: effect gestures, never notes).
+5. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
    builds to GitHub releases.
-5. **macOS.** Not tested yet: window, real-time audio and a standalone build.
-6. **Richer XM.** Multi-sample instruments, the rest of the XM effect set, then IT.
-7. **Local phrase model** (see the October study in the history folder), only if the agent with
+6. **macOS.** Not tested yet: window, real-time audio and a standalone build.
+7. **Richer XM.** Multi-sample instruments, the rest of the XM effect set, then IT.
+8. **Local phrase model** (see the October study in the history folder), only if the agent with
    references, variations and the taste profile proves insufficient.
