@@ -371,6 +371,9 @@ def build_parser() -> argparse.ArgumentParser:
             group = command.add_mutually_exclusive_group()
             group.add_argument("--set", type=Path, dest="set_path", help="Make this bank folder the active bank.")
             group.add_argument("--new", type=Path, dest="new_path", help="Create an empty bank here and make it active.")
+            group.add_argument("--starter", type=Path, nargs="?", const=True, dest="starter_path",
+                               help="Build the ChipLoom starter bank (generated sounds) here, or at its default "
+                                    "place, and make it active.")
         if name in ("slots", "import-slot"):
             command.add_argument("module", type=Path, help="MOD, XM or JSON project to read; read only.")
         if name == "import-slot":
@@ -579,10 +582,16 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "samples":
             from . import sample_intake
             from .sample_library import SampleLibrary
-            bank = SampleLibrary(args.library or sample_intake.active_library())
             action = args.sample_command
+            bank = SampleLibrary(args.library or (sample_intake.active_library() if action == "bank"
+                                                  else sample_intake.ensure_active_bank()))
             if action == "bank":
-                if args.new_path:
+                if args.starter_path:
+                    from .starter_bank import build
+                    target = sample_intake.starter_path() if args.starter_path is True else args.starter_path
+                    built = build(target)
+                    result = {**sample_intake.set_active_library(target), "built": built}
+                elif args.new_path:
                     created = SampleLibrary(args.new_path).create()
                     result = {**sample_intake.set_active_library(args.new_path), "created": created["library"]}
                 elif args.set_path:

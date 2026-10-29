@@ -175,9 +175,13 @@ TOOLS = [
           lambda a: ["samples", "add", a["id"], "--project", a["project"], "--output", a["output"], *_flags(a, {
               "library": "--library", "slot": "--slot", "replace": "--replace", "adapt": "--adapt"})]),
     _tool("samples_bank", "Show the active sample bank (the one the window and the agent share: path, entry count, "
-          "recent banks), or make another folder the active bank with `set`, or create an empty one with `new`.",
-          {"set": S, "new": S}, (),
-          lambda a: ["samples", "bank", *_flags(a, {"set": "--set", "new": "--new"})]),
+          "recent banks), or make another folder the active bank with `set`, create an empty one with `new`, or build "
+          "the ChipLoom starter bank (62 generated sounds in tune, 5 palettes) with `starter` (a folder, or true for "
+          "its default place). Without any bank the starter bank is built on first use.",
+          {"set": S, "new": S, "starter": {"type": ["string", "boolean"]}}, (),
+          lambda a: ["samples", "bank", *_flags({**a, "starter": None}, {"set": "--set", "new": "--new"}),
+                     *(["--starter"] if a.get("starter") is True else
+                       ["--starter", a["starter"]] if isinstance(a.get("starter"), str) else [])]),
     _tool("samples_slots", "List the samples of a MOD, XM or JSON project: name, frames, bits, loop, the role scored "
           "from how the song plays it, the measured tuning (the note it sounds when C is written) and the bank entry "
           "that already holds it.",
