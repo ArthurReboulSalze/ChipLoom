@@ -20,7 +20,7 @@ from pathlib import Path
 from . import loudness, sample_source
 from .model import (
     EFFECT_DIGITS, NOTES, PAL_CLOCK, PITCHES, REFERENCE_PERIOD, SAMPLE_RATE, XM_KEY_OFF, XM_NOTES, Module, Sample,
-    ValidationError, playback_plan, xm_profile,
+    ValidationError, cell as make_cell, playback_plan, xm_profile,
 )
 
 SCHEMA = "chiploom.report.v1"
@@ -44,15 +44,17 @@ XM_C4_RATE = 8363.0  # FastTracker II plays an XM sample at note C-4 (number 49)
 XM_REFERENCE_NUMBER = 49
 PITCHED_RECIPES = ("wave", "draw", "pluck")
 SOUNDING_NOTE = (
-    "A channel sounds from a note start until it is silenced: a key off (XM ===, or Kxx at its tick; with or "
-    "without a volume envelope the key off is taken as the end, release and fadeout are ignored), a note cut "
+    "A channel sounds from a note start until it is silenced: a key off (XM ===, or Kxx at its tick) ends it at "
+    "once without a volume envelope and, with one, after the release: the envelope goes on from where it stood "
+    "(its sustain point at most) until its zero tail, or the fadeout (32768 / fadeout ticks) reaches 0, whichever "
+    "comes first; a looping envelope only ends by its fadeout, and without either the voice goes on. A note cut "
     "ECx at its tick, C00 or XM volume column 10 (a later Cxx, volume-column volume or sample number brings a "
     "voice that is still playing back), or a one-shot (unlooped) sample running out: its length in frames "
     "(minus a 9xx offset) at its playback rate at the written note (MOD: PAL clock / period with finetune; XM: "
     "8363 Hz x 2^((note - 49 + relative_note) / 12 + finetune / 1536), the linear table). A looped sample sounds "
     "until silenced or replaced. An XM volume envelope (no loop) that falls to 0 before any sustain point ends "
     "the note there, counted in ticks at the BPM of the note start. Volume slides, other envelope shapes, "
-    "fadeout, note delays and pitch effects are not applied, and a one-shot counts until its last frame, quiet "
+    "note delays and pitch effects are not applied, and a one-shot counts until its last frame, quiet "
     "tail included. The XM Amiga frequency table is read as linear. A rest is a silence of at least "
     f"{MIN_REST_SECONDS} s after the channel's first note; shorter gaps join the runs on both sides. The song "
     "ends at the end of the first replay cycle."
@@ -236,6 +238,64 @@ def _envelope_ends(module: Module) -> dict[int, int]:
     return ends
 
 
+FADEOUT_START = 32768  # FastTracker II starts a released voice at 32768 and takes the fadeout off every tick
+
+
+def _releases(module: Module) -> dict[int, tuple[dict | None, int]]:
+    """(enabled volume envelope or None, fadeout) of every XM instrument slot, for the release after a key off."""
+    instruments = xm_profile(module).get("instruments")
+    result: dict[int, tuple[dict | None, int]] = {}
+    for key, instrument in (instruments.items() if isinstance(instruments, dict) else ()):
+        if not isinstance(instrument, dict) or not str(key).isdigit():
+            continue
+        envelope = instrument.get("volume_envelope")
+        enabled = isinstance(envelope, dict) and envelope.get("type", 0) & 1 and envelope.get("points")
+        result[int(key)] = (envelope if enabled else None, int(instrument.get("fadeout", 0) or 0))
+    return result
+
+
+def _release_ticks(release: tuple[dict | None, int] | None, elapsed: int) -> float:
+    """Ticks a voice still sounds after a key off `elapsed` ticks into its note: 0 without a volume envelope
+    (FastTracker II silences it at once); else until the envelope, going on from where it stood (its sustain
+    point at most), reaches its zero tail, or the fadeout reaches 0, whichever comes first; inf when neither
+    does (a looping envelope never reaches its tail)."""
+    if release is None or release[0] is None:
+        return 0.0
+    envelope, fadeout = release
+    kind, points = envelope.get("type", 0), envelope["points"]
+    candidates = [math.ceil(FADEOUT_START / fadeout)] if fadeout else []
+    if not kind & 4:
+        position = elapsed
+        sustain = envelope.get("sustain", 0)
+        if kind & 2 and sustain < len(points):
+            position = min(position, points[sustain][0])
+        zero = len(points)
+        while zero and points[zero - 1][1] == 0:
+            zero -= 1
+        if zero < len(points):
+            candidates.append(max(0, points[zero][0] - position))
+    return min(candidates, default=math.inf)
+
+
+def _identical_run(cells: list, seconds: list[float], empty: str) -> dict | None:
+    """Longest stretch (by duration, the first wins ties) of consecutive played rows repeating one non-empty cell,
+    whatever its note or effect; None when no non-empty cell is repeated on the next row."""
+    best = None
+    start = 0
+    for index in range(1, len(cells) + 1):
+        if index < len(cells) and cells[index] == cells[start]:
+            continue
+        rows, text = index - start, cells[start].text()
+        if rows >= 2 and text != empty:
+            length = sum(seconds[start:index])
+            if best is None or length > best["seconds"] + 1e-12:
+                best = {"start_played_row": start, "rows": rows, "seconds": length, "cell": text}
+        start = index
+    if best:
+        best["seconds"] = _round(best["seconds"])
+    return best
+
+
 def _sounding_runs(segments: list[list], gap: float) -> list[list]:
     """Join sounding segments [start, end, percussion one-shot] separated by less than `gap` seconds into runs
     [start, end, percussion only]."""
@@ -322,6 +382,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             roles[slot] = loudness.slot_role(sample, sources.get(str(slot)), bank)
     percussion = {slot for slot, (role, _) in roles.items() if loudness.is_percussion(role)}
     envelope_ticks = _envelope_ends(module) if xm else {}
+    releases = _releases(module) if xm else {}
     # Slot pitches are measured on demand: only slots that a pitched note start plays (an estimate costs time).
     slot_pitches: dict[int, dict] = {}
     cycles_per_frame: dict[int, float | None] = {}
@@ -333,6 +394,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
 
     # One pass over the played rows: cells, note starts and the sample each note uses.
     signatures: list[list[tuple[int, ...]]] = [[] for _ in range(count)]
+    played_cells: list[list] = [[] for _ in range(count)]
     note_flags = [[False] * rows for _ in range(count)]
     channel_notes: list[list[int]] = [[] for _ in range(count)]
     channel_samples: list[dict[int, int]] = [{} for _ in range(count)]
@@ -350,6 +412,8 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     # Sounding state: when the playing voice runs out (inf when looped, None without a voice), whether the
     # channel volume is above 0, the open segment's start and whether it plays a percussion one-shot.
     voice_end: list[float | None] = [None] * count
+    voice_slot = [0] * count          # the slot and start time of the playing voice, for its release
+    voice_start = [0.0] * count
     audible = [False] * count
     segment_start: list[float | None] = [None] * count
     segment_percussive = [False] * count
@@ -371,6 +435,18 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             segment_start[channel] = moment
         audible[channel] = positive
 
+    def release_voice(channel: int, moment: float, tick: float) -> None:
+        """A key off at `moment`: the voice ends now, or after its envelope release and fadeout (XM)."""
+        if voice_end[channel] is None:
+            return
+        elapsed = round((moment - voice_start[channel]) / tick)
+        ticks = _release_ticks(releases.get(voice_slot[channel]), elapsed)
+        if ticks <= 0:
+            close_segment(channel, moment)
+            voice_end[channel] = None
+        else:
+            voice_end[channel] = min(voice_end[channel], moment + ticks * tick)
+
     def close_arpeggio(channel: int) -> None:
         run = arpeggio_run[channel]
         if run is not None and run[2] > HELD_ARPEGGIO_SECONDS:
@@ -383,6 +459,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             value = pattern.get(item["row"], channel)
             signatures[channel].append((value.period, value.sample, value.command, value.param)
                                        + ((value.volume,) if xm else ()))
+            played_cells[channel].append(value)
             if value.sample:
                 current_sample[channel] = value.sample
             if value.command or value.param:
@@ -409,12 +486,12 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             # Sounding: key off, note start, volume set at tick 0, then a cut or key off at a later tick.
             moment, tick, speed = item["seconds"], 2.5 / item["bpm"], item["speed"]
             if xm and value.period == XM_KEY_OFF:
-                close_segment(channel, moment)
-                voice_end[channel] = None
+                release_voice(channel, moment, tick)
             if starts_note:
                 close_segment(channel, moment)
                 voice_end[channel] = None
                 slot = current_sample[channel]
+                voice_slot[channel], voice_start[channel] = slot, moment
                 sample = module.samples[slot - 1] if 0 < slot <= len(module.samples) else None
                 if sample is not None and sample.pcm:
                     rate = _playback_rate(sample, value.period, xm)
@@ -449,8 +526,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             if value.command == 14 and value.param >> 4 == 0xC and (value.param & 15) < speed:
                 set_volume(channel, moment + (value.param & 15) * tick, False)
             if xm and value.command == 20 and value.param < speed:
-                close_segment(channel, moment + value.param * tick)
-                voice_end[channel] = None
+                release_voice(channel, moment + value.param * tick, tick)
             if not starts_note:
                 if value.sample:
                     sample_changes[value.sample] = sample_changes.get(value.sample, 0) + 1
@@ -471,6 +547,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         close_arpeggio(channel)
         close_segment(channel, duration)
     row_starts = [item["seconds"] for item in timeline]
+    empty_cell = make_cell(fmt=module.format).text()
 
     def run_entry(run: list | None, starts: list[float] | None = None) -> dict | None:
         """A run as JSON; with the channel's note-start times, also the note starts that fall inside it."""
@@ -525,6 +602,7 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                "longest": {"start_played_row": held[0], "rows": held[1],
                                            "seconds": _round(held[2])} if held else None},
             "sounding": sounding,
+            "identical_cells": _identical_run(played_cells[channel], row_seconds, empty_cell),
             "pitch": pitch,
         }
         channels.append(entry)

@@ -31,12 +31,14 @@ How notes end, per module median: the next note **94%**, a cut (`C00`, XM volume
 
 | Measure (per playing channel) | p25 | p50 | p75 | p90 |
 | --- | --- | --- | --- | --- |
-| Share of the song the channel sounds | 0.31 | 0.58 | 0.87 | 1.00 |
-| Longest stretch without a rest (seconds) | 1.1 | 12.6 | 40.2 | 78.9 |
-| Rests per minute | 1.2 | 12.5 | 64 | 162 |
+| Share of the song the channel sounds | 0.45 | 0.75 | 0.94 | 1.00 |
+| Longest stretch without a rest (seconds) | 4.8 | 25.6 | 61.4 | 87.3 |
+| Rests per minute | 0.4 | 3.1 | 36 | 145 |
 | Note starts per second | 0.6 | 2.2 | 4.8 | 7.0 |
 
-Longest stretch with many channels (at least max(4, 60%)) sounding together: p50 0.5 s, p75 9.9 s, p90 26.6 s.
+Longest stretch with many channels (at least max(4, 60%)) sounding together: p50 1.9 s, p75 22.7 s, p90 42.4 s.
+
+A channel sounds until its note is silenced. In an XM, a key off lets the instrument's volume envelope and fadeout play out (a median release of about 2.5 s on this selection), and that fading tail counts as sounding down to silence. The first version of these tables, published the same day, cut every XM note at its key off and showed channels sounding 58% of the time with 12.5 rests per minute.
 
 ## Tempo
 
@@ -44,7 +46,7 @@ Speed of the first row: p25 4, p50 4, p75 6. BPM: 125 in at least three quarters
 
 ## MOD and XM
 
-The four-channel MODs play their channels almost all the time (median share 1.0, median longest stretch 20.5 s, almost no rests) with dense lines (4.2 notes per second per channel); the XMs spread more channels thinner (median share 0.54, 2.1 notes per second, 17 rests per minute). Arpeggio runs and note lengths are about the same in both: one or two rows. See `mod` and `xm` in [norms.json](norms.json).
+The four-channel MODs play their channels almost all the time (median share 1.0, median longest stretch 20.5 s, almost no rests) with dense lines (4.2 notes per second per channel); the XMs spread more channels thinner (median share 0.69, 2.1 notes per second, 4.5 rests per minute, their key offs fading out through envelopes rather than stopping dead). Arpeggio runs and note lengths are about the same in both: one or two rows. See `mod` and `xm` in [norms.json](norms.json).
 
 ## What this means for composing (judgments)
 

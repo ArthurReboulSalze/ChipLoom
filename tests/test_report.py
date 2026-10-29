@@ -624,6 +624,42 @@ class SoundingTests(unittest.TestCase):
         self.assertAlmostEqual(channels[0]["sounding"]["seconds"], 8 * ROW)
         self.assertAlmostEqual(channels[1]["sounding"]["seconds"], 30 * 2.5 / 125)  # 30 ticks
 
+    def test_xm_key_off_lets_the_envelope_release_and_the_fadeout_play(self):
+        tick = 2.5 / 125
+        module = xm.blank("Release", 4)
+        module.samples = [dataclasses.replace(LEAD, name=name) for name in ("Sustain", "Loop", "Endless", "Plain")]
+        module.metadata["xm"]["instruments"] = {
+            # held at its sustain point (tick 10), then 30 ticks down to 0 after the key off
+            "1": {"volume_envelope": {"points": [[0, 64], [10, 48], [40, 0]], "type": 3, "sustain": 1}},
+            # a looping envelope never reaches a tail: the fadeout (32768 / 1024 = 32 ticks) ends it
+            "2": {"volume_envelope": {"points": [[0, 64], [20, 32]], "type": 5, "loop_start": 0, "loop_end": 1},
+                  "fadeout": 1024},
+            # neither a zero tail nor a fadeout: the voice goes on after the key off
+            "3": {"volume_envelope": {"points": [[0, 64], [10, 40]], "type": 3, "sustain": 1}},
+        }
+        for channel in range(4):
+            module.patterns[0].put(0, channel, cell("C-4", channel + 1, fmt="xm"))
+            module.patterns[0].put(8, channel, cell("===", fmt="xm") if channel != 3 else cell(None, 0, "K02", fmt="xm"))
+        channels = analyze(module)["channels"]
+        self.assertAlmostEqual(channels[0]["sounding"]["seconds"], 8 * ROW + 30 * tick)
+        self.assertAlmostEqual(channels[1]["sounding"]["seconds"], 8 * ROW + 32 * tick)
+        self.assertAlmostEqual(channels[2]["sounding"]["seconds"], 64 * ROW)
+        self.assertAlmostEqual(channels[3]["sounding"]["seconds"], 8 * ROW + 2 * tick)  # no envelope: Kxx at tick 2
+        self.assertEqual(channels[2]["sounding"]["rests"], 0)
+
+    def test_the_longest_run_of_identical_cells(self):
+        retrigger = cell("C-2", 1, "037")
+        slide = cell(None, 0, "A01")
+        cells = [(row, 0, retrigger) for row in range(8)] + [(row, 1, slide) for row in range(10, 26)]
+        cells += [(row, 2, cell("C-2", 1)) for row in range(0, 64, 2)]   # never on two rows in a row
+        report = analyze(Module("Same", [LEAD], [pattern(*cells)], [0]))
+        runs = [entry["identical_cells"] for entry in report["channels"]]
+        self.assertEqual(runs[0], {"start_played_row": 0, "rows": 8, "seconds": round(8 * ROW, 6),
+                                   "cell": retrigger.text()})
+        self.assertEqual((runs[1]["start_played_row"], runs[1]["rows"], runs[1]["cell"]), (10, 16, slide.text()))
+        self.assertIsNone(runs[2])   # empty rows between the notes are not counted
+        self.assertIsNone(runs[3])
+
 
 class SoundingPitchTests(unittest.TestCase):
     """Heard fundamentals: the slot's pitch at its reference note, moved by the note, relative note and finetune."""
