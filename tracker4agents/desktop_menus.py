@@ -1,12 +1,13 @@
-"""The menu bar of the ChipLoom window: File, Edit, Playback, Agent and Help.
+"""The menu bar of the ChipLoom window: File, Edit, Playback, Bank, Agent and Help.
 
 `MenuBarMixin._build_menus` runs first in `_build_ui`. It creates the window's actions (open_action, save_action,
 export_action, undo_action, redo_action, edit_action, cut/copy/paste/clear_action, instrument_action, realtime_action,
 buffer_actions, live_action, browser_action, comment_action, song_comment_action) and connects them to methods of the other mixins (choose_file,
 save_project, reload_document, export_mod, export_audio, undo, redo, set_edit_mode, set_realtime, set_audio_buffer,
-set_live, open_browser). Widgets built later (table, instrument_panel, agent_panel, comment_panel, sample_tabs) are reached through
-lambdas, so they need not exist yet. Relies on: window.live (created before the UI) and the text-binding helpers
-`_bind`, `_action`, `_menu_action` and `t` of `TrackerWindow`.
+set_live, open_browser). The Bank menu is filled by `desktop_bank.BankMixin._build_bank_menu`. Widgets built later
+(table, instrument_panel, agent_panel, comment_panel, sample_tabs) are reached through lambdas, so they need not exist
+yet. Relies on: window.live (created before the UI) and the text-binding helpers `_bind`, `_action`, `_menu_action`
+and `t` of `TrackerWindow`.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ class MenuBarMixin:
         file_menu = self._bind(self.menuBar().addMenu(""), "File", "setTitle")
         edit_menu = self._bind(self.menuBar().addMenu(""), "Edit", "setTitle")
         playback_menu = self._bind(self.menuBar().addMenu(""), "Playback", "setTitle")
+        bank_menu = self._bind(self.menuBar().addMenu(""), "Bank", "setTitle")
         agent_menu = self._bind(self.menuBar().addMenu(""), "Agent", "setTitle")
         help_menu = self._bind(self.menuBar().addMenu(""), "Help", "setTitle")
         self.open_action = self._action('Open a MOD or project…')
@@ -106,6 +108,7 @@ class MenuBarMixin:
             action.triggered.connect(lambda checked=False, key=key: self.set_audio_buffer(key))
             buffer_menu.addAction(action)
             self.buffer_actions[key] = action
+        self._build_bank_menu(bank_menu)   # desktop_bank: Open bank…, New bank…, Recent banks, Open bank folder
         self.live_action = self._action("Live collaboration")
         self.live_action.setCheckable(True)
         self.live_action.setChecked(self.live.enabled)

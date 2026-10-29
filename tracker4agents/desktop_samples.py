@@ -1,16 +1,29 @@
-"""Optional Qt sample-bank browser, hosted below the tracker."""
+"""The Sample library tab: the active bank's entries, their audition, and their insertion into the song.
+
+`SampleBrowser` searches the bank (`SampleLibrary.search`, in the background), shows the selected entry (waveform,
+settings, the owner's tuning correction), auditions it (Listen, a double-click, a click when Auto-play is on, the
+piano keys) and inserts it into the open document (`insert_entry`, one undoable step). Its header names the bank
+(the active one shared with the agent, see `desktop_bank`) and switches to the Palettes page (`desktop_palettes`).
+A MOD, XM, project or WAV dropped on the tab goes to `window.bank_drop`; an entry dragged from the list to the song
+sample list is inserted there. Relies on: window.document, window.state, window.submit, window.cache,
+window.sample_player, window.meter, window.samples, window.sample_mode, window.bank_changed, window.autoplay,
+window.make_autoplay, `drag_hint`, `drag_hint_done`, `edited`, `pause_playback`, `message` and the binding helpers.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
-                               QLineEdit, QListWidget, QListWidgetItem, QSizePolicy,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLineEdit, QListWidgetItem,
+                               QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
-from .desktop_widgets import media_call
+from . import sample_intake
+from .desktop_bank import BankList, initial_library, retune_text
+from .desktop_drops import drop_kind
+from .desktop_palettes import PalettePanel
+from .desktop_widgets import ElidedLabel, media_call
 from .model import NOTES
-from .sample_library import CATEGORIES, DEFAULT_LIBRARY, SampleLibrary
+from .sample_library import CATEGORIES, SampleLibrary
 
 CATEGORY_LABELS = {"cycle": "Cyclic waves", "percussion": "Percussion", "texture": "Textures",
                    "effect": "Effects", "unclassified": "Unclassified", "silent": "Silent"}
@@ -32,15 +45,25 @@ class SampleBrowser(QWidget):
         self._error = False
         self.setObjectName("sampleLibraryBrowser")
         self.setMinimumWidth(0)
-        saved = window.state.values.get("sample_library")
-        root = Path(__file__).resolve().parents[1]
-        try:
-            self.library_path = Path(saved).resolve() if saved else root / DEFAULT_LIBRARY
-        except (OSError, ValueError):
-            self.library_path = root / DEFAULT_LIBRARY
+        self.setAcceptDrops(True)
+        self.library_path = initial_library(window)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 5, 0, 0)
         layout.setSpacing(5)
+
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        self.bank_label = ElidedLabel("", "muted")
+        self.bank_label.setObjectName("bankName")
+        header.addWidget(self.bank_label, 1)
+        self.page_buttons = []
+        for text, index, name in (("Samples", 0, "pageSamples"), ("Palettes", 1, "pagePalettes")):
+            control = window._button(text, lambda _=False, index=index: self.show_page(index), name)
+            control.setCheckable(True)
+            control.setProperty("compact", True)
+            header.addWidget(control)
+            self.page_buttons.append(control)
+        layout.addLayout(header)
 
         filters = QHBoxLayout()
         filters.setSpacing(5)
@@ -71,9 +94,14 @@ class SampleBrowser(QWidget):
         filters.addWidget(self.reload_button)
         layout.addLayout(filters)
 
+        self.pages = QStackedWidget()
+        samples_page = QWidget()
+        page_layout = QVBoxLayout(samples_page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.setSpacing(5)
         content = QHBoxLayout()
         content.setSpacing(10)
-        self.results = QListWidget()
+        self.results = BankList()
         self.results.setObjectName("librarySamples")
         self.results.setMinimumWidth(190)
         self.results.setMinimumHeight(70)
@@ -103,10 +131,12 @@ class SampleBrowser(QWidget):
         controls.addWidget(self.listen)
         self.stop_button = window._button("Stop", self.stop)
         controls.addWidget(self.stop_button)
+        self.autoplay = window.make_autoplay("autoplayLibrary")
+        controls.addWidget(self.autoplay)
         controls.addStretch()
         preview.addLayout(controls)
         content.addLayout(preview, 2)
-        layout.addLayout(content, 1)
+        page_layout.addLayout(content, 1)
 
         actions = QHBoxLayout()
         actions.setSpacing(5)
@@ -139,7 +169,11 @@ class SampleBrowser(QWidget):
         self.add_button = window._button("Add to song", self.add_to_song)
         self.add_button.setObjectName("addLibrarySample")
         actions.addWidget(self.add_button)
-        layout.addLayout(actions)
+        page_layout.addLayout(actions)
+        self.pages.addWidget(samples_page)
+        self.palettes = PalettePanel(self)
+        self.pages.addWidget(self.palettes)
+        layout.addWidget(self.pages, 1)
 
         self.debounce = QTimer(self)
         self.debounce.setSingleShot(True)
@@ -150,11 +184,13 @@ class SampleBrowser(QWidget):
         self.role.currentIndexChanged.connect(self.schedule_search)
         self.compatible.toggled.connect(self.schedule_search)
         self.results.currentItemChanged.connect(lambda *_: self.selected())
+        self.results.itemClicked.connect(self.entry_clicked)
         self.results.itemDoubleClicked.connect(lambda *_: self.play())
         self.target.currentIndexChanged.connect(self.target_changed)
         self.replace.toggled.connect(self.update_controls)
         self.adapt.toggled.connect(self.update_controls)
         self.note.currentTextChanged.connect(lambda *_: self.cancel_preview())
+        self.show_page(0)
         self.retranslate()
         self.update_slots()
         QTimer.singleShot(0, self.reload)
@@ -171,9 +207,25 @@ class SampleBrowser(QWidget):
             combo.blockSignals(False)
         self.folder_button.setToolTip(str(self.library_path))
         self.search.setAccessibleName(self.window.t("Search samples…"))
+        self.show_bank()
         self.show_entry()
         self.update_slots(reset_confirmation=False)
         self.show_count()
+        self.palettes.retranslate()
+
+    # --- the bank ------------------------------------------------------------------------------------
+    def show_bank(self):
+        """Name the active bank in the tab's header (the full path in the tooltips)."""
+        path = self.library_path
+        self.bank_label.setText(self.window.t("Bank: {name}", name=path.name or str(path)))
+        self.bank_label.setToolTip(self.window.t("Active bank: {path}", path=str(path)))
+        self.folder_button.setToolTip(str(path))
+
+    def show_page(self, index: int):
+        self.pages.setCurrentIndex(index)
+        for position, control in enumerate(self.page_buttons):
+            control.setChecked(position == index)
+        self.cancel_preview()
 
     def schedule_search(self, *_):
         self.page = 0
@@ -185,15 +237,20 @@ class SampleBrowser(QWidget):
         folder = QFileDialog.getExistingDirectory(self, self.window.t("Choose a sample library folder"),
             str(self.library_path), options=QFileDialog.Option.DontUseNativeDialog)
         if folder:
-            self.set_library(Path(folder))
+            self.window.open_bank(Path(folder))
 
     def set_library(self, path: Path):
+        """Show `path` and make it the active bank (shared with the agent); raises when the folder is neither
+        a bank nor empty."""
         self.library_path = Path(path).resolve()
         self.window.state.values["sample_library"] = str(self.library_path)
         self.window._save_preferences()
-        self.folder_button.setToolTip(str(self.library_path))
-        self.page = 0
-        self.reload()
+        try:
+            sample_intake.set_active_library(self.library_path)
+        finally:
+            self.page = 0
+            self.reload()
+            self.window.bank_changed()
 
     def reload(self):
         self.debounce.stop()
@@ -204,6 +261,7 @@ class SampleBrowser(QWidget):
         self._error = False
         bank = SampleLibrary(self.library_path)
         self.bank = bank
+        self.palettes.set_bank(bank)
         query, category, role = self.search.text(), self.category.currentData(), self.role.currentData()
         compatible, offset = self.compatible.isChecked(), self.page * self.PAGE_SIZE
         selected_id = self.entry["id"] if self.entry else None
@@ -227,7 +285,8 @@ class SampleBrowser(QWidget):
             self.results.clear()
             wanted = 0
             for index, entry in enumerate(result["samples"]):
-                item = QListWidgetItem(f"{entry['id']}  ·  {entry['name']}")
+                retune = retune_text(entry)
+                item = QListWidgetItem(f"{entry['id']}  ·  {entry['name']}" + (f"  ·  {retune}" if retune else ""))
                 item.setData(Qt.ItemDataRole.UserRole, entry["id"])
                 item.setToolTip(" · ".join([self.window.t(CATEGORY_LABELS[entry["category"]]), *entry["tags"]]))
                 self.results.addItem(item)
@@ -255,6 +314,19 @@ class SampleBrowser(QWidget):
 
         self.window.submit(operation, finished, failed)
 
+    def select_entry(self, sample_id: str):
+        """Show one entry: the search box takes its ID (the compatibility filter is lifted) and it is selected."""
+        self.search.blockSignals(True)
+        self.search.setText(sample_id)
+        self.search.blockSignals(False)
+        self.compatible.blockSignals(True)
+        self.compatible.setChecked(False)
+        self.compatible.blockSignals(False)
+        self.page = 0
+        self.entry = {"id": sample_id}
+        self.show_page(0)
+        self.reload()
+
     def show_count(self):
         self.count.setText(self.window.t("{count} samples", count=self.total))
         self.count.setToolTip(str(self.library_path))
@@ -275,6 +347,40 @@ class SampleBrowser(QWidget):
         self.cancel_preview()
         self.debounce.stop()
 
+    # --- drops -----------------------------------------------------------------------------------------
+    @staticmethod
+    def dropped(event):
+        """(kind, path) of a module or WAV being dragged over the tab, else None."""
+        found = drop_kind(event.mimeData())
+        return found if found and found[0] in ("module", "wav") else None
+
+    def dragEnterEvent(self, event):
+        found = self.dropped(event)
+        if found:
+            event.acceptProposedAction()
+            self.window.drag_hint("bank" if found[0] == "module" else "wav")
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self.dropped(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.window.drag_hint_done()
+
+    def dropEvent(self, event):
+        found = self.dropped(event)
+        self.window.drag_hint_done()
+        if not found:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        QTimer.singleShot(0, lambda: self.window.bank_drop(found[1]))
+
+    # --- the selected entry ----------------------------------------------------------------------------
     def selected(self):
         self.cancel_preview()
         self.adapt.setChecked(False)
@@ -292,8 +398,15 @@ class SampleBrowser(QWidget):
         self.show_entry()
         self.update_controls()
 
+    def entry_clicked(self, item):
+        """A click on an entry auditions it when Auto-play is on."""
+        if item is not None and self.entry and self.window.autoplay():
+            self.play()
+
     def jam_sample(self):
-        """The selected library entry's sample, for playing it from the keyboard (None when nothing is selected)."""
+        """The sample the piano keys play: the selected entry, or the selected palette entry on the Palettes page."""
+        if self.pages.currentIndex() == 1:
+            return self.palettes.jam_sample()
         return self._jam if self.entry else None
 
     def show_entry(self):
@@ -307,8 +420,12 @@ class SampleBrowser(QWidget):
         self.title.setToolTip(self.title.text())
         loop = self.window.t("loop {start} → {end}", start=entry["loop_start"],
                              end=entry["loop_start"] + entry["loop_length"]) if entry["loop_length"] else self.window.t("no loop")
-        self.details.setText(self.window.t("{size} bytes · {loop} · fine tune {tune} · volume {volume}",
-            size=entry["bytes"], loop=loop, tune=entry["finetune"], volume=entry["volume"]))
+        text = self.window.t("{size} bytes · {loop} · fine tune {tune} · volume {volume}",
+                             size=entry["bytes"], loop=loop, tune=entry["finetune"], volume=entry["volume"])
+        retune = retune_text(entry)
+        if retune:
+            text += " · " + self.window.t("retune {retune}", retune=retune)
+        self.details.setText(text)
         self.details.setToolTip(" · ".join(entry["tags"]))
 
     def update_slots(self, reset_confirmation=True):
@@ -365,16 +482,26 @@ class SampleBrowser(QWidget):
                 explanation = "No free slot. Select an existing slot to replace."
         if occupied and not self.replace.isChecked():
             explanation = "Check Replace to use this occupied slot."
+        mode = getattr(self.window, "sample_mode", None)
+        if document and mode is not None and not mode.allows("library"):   # a synthesized song refuses the bank
+            ready = False
+            explanation = mode.hint("library")
         self.add_button.setEnabled(bool(ready))
         self.add_button.setToolTip(self.window.t(explanation) if explanation else "")
         self.target.setEnabled(bool(document))
 
+    # --- auditions -------------------------------------------------------------------------------------
     def play(self):
-        if not self.entry or not self.bank:
+        if self.entry:
+            self.play_entry(self.entry["id"])
+
+    def play_entry(self, sample_id: str, note: str | None = None):
+        """Hear a bank entry at the preview note (the song pauses), rendered in the background."""
+        if not self.bank:
             return
         self.cancel_preview()
         token = self._preview_token
-        bank, sample_id, note = self.bank, self.entry["id"], self.note.currentText()
+        bank, note = self.bank, note or self.note.currentText()
 
         def finished(path):
             if token != self._preview_token:
@@ -396,20 +523,34 @@ class SampleBrowser(QWidget):
         media_call(self.window.sample_player, "stop")
         self.window.meter.reset()
 
+    # --- into the song ---------------------------------------------------------------------------------
     def add_to_song(self):
         if not self.add_button.isEnabled() or not self.entry or not self.window.document:
-            return
+            return None
+        return self.insert_entry(self.entry["id"], self.target.currentData(), self.replace.isChecked(),
+                                 self.adapt.isChecked())
+
+    def insert_entry(self, sample_id: str, slot: int | None, replace: bool = False, adapt: bool = False) -> dict | None:
+        """Insert a bank entry into the document as one undoable step and select the slot it took."""
+        window = self.window
+        if not window.document or not self.bank:
+            return None
         try:
-            info = self.window.document.insert_library_sample(self.bank, self.entry["id"],
-                slot=self.target.currentData(), replace=self.replace.isChecked(), adapt=self.adapt.isChecked())
+            name = self.bank.get(sample_id)["name"]
+            info = window.document.insert_library_sample(self.bank, sample_id, slot=slot, replace=replace, adapt=adapt)
             self.replace.setChecked(False)
             if info["changed"]:
                 self.cancel_preview()
-                self.window.edited()
-                for row in range(self.window.samples.count()):
-                    if self.window.samples.item(row).data(Qt.ItemDataRole.UserRole) == info["slot"] - 1:
-                        self.window.samples.setCurrentRow(row)
+                window.edited("Add library sample")
+                for row in range(window.samples.count()):
+                    if window.samples.item(row).data(Qt.ItemDataRole.UserRole) == info["slot"] - 1:
+                        window.samples.setCurrentRow(row)
                         break
-                self.window.message("Added {name} to slot {slot} · Ctrl+Z to undo", name=self.entry["name"], slot=f"{info['slot']:02X}")
+                window.message("Added {name} to slot {slot} · Ctrl+Z to undo", name=name, slot=f"{info['slot']:02X}")
+            return info
         except (OSError, ValueError, RuntimeError) as exc:
-            self.window.message("Cannot add library sample: {detail}", True, detail=str(exc))
+            window.message("Cannot add library sample: {detail}", True, detail=str(exc))
+            return None
+
+
+__all__ = ["CATEGORY_LABELS", "ROLES", "SampleBrowser"]

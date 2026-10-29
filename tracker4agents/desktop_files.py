@@ -1,7 +1,7 @@
-"""Files of the ChipLoom window: open, reload, save, export, the library panel and drag and drop.
+"""Files of the ChipLoom window: open, reload, save, export and the library panel (drops: `desktop_drops`).
 
-`FileActionsMixin` opens a MOD, XM or JSON project (`choose_file`, `open_document`, `open_module`, `reload_document`,
-dropping a file on the window) and installs it as the window's `Document` (`_install_document`), asks before
+`FileActionsMixin` opens a MOD, XM or JSON project (`choose_file`, `open_document`, `open_module`, `reload_document`;
+a file dropped on the window reaches `open_document` through `desktop_drops.DropMixin`) and installs it as the window's `Document` (`_install_document`), asks before
 discarding unsaved changes (`_discard_or_save`), saves the editable project (`save_project`), exports the module
 (`export_mod`) and the audible mix (`export_audio`), and fills the library tree with the examples and recent files.
 Relies on: window.document, window.state (recent files), window.cache and `submit` (background export),
@@ -184,13 +184,3 @@ class FileActionsMixin:
             return destination
 
         self.submit(operation, lambda path: self.message("Audio exported: {name}", name=path.name))
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event):
-        for url in event.mimeData().urls():
-            if url.isLocalFile():
-                self.open_document(Path(url.toLocalFile()))
-                break

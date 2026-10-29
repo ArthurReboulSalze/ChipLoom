@@ -498,6 +498,10 @@ class CreatePanel(QWidget):
                 self.slot.addItem(text, number)
         self.slot.setCurrentIndex(max(0, self.slot.findData(current)))
         self.slot.blockSignals(False)
+        mode = getattr(window, "sample_mode", None)   # a library-only song refuses created sounds (desktop_source)
+        allowed = mode is None or mode.allows("recipe")
+        self.add_button.setEnabled(allowed)
+        self.add_button.setToolTip("" if allowed else mode.hint("recipe"))
 
     def first_free_slot(self) -> int:
         samples = self.window.document.module.samples

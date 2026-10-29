@@ -13,6 +13,8 @@
 - desktop_transport.py    playback (real-time libxmp or rendered WAV), seeking, auditions, audio buffer.
 - desktop_editing.py      undoable edits, Edit mode, undo/redo, agent changes saved to disk.
 - desktop_collab.py       the window's side of the live session (desktop_live holds the session itself).
+- desktop_bank.py         the Bank menu and the active bank, Auto-play, adding song samples to the bank.
+- desktop_drops.py        files dropped on the window (open a module, the MIDI hook) and the drag hints.
 
 Panels and helpers that take the window as an argument live in the other desktop_*.py modules (pattern grid,
 playback engine, live bridge, sample workshop, sample library, create, instruments, orders, jam, widgets...).
@@ -29,8 +31,10 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from . import __version__
+from .desktop_bank import BankMixin
 from .desktop_browser import BrowserDialog
 from .desktop_collab import CollaborationMixin
+from .desktop_drops import DropMixin
 from .desktop_editing import EditingMixin
 from .desktop_files import FileActionsMixin
 from .desktop_input import resolve_layout
@@ -64,7 +68,7 @@ __all__ = ["ASSETS", "PatternModel", "PatternView", "STYLE", "Task", "TaskSignal
 
 
 class TrackerWindow(WindowLayoutMixin, MenuBarMixin, PreferencesMixin, FileActionsMixin, SongViewMixin,
-                    TransportMixin, EditingMixin, CollaborationMixin, QMainWindow):
+                    TransportMixin, EditingMixin, CollaborationMixin, BankMixin, DropMixin, QMainWindow):
     """The main window. Its methods are spread over the mixins listed in the module docstring."""
 
     def __init__(self, initial: Path | None = None, state_dir: Path | None = None, restore: bool = True):
@@ -233,7 +237,7 @@ class TrackerWindow(WindowLayoutMixin, MenuBarMixin, PreferencesMixin, FileActio
         self.state.values.update(volume=self.volume.value(), loop=self.loop.isChecked(), follow=self.follow.isChecked(),
                                  theme=self.theme, language=self.language, keyboard=self.keyboard_combo.currentData(),
                                  edit_octave=self.edit_octave.value(), edit_step=self.edit_step.value(),
-                                 live=self.live.enabled, audio_buffer=self.audio_buffer)
+                                 live=self.live.enabled, audio_buffer=self.audio_buffer, autoplay=self.autoplay())
         try:
             self.state.save()
         except OSError:

@@ -5,15 +5,15 @@
 panel on the left, and in the center a vertical splitter with the pattern area (order navigation, edit controls,
 channel strip, pattern grid, hints) over the bottom tabs (Song samples, Sample library, Create, Instruments, Agent).
 
-It creates most widget attributes the other mixins use (theme_combo, language_combo, title_edit, format_label, bpm,
-speed, origin, summary, play_button, stop_button, seek, position_label, loop, volume, meter, library, orders,
+It creates most widget attributes the other mixins use (theme_combo, language_combo, title_edit, format_label,
+sample_mode, bpm, speed, origin, summary, play_button, stop_button, seek, position_label, loop, volume, meter, library, orders,
 order_editor, follow, edit_button, edit_step, edit_octave, keyboard_combo, keys_hint, table, channel_strip, mutes,
 solos, pattern_model, pattern_hint, help_button, shortcut_popup, xm_hint, samples, sample_workshop, waveform,
 sample_title, sample_info, sample_volume, finetune, sample_tabs, sample_browser, create_panel, instrument_panel,
 agent_panel, comment_panel, tab_titles, live_status, web_status, center_splitter, workspace, play_action) and connects their signals
 to methods of the other mixins. Relies on: window.live, window.language/theme, the text-binding helpers
-(`_bind`, `_label`, `_button`, `t`) and `message`. Also here: the automatic height of the bottom tabs (`_fit_split`)
-and the "?" shortcut popup.
+(`_bind`, `_label`, `_button`, `t`), `message`, and `make_autoplay` / `song_sample_clicked` from `desktop_bank`.
+Also here: the automatic height of the bottom tabs (`_fit_split`) and the "?" shortcut popup.
 """
 
 from __future__ import annotations
@@ -21,9 +21,10 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QFontDatabase, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, QGridLayout, QHeaderView, QHBoxLayout,
-                               QLabel, QLineEdit, QListWidget, QSlider, QSpinBox, QSplitter, QTabWidget, QTreeWidget,
+                               QLabel, QLineEdit, QSlider, QSpinBox, QSplitter, QTabWidget, QTreeWidget,
                                QVBoxLayout, QWidget)
 
+from .desktop_bank import SongSampleList
 from .desktop_comments import CommentPanel
 from .desktop_create import CreatePanel, scroll_page
 from .desktop_input import LAYOUTS
@@ -32,6 +33,7 @@ from .desktop_live import AgentPanel, status_label
 from .desktop_orders import OrderEditor
 from .desktop_pattern import ChannelStrip, PatternModel, PatternView
 from .desktop_samples import SampleBrowser
+from .desktop_source import SampleModeSwitch
 from .desktop_widgets import ASSETS, ElidedLabel, ShortcutPopup, Waveform, label, separator
 from .desktop_workshop import SampleWorkshop
 from .level_meter import LevelMeter
@@ -181,6 +183,8 @@ class WindowLayoutMixin:
         self.speed.setFixedWidth(64)
         song.addWidget(self.speed, 0, 5)
         song.addWidget(self._button('Apply at start', self.apply_song, "applySong"), 0, 6)
+        self.sample_mode = SampleModeSwitch(self)   # library / synthesized / mixed, see desktop_source
+        song.addWidget(self.sample_mode, 0, 7)
         details = QHBoxLayout()
         details.setContentsMargins(4, 0, 0, 0)
         details.setSpacing(8)
@@ -190,7 +194,7 @@ class WindowLayoutMixin:
         self.summary = self._label('Open a module to get started', "muted")
         details.addWidget(self.summary)
         details.addStretch()
-        song.addLayout(details, 1, 0, 1, 7)
+        song.addLayout(details, 1, 0, 1, 8)
         song.setColumnStretch(0, 1)
         head.addLayout(song)
 
@@ -355,17 +359,19 @@ class WindowLayoutMixin:
         sample_layout.setSpacing(14)
         sample_left = QVBoxLayout()
         sample_left.addWidget(self._label('SAMPLES', "section"))
-        self.samples = QListWidget()
+        self.samples = SongSampleList(self)   # drop target for bank entries, right-click: Play, Add to bank…
         self.samples.setObjectName("samples")
         self.samples.setMinimumWidth(195)
         self.samples.setMinimumHeight(45)
         self.samples.setMaximumWidth(280)
         self.samples.currentRowChanged.connect(self.sample_selected)
+        self.samples.itemClicked.connect(self.song_sample_clicked)
         self.samples.itemDoubleClicked.connect(lambda item: self.play_sample())
         sample_left.addWidget(self.samples)
         sample_layout.addLayout(sample_left)
         self.song_samples_page = sample_widget
         self.sample_workshop = SampleWorkshop(self)
+        self.sample_workshop.switch.addWidget(self.make_autoplay("autoplaySong"))
         sample_left.addLayout(self.sample_workshop.switch)
         editor = self.sample_workshop.editor
         # The editor owns these widgets; the window keeps the names it always had for them.
