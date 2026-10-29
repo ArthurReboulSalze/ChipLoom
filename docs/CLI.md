@@ -83,9 +83,12 @@ Generated files can contain the project's user-authored metadata and music. Revi
 
 ## Local sample library
 
-The library is optional and uses only the standard library. Its default location is
-`exports/sample_library`, relative to the working directory. Every subcommand accepts
-`--library PATH` after the subcommand. Library data and its private provenance stay local.
+The library is optional and uses only the standard library. A bank is the owner's local data and is
+never published. Every subcommand accepts `--library PATH` after the subcommand; without it the
+**active bank** is used: `CHIPLOOM_BANK` when set, else the bank chosen in the window or with
+`samples bank --set` (remembered in `bank.json` under the ChipLoom home, the same folder as the live
+discovery files), else `exports/sample_library` under the working directory. The window and the agent
+therefore work on the same bank, and `live status` reports it as `bank`.
 
 ```sh
 python -m tracker4agents samples extract path/to/selection.zip --library exports/sample_library
@@ -101,7 +104,49 @@ python -m tracker4agents samples add SMP-0001 --project exports/song/project.jso
 python -m tracker4agents samples palettes --role bass --format xm
 python -m tracker4agents samples palette PAL-0003
 python -m tracker4agents samples use-palette PAL-0003 exports/song/blank.json --output exports/song/v1.project.json
+python -m tracker4agents samples bank                                  # the active bank, its size, recent banks
+python -m tracker4agents samples bank --new D:/banks/mine              # create an empty bank and make it active
+python -m tracker4agents samples slots song.xm                         # a song's samples: role, tuning, bank entry
+python -m tracker4agents samples import-slot song.xm --slot 4 --name "Fat bass" --role bass --tag warm
+python -m tracker4agents samples import-wav kick.wav --role kick
+python -m tracker4agents samples edit SMP-0012 --semitones 12 --cents -15   # tuning kept in the bank
 ```
+
+**One sample at a time.**
+
+- `samples bank [--set PATH | --new PATH]` shows the active bank (`library`, `source`: `environment`,
+  `chosen` or `default`, `entries`, `recent`), makes another bank folder active (it must hold a bank
+  or be empty), or creates an empty bank there and makes it active.
+- `samples slots SONG` lists the non-empty slots of a MOD, XM or JSON project: name, frames, bits,
+  loop, `volume`, the `role` and `role_confidence` scored by `usage.study` from how the song plays the
+  slot, `tuning` (below) and `in_bank` (the ID of the entry that already holds this sample, or null).
+- `samples import-slot SONG --slot N [--name] [--role] [--category] [--tag ...]` adds that slot with its
+  PCM and playback settings (an XM sample keeps its bits, loop mode, panning, relative note and
+  finetune, and its instrument's envelope facts). The name defaults to the sample's own (cleaned to 22
+  printable ASCII characters), the role to the scored one (`role_source: owner` when you give it,
+  `song` when scored from the song, `sound` from the PCM alone). The entry records `source` (file,
+  slot, original name). A sample already in the bank (same PCM and settings) is not added twice: the
+  result has `created: false` and the existing `id`.
+- `samples import-wav FILE [--name] [--role] [--category] [--tag ...] [--loop-start N --loop-length N]`
+  reads a PCM WAV (8, 16, 24 or 32-bit, up to 8 channels mixed to mono, 1 to 192 kHz, at most
+  1,048,576 frames) as an XM-origin sample: 8-bit stays 8-bit, deeper files become 16-bit, and the
+  relative note and finetune make C-4 play the file at its own rate. The loop is in frames (0: one-shot).
+  Errors: `SAMPLE_WAV`.
+- `samples edit ID [--name] [--category] [--tag ...] [--role] [--semitones N] [--cents N]` renames and
+  relabels an entry; `--semitones` (-48..48, 12 = an octave) and `--cents` (-100..100) store a tuning
+  correction `retune` that every insertion applies: an XM takes it in its relative note and finetune,
+  a MOD takes the cents in its finetune (1/8 semitone) and, having no relative note, gets
+  `retune.transpose_notes` (the semitones to transpose its notes by). The PCM is never changed.
+  `--semitones 0 --cents 0` clears it.
+- `samples relabel` gives entries extracted before readable names their source's sample name (entries
+  you renamed keep yours) and a `source`.
+
+**Tuning.** `tuning` is a measurement: the note a sample sounds when C is written (XM C-4, MOD C-2),
+as `written_c_sounds` (pitch class), `cents`, `hz`, `nearest_note` and `transpose_semitones`, or
+`pitched: false` with the reason for a drum or a noise. Samples taken from different songs were often
+tuned differently and written transposed in their song, so two parts can clash although each note is
+"right": compare `written_c_sounds` before writing, retune with `samples edit --semitones/--cents` (or
+the relative note in an XM), or transpose the notes.
 
 `extract SOURCE` reads a `.mod`, an `.xm`, a ZIP holding either, or a folder (recursive;
 its ZIPs are opened too). A MOD is read with the same bounded 31-sample layouts as structural
@@ -114,15 +159,17 @@ the other modules are imported. Archive paths are never extracted. Limits are 51
 64 MiB expanded per ZIP, 4 MiB per MOD, 24 MiB per XM, 256 MiB per folder.
 
 The manifest `library.json` (`chiploom.sample-library.v2`; a v1 bank is read and rewritten
-as v2 on its next update) contains stable `SMP-0001` IDs, neutral names, PCM digests,
+as v2 on its next update) contains stable `SMP-0001` IDs, names, PCM digests,
 playback settings, measured features, editable labels and the fields below. `pcm/` holds
 exact PCM, one file per distinct payload: `<sha256>.pcm` for signed 8-bit bytes,
 `<sha256>.pcm16` for signed little-endian 16-bit frames (`bits` says which; `loop_start`,
 `loop_length` and `bytes` count frames and bytes respectively). Different loop, volume,
 fine-tune, bit depth, loop mode, panning or relative-note settings remain separate entries.
-Original filenames, titles, sample labels and source fingerprints exist only in
-`private/provenance.json`; ordinary search/inspect results do not include them. A generated
-`.gitignore` excludes bank contents from Git.
+An entry is named after the sample's own name (cleaned to 22 printable ASCII characters; a neutral
+name such as `Cycle Pulse 12` when it has none) and records a readable `source` (`file`, `slot`,
+`name`); the name is a label, never read as an instruction. `private/provenance.json` keeps every
+occurrence (module digests and titles) for roles and palettes. A generated `.gitignore` excludes bank
+contents from Git; published material (norms, reference studies, demos) keeps neutral IDs.
 
 Per entry: `format_origin` (`mod` or `xm`), `bits` (8 or 16), `loop_mode` (`forward` or
 `pingpong`), `panning` (0-255, 128 centred), `relative_note` (-96..95), `finetune` (-8..7 for
@@ -223,13 +270,18 @@ cannot decode yields its samples but no palette (`modules_without_palette`).
 
 - `samples palettes [--role ROLE] [--format mod|xm] [--channels N]` lists palettes with their summary.
 - `samples palette PAL-0003` shows one palette.
-- `samples use-palette PAL-0003 PROJECT --output NEW.json [--slots N ...] [--adapt] [--all]`
+- `samples use-palette PAL-0003 PROJECT --output NEW.json [--slots N ...] [--adapt] [--all] [--retune]`
   inserts the palette's played entries into a library-mode project in role order (drums,
   bass, chords, leads, pads, textures, effects; the most played first inside a role) and
   returns `slot_map` (slot, ID, role, confidence, adaptations) and the palette's channel
   layout. `--slots` gives the target slot of each entry in that order (no gaps, no occupied
   slot), `--all` also inserts the entries the song never plays, `--adapt` is needed for
   entries outside the MOD profile when the project is a MOD. Write your own notes afterwards.
+  The result's `tuning` compares the pitched entries the palette plays with its most played one:
+  per entry `written_c_sounds`, `cents`, `delta_cents`, `retune_relative_note`, `retune_finetune`
+  and `in_tune`, and `consistent` overall. An entry off by whole semitones was written transposed in
+  its song. `--retune` (XM only) applies the corrections to the inserted samples (`retuned`), relative
+  note and finetune only.
 
 For a local listening catalog and the original test composition using the selected bank:
 
