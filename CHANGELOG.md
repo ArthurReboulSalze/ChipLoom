@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `chiploom lint` and the MCP tool `lint` (`chiploom.lint.v1`): cells whose effect does nothing or not what the score suggests, along the playback timeline, each with its pattern, row, channel, grid text and the reason. Rules: `offset_without_note`, `offset_past_end`, `finetune_without_note`, XM `instrument_without_note`, XM `retrig_volume_ignored`, XM `key_off_k00`, `slide_both_nibbles`, `tick_effect_after_row`, `portamento_without_note` and `held_arpeggio`. `--strict` exits 1 on any finding; `validate --report` adds a `lint` summary. The published songs lint clean; the first version of Copper Skies would have shown its 100 held arpeggios. The skill and the agent guide run it before delivery.
+
 ## 0.8.4 — 2026-10-29
 
 - `render --mp3-output` takes `--mp3-normalize` (MCP `mp3_normalize`): the MP3 listening copy is scaled to a -1 dBFS peak and the result says by how much; the WAV keeps the engine's level. A ten-channel XM renders about 9 dB below full scale in libopenmpt, so its listening copy was much quieter than a four-channel MOD's.

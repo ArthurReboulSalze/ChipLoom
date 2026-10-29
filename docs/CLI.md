@@ -15,6 +15,7 @@ Use `chiploom` after editable installation, or `python -m tracker4agents` from t
 | `render` | MOD, XM or JSON project | WAV from the actual module file (a project is encoded to a temporary module first), with level and loudness measurements; optional MP3 |
 | `preview` | Strict MOD or JSON | New portable HTML/media directory |
 | `analyze` | Reference MOD or ZIP | Read-only aggregate report; broader than editable profile |
+| `lint` | Project, MOD or XM | Cells whose effect does nothing, or not what the score suggests, with the reason |
 | `report` | Project or MOD | Measurements of the played score: density, ranges, gaps, repetition, estimated key |
 | `compare` | Two projects or MODs | New directory with a blind A/B listening page |
 | `feedback` | Project | New project with the owner's listening feedback in its metadata |
@@ -417,6 +418,29 @@ A project may declare `"sample_source"` in `metadata`: `"library"` (only PCM fro
 
 ## Measuring and comparing versions
 
+### lint
+
+```sh
+python -m tracker4agents lint exports/song/project.json [--strict]
+```
+
+`lint` takes a project, MOD or XM and prints `chiploom.lint.v1` JSON: cells whose effect does nothing (`inert`), does something other than the cell suggests (`misleading`), or works but tires the ear (`texture`). It follows the playback timeline like `report`, so it knows each row's speed and the instrument playing on each channel; a cell played several times is listed once with `times_played`, and patterns that are never played are not linted. Rules follow FastTracker II for an XM and ProTracker for a MOD. A finding is advice about the score, not a validation error: the song still validates, exports and plays. `--strict` exits with status 1 when there is any finding (for scripts); `validate --report` adds a `lint` summary (`count`, `counts`).
+
+| Code | Kind | Cell |
+| --- | --- | --- |
+| `offset_without_note` | inert | `9xx` without a note in the same cell |
+| `offset_past_end` | misleading | `9xx` at or past the end of the sample (`frames` gives its length): FastTracker II plays nothing |
+| `finetune_without_note` | inert | `E5x` without a note in the same cell |
+| `instrument_without_note` | misleading | XM: an instrument number other than the playing one, without a note; FastTracker II keeps the playing sample and only resets the volume and the envelope (a MOD sample swap is not flagged) |
+| `retrig_volume_ignored` | misleading | XM: `Rxy` with a volume change `x` and a volume set in the volume column, which FastTracker II applies after each retrigger |
+| `key_off_k00` | misleading | XM: `K00`; write `===` in the note column instead |
+| `slide_both_nibbles` | misleading | `Axy`, `5xy`, `6xy`, `Hxy` or `Pxy` with both nibbles set: only the first runs |
+| `tick_effect_after_row` | inert | `E9x`, `ECx` or `EDx` whose tick is not reached at the row's speed (an `EDx` note is then never played in FastTracker II) |
+| `portamento_without_note` | inert | `3xx`, `5xy` or a volume-column `Fx` on a channel that has not played a note yet |
+| `held_arpeggio` | texture | one note under an `0xy` arpeggio for more than 1.2 s without a new note or a cut (`rows`, `seconds`; the same measure as `report`) |
+
+Each finding has `code`, `kind`, `order`, `pattern`, `row`, `channel`, `cell` (grid text), `message` and `times_played`; `counts` totals them by code, `clean` is true when there is none, and `rules` describes every rule. At most 500 findings are listed (`truncated`).
+
 ### report
 
 ```sh
@@ -571,7 +595,7 @@ Each tool call runs the equivalent `chiploom` command in a **child process**, so
 | `synth_types`, `synth_levels`, `synth_preview`, `synth_add`, `synth_palette` | `synth types`, `levels`, `preview`, `add`, `palette`; `recipe` is a JSON object, `match_library` a bank folder, `no_match` a boolean |
 | `live_sessions`, `live_status`, `live_score`, `live_patch`, `live_changes`, `live_proposals`, `live_withdraw`, `live_take`, `live_takes`, `live_open`, `live_play`, `live_stop`, `live_select`, `live_save` | the `live` subcommands; `live_patch` takes `ops` or `ops_file`, `base_revision`, `label`, `propose`, `author` |
 
-There are 46 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
+There are 47 tools; the full list, with every argument, is in [MCP.md](MCP.md#tools). `validate` also takes `sample_source`; `report` takes `library`. `demo`, `import`, `analyze`, `gui` and `live serve` are not exposed; use the CLI for them. Read-only tools carry `readOnlyHint`.
 
 Configuration for a client that launches stdio servers (field names vary by client; this is the common shape):
 

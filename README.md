@@ -225,7 +225,7 @@ Without the window, `chiploom live serve SONG.json` hosts the same session headl
 - **Keyboard audition:** the piano keys play the current sound, a library entry, a recipe or an instrument, over the song when it plays. [User guide →](docs/USER_GUIDE.md#keyboard-audition)
 - **Browser studio:** a tablet or second screen edits the same live session, opened from **Agent → Open in a browser…** or by pasting the printed address, with no code to type. It stays on this computer unless you allow your local network (plain HTTP). [User guide →](docs/USER_GUIDE.md#open-in-a-browser)
 - **More formats:** MOD with 2 to 32 channels, the `E6x` and `EEx` effects, a first FastTracker 2 XM profile and `convert` between MOD and XM in the command line. [CLI reference →](docs/CLI.md#multi-channel-mod-and-xm)
-- **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 46 MCP tools. [Changelog →](CHANGELOG.md)
+- **For agents:** sample-editing and instrument patch operations, an `open` request that answers `pending` instead of blocking on the owner's prompt, and 46 MCP tools in 0.8 (47 with `lint`). [Changelog →](CHANGELOG.md)
 - **Standalone builds:** each GitHub release has a Windows `.zip` and, since 0.8.1, a Linux x86-64 `.tar.gz`, with no Python to install.
 
 <p align="center">

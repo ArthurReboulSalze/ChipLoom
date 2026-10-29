@@ -17,7 +17,7 @@ The command workflow is exercised by this project's tests and by Codex during de
 1. Establish duration, approximate tempo, mood and target format (MOD with 4 or more channels, or XM). By default, use the owner's local sample library; use created samples only when the owner asks for a song made with them ([below](#songs-made-only-with-created-samples)), and edit sample PCM only when the owner asks for it.
 2. Inspect an included project and, when useful, read the reference study. Use a reference's construction ideas without assuming its samples or melody should be copied.
 3. Create a **new** schema v2 project JSON with embedded library PCM, patterns and order list: `new --output exports/my-song/project.json [--channels N] [--patterns N] [--bpm B]` writes a blank library-mode project to fill with `samples add` or `library_sample` operations. Record the library IDs and select a coherent palette before writing the arrangement. Avoid replacing the included examples. Write patterns as grid `rows` (see [Project data and samples](#project-data-and-samples)), or build the first version with `patch` operations on a copy.
-4. Read what you wrote back with `inspect --pattern N --grid` and validate. Fix any rejected note range, sample loop or unsupported effect before exporting. `validate --report` lists every independent problem with a stable `code` and a `path`.
+4. Read what you wrote back with `inspect --pattern N --grid` and validate. Fix any rejected note range, sample loop or unsupported effect before exporting. `validate --report` lists every independent problem with a stable `code` and a `path`. Then run `lint`: it lists cells whose effect does nothing or not what you meant (a `9xx` or `E5x` without a note, an XM instrument number without a note, `Rxy` under a volume column, held arpeggios), each with the reason; fix them before you deliver.
 5. Revise with `patch`: batches of operations that apply as one validated transaction ([below](#editing-with-patch-operations)). Write each revision to a new file so earlier versions stay available.
 6. Export the actual MOD, then render that exported file. Generate an HTML listening bundle if useful.
 7. Measure with `report` and, when two versions exist, build a blind A/B page with `compare` ([Measuring and comparing versions](#measuring-and-comparing-versions)). Check duration, signal levels, transitions and loop behavior. Explain which checks were performed; listening quality is still a musical judgment.
@@ -28,6 +28,7 @@ The command workflow is exercised by this project's tests and by Codex during de
 python -m tracker4agents inspect examples/pixel_rush.project.json --pattern 0 --grid --rows 8
 python -m tracker4agents new --output exports/my-song/project.json --patterns 4 --bpm 120
 python -m tracker4agents validate exports/my-song/project.json
+python -m tracker4agents lint exports/my-song/project.json
 python -m tracker4agents export exports/my-song/project.json --output exports/my-song/my-song.mod
 python -m tracker4agents render exports/my-song/my-song.mod --output exports/my-song/my-song.wav --mp3-output exports/my-song/my-song.mp3
 python -m tracker4agents preview exports/my-song/project.json --output exports/my-song-review --language en
@@ -294,7 +295,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## MCP adapter
 
-`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 46 tools (estimate, validate, inspect, `new_project`, patch, export, render, preview, report, compare, feedback, migrate, convert, `export_format`, four `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`, or as a path to a JSON file in `ops_file` for large generated patches.
+`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 47 tools (estimate, validate, inspect, `new_project`, patch, export, render, preview, lint, report, compare, feedback, migrate, convert, `export_format`, four `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`, or as a path to a JSON file in `ops_file` for large generated patches.
 
 A client that launches stdio servers can use this shape (field names vary by client):
 

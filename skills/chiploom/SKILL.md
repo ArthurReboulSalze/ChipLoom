@@ -69,8 +69,9 @@ music made with that PCM local unless the user explicitly requests publication.
    and orders count from 0 in operations and in every result (`ch0` is the first channel).
    `samples inspect` gives a sample's estimated pitch at C-2; a looped cycle's pitch
    follows its loop length, so check that the palette agrees before writing chords.
-5. Validate, export the real MOD, then render that exported file if audio tools are
-   available. For a longer score, use bounded section renders; each render is at
+5. Validate, run `lint` and fix what it lists (effects that do nothing or not what the
+   cell suggests, held arpeggios), export the real MOD, then render that exported file if
+   audio tools are available. For a longer score, use bounded section renders; each render is at
    most 120 seconds. Choose a new directory for each HTML bundle.
 6. Check signal, duration and transitions. Distinguish measured results from musical
    judgments and actual listening. Revise from the user's feedback.
@@ -145,7 +146,7 @@ and a cell is `NOTE II VV EEE`.
    of changing pulse width mid-note needs new notes there.
 4. Header: `xm_header` sets `restart_position`, `default_speed`, `default_bpm`,
    `frequency_table`. Read `warnings` for loops that come back at another tempo.
-5. Validate (with `--sample-source` for a declared mode), `export --output song.xm`, render.
+5. Validate (with `--sample-source` for a declared mode), `lint`, `export --output song.xm`, render.
    Both engines render at libopenmpt's level, which is about 6 dB lower for an XM than for a
    four-channel MOD and drops as channels are added: compare loudness within one format and width.
 

@@ -416,6 +416,10 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--label", default="Patch", help="Label for the change history.")
     patch.add_argument("--in-place", action="store_true", help="Allow --output to be the source project.")
     patch.add_argument("--overwrite", action="store_true", help="Allow --output to replace an existing file other than the source.")
+    lint = commands.add_parser("lint", help="List cells whose effect does nothing, or not what the score suggests "
+                                            "(FastTracker II / ProTracker rules along the playback timeline).")
+    lint.add_argument("source", type=Path)
+    lint.add_argument("--strict", action="store_true", help="Exit with status 1 when there is any finding.")
     report = commands.add_parser("report", help="Measure a composition: density, ranges, gaps, repetition, estimated key.")
     report.add_argument("source", type=Path)
     report.add_argument("--library", type=Path, help="Sample bank whose median levels are the loudness reference "
@@ -583,7 +587,11 @@ def main(argv: list[str] | None = None) -> int:
             if source_check is not None:
                 result["sample_source"] = source_check
             if getattr(args, "report", False):
-                result.update(errors=[], error_count=0)
+                from .lint import lint
+                found = lint(module)
+                result.update(errors=[], error_count=0,
+                              lint={"count": found["count"], "counts": found["counts"],
+                                    "note": "Advice, not errors: run `lint` for every cell and the reason."})
         elif args.command in ("export", "import"):
             if args.source.resolve() == args.output.resolve():
                 raise ValidationError("La sortie doit être distincte du fichier source.", "OUTPUT_PATH")
@@ -600,6 +608,12 @@ def main(argv: list[str] | None = None) -> int:
             result = patch_project(args)
         elif args.command == "new":
             result = new_project(args)
+        elif args.command == "lint":
+            from .lint import lint
+            result = {"ok": True, **lint(load(args.source))}
+            if args.strict and not result["clean"]:
+                emit(result)
+                return 1
         elif args.command == "report":
             from .report import analyze, loudness_reference
             module = load(args.source)

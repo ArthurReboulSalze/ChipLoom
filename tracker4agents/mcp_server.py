@@ -112,6 +112,10 @@ TOOLS = [
     _tool("preview", "Build a portable HTML listening bundle in a new directory.",
           {"source": S, "output": S, "mp3": B, "language": _enum("en", "fr")}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),
+    _tool("lint", "List cells whose effect does nothing or not what the score suggests (a 9xx or E5x without a "
+          "note, an XM instrument number without a note, Rxy cancelled by the volume column, K00, slides with both "
+          "nibbles, E9x/ECx/EDx past the row's ticks, portamento with no note, held 0xy arpeggios), with the reason.",
+          {"source": S}, ["source"], lambda a: ["lint", a["source"]], True),
     _tool("report", "Measure a composition: density, ranges, gaps, repetition, held arpeggios, estimated key, unused samples, "
           "sample sources and loudness against the reference levels (exports/sample_library when it exists, "
           "unless library is given; else fixed levels). The key estimate leaves out percussion slots. "
