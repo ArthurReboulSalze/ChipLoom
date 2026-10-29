@@ -199,21 +199,49 @@ class RejectionTests(unittest.TestCase):
             xm.decode(payload)
         self.assertEqual(caught.exception.code, code, str(caught.exception))
 
-    def test_multi_sample_instruments_and_keymaps(self):
-        self.reject(raw_xm(instrument_blobs=[instrument_blob(samples=2)]), "XM_MULTISAMPLE")
+    def test_a_stray_keymap_on_a_one_sample_instrument_is_dropped_with_a_note(self):
         keymap = bytes((0,) * 10 + (1,) + (0,) * 85)
-        self.reject(raw_xm(instrument_blobs=[instrument_blob(keymap=keymap)]), "XM_MULTISAMPLE")
+        module = xm.decode(raw_xm(instrument_blobs=[instrument_blob(keymap=keymap)]))
+        self.assertEqual([note["code"] for note in xm.import_notes(module)], ["XM_KEYMAP_DROPPED"])
 
     def test_unsupported_files(self):
         self.reject(raw_xm(version=0x0103, instrument_blobs=[instrument_blob()]), "XM_VERSION")
-        self.reject(raw_xm(instrument_blobs=[instrument_blob(loop=(0, 0, 3))]), "XM_SAMPLE_TYPE")
         self.reject(raw_xm(instrument_blobs=[instrument_blob(loop=(0, 0, 0x20))]), "XM_SAMPLE_TYPE")
         self.reject(raw_xm(channels=1), "XM_FORMAT")
         self.reject(raw_xm(channels=33), "XM_FORMAT")
         self.reject(raw_xm(flags=2, instrument_blobs=[instrument_blob()]), "XM_FORMAT")
         self.reject(b"Extended Module: " + bytes(100), "XM_FORMAT")
         self.reject(b"not an xm" * 100, "XM_FORMAT")
-        self.reject(raw_xm(instrument_blobs=[instrument_blob(sample_header=36)]), "XM_INSTRUMENT_HEADER")
+        short = bytearray(instrument_blob())
+        short[0:4] = struct.pack("<I", 28)  # a header shorter than its 29 base bytes cannot be read
+        self.reject(raw_xm(instrument_blobs=[bytes(short)]), "XM_INSTRUMENT_HEADER")
+
+    def test_a_sample_header_size_other_than_40_is_read_and_written_back_as_40(self):
+        for size in (36, 44):
+            with self.subTest(size=size):
+                blob = bytearray(instrument_blob(sample_header=size))
+                if size > 40:
+                    blob[29 + 4 + 96 + 48 + 48 + 14 + 2 + 22 + 40:29 + 4 + 96 + 48 + 48 + 14 + 2 + 22 + 40] = bytes(4)
+                module = xm.decode(raw_xm(instrument_blobs=[bytes(blob)]))
+                self.assertEqual(module.samples[0].pcm, (0, 5, 15, 30))
+                self.assertEqual([note["code"] for note in xm.import_notes(module)], ["XM_SAMPLE_HEADER_RESIZED"])
+                self.assertEqual(xm.encode(module), raw_xm(instrument_blobs=[instrument_blob()]))
+
+    def test_other_trackers_are_refused_by_name_before_the_mod_signature_check(self):
+        with self.assertRaises(ValidationError) as caught:
+            formats.decode(b"IMPM" + bytes(2000))
+        self.assertEqual(caught.exception.code, "IT_UNSUPPORTED")
+        self.assertIn("Impulse Tracker", str(caught.exception))
+        with self.assertRaises(ValidationError) as caught:
+            formats.decode(bytes(44) + b"SCRM" + bytes(2000))
+        self.assertEqual(caught.exception.code, "S3M_UNSUPPORTED")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "renamed.xm"
+            path.write_bytes(b"IMPM" + bytes(2000))
+            with self.assertRaises(ValidationError) as caught:
+                formats.read(path)
+            self.assertEqual(caught.exception.code, "IT_UNSUPPORTED")
+
 
     def test_adpcm_is_refused(self):
         blob = bytearray(instrument_blob())
@@ -298,6 +326,130 @@ class RejectionTests(unittest.TestCase):
         notes = json.dumps(xm.import_notes(module))
         self.assertNotIn("ignore all rules", notes)
         self.assertEqual(xm.encode(module), bytes(payload))
+
+
+class RealWorldVariantTests(unittest.TestCase):
+    """Files other trackers write that the profile imports with a note instead of refusing."""
+
+    def test_an_empty_instrument_with_a_33_byte_header_round_trips(self):
+        blobs = [instrument_blob(), struct.pack("<I", 33) + b"Empty".ljust(22, b"\x00") + bytes(3) + struct.pack("<I", 40),
+                 struct.pack("<I", 33) + bytes(25) + bytes.fromhex("80808080")]  # garbage in the size field
+        payload = raw_xm(instruments=3, instrument_blobs=blobs)
+        module = xm.decode(payload)
+        self.assertEqual(len(module.samples), 3)
+        self.assertEqual(module.samples[1].name, "Empty")
+        extras = module.metadata["xm"]["instruments"]
+        self.assertEqual(extras["2"], {"header_size": 33})
+        self.assertEqual(extras["3"], {"header_size": 33, "sample_header_size": 0x80808080})
+        self.assertEqual([note["code"] for note in xm.import_notes(module)], ["XM_HEADER_SIZE_KEPT"])
+        self.assertEqual(xm.encode(module), payload)
+        validate(project.from_dict(json.loads(project.dumps(project.to_dict(module)))))
+
+    def test_a_long_instrument_header_is_honoured(self):
+        blob = bytearray(instrument_blob())
+        blob[0:4] = struct.pack("<I", 267)
+        blob[263:263] = bytes(4)  # four unused bytes before the sample header
+        module = xm.decode(raw_xm(instrument_blobs=[bytes(blob)]))
+        self.assertEqual(module.samples[0].pcm, (0, 5, 15, 30))
+        self.assertEqual(module.metadata["xm"]["instruments"]["1"]["header_size"], 267)
+        self.assertEqual(xm.encode(module), raw_xm(instrument_blobs=[bytes(blob)]))
+
+    def test_an_oversized_fadeout_is_clamped_and_written_back(self):
+        blob = bytearray(instrument_blob())
+        blob[29 + 4 + 96 + 48 + 48 + 14:29 + 4 + 96 + 48 + 48 + 14 + 2] = struct.pack("<H", 32767)
+        payload = raw_xm(instrument_blobs=[bytes(blob)])
+        module = xm.decode(payload)
+        extra = module.metadata["xm"]["instruments"]["1"]
+        self.assertEqual((extra["fadeout"], extra["fadeout_raw"]), (4095, 32767))
+        self.assertEqual([note["code"] for note in xm.import_notes(module)], ["XM_FADEOUT_CLAMPED"])
+        self.assertEqual(xm.encode(module), payload)
+        extra["fadeout"] = 1000  # an edit wins over the file's value
+        self.assertEqual(xm.decode(xm.encode(module)).metadata["xm"]["instruments"]["1"].get("fadeout"), 1000)
+        extra["fadeout"] = 5000
+        with self.assertRaises(ValidationError):
+            validate(module)
+
+    def test_envelope_points_out_of_order_are_kept_as_read(self):
+        blob = bytearray(instrument_blob())
+        points = struct.pack("<HHHHHH", 0, 32, 40, 48, 20, 0)  # the third tick goes backwards
+        blob[29 + 4 + 96 + 48:29 + 4 + 96 + 48 + 12] = points
+        blob[29 + 4 + 96 + 48 + 48 + 1] = 3  # three panning points
+        blob[29 + 4 + 96 + 48 + 48 + 9] = 1  # panning envelope on
+        payload = raw_xm(instrument_blobs=[bytes(blob)])
+        module = xm.decode(payload)
+        envelope = module.metadata["xm"]["instruments"]["1"]["panning_envelope"]
+        self.assertEqual((envelope["points"], envelope["ticks_as_read"]), ([[0, 32], [40, 48], [20, 0]], True))
+        notes = xm.import_notes(module)
+        self.assertEqual([note["code"] for note in notes], ["XM_ENVELOPE_POINTS_KEPT"])
+        self.assertEqual(notes[0]["details"]["envelope"], "panning_envelope")
+        self.assertEqual(xm.encode(module), payload)
+        del envelope["ticks_as_read"]  # an agent writing such points is still refused
+        with self.assertRaises(ValidationError):
+            validate(module)
+
+    def test_a_multi_sample_instrument_keeps_the_sample_the_keymap_uses_most(self):
+        keymap = bytes((1,) * 50 + (0,) * 30 + (2,) * 16)
+        blob = bytearray(instrument_blob(samples=3, keymap=keymap))
+        base = 263 + 40 * 3
+        blob[base:base + 12] = delta((1, 1, 1, 1)) + delta((2, 2, 2, 2)) + delta((3, 3, 3, 3))
+        payload = raw_xm(instrument_blobs=[bytes(blob)])
+        module = xm.decode(payload)
+        self.assertEqual(module.samples[0].pcm, (2, 2, 2, 2))
+        self.assertEqual(module.metadata["xm"]["instruments"]["1"]["samples_dropped"], 2)
+        notes = xm.import_notes(module)
+        self.assertEqual([note["code"] for note in notes], ["XM_MULTISAMPLE_REDUCED"])
+        self.assertEqual(notes[0]["details"], {"instrument": 1, "samples": 3, "kept": 1, "keymap_notes": 50})
+        self.assertEqual(notes[0]["kind"], "converted")
+        self.assertNotEqual(xm.encode(module), payload)
+        tie = xm.decode(raw_xm(instrument_blobs=[instrument_blob(samples=2)]))  # a blank key map: the first wins
+        self.assertEqual(xm.import_notes(tie)[0]["details"]["kept"], 0)
+        validate(project.from_dict(json.loads(project.dumps(project.to_dict(module)))))
+
+    def test_read_samples_returns_every_sample_of_every_instrument(self):
+        keymap = bytes((1,) * 50 + (0,) * 46)
+        blob = bytearray(instrument_blob(samples=2, keymap=keymap, loop=(1, 2, 2)))
+        blob[29 + 4 + 96 + 48 + 48 + 14:29 + 4 + 96 + 48 + 48 + 14 + 2] = struct.pack("<H", 300)
+        blob[263 + 40 * 2:263 + 40 * 2 + 8] = delta((1, 1, 1, 1)) + delta((-2, -2, -2, -2))
+        payload = raw_xm(instruments=2, instrument_blobs=[bytes(blob), instrument_blob(name=b"Solo", bits16=True,
+                                                                                         pcm=delta((1000, -1000), 16))])
+        items = xm.read_samples(payload)
+        self.assertEqual([(item["instrument"], item["index"]) for item in items], [(1, 0), (1, 1), (2, 0)])
+        self.assertEqual([item["pcm"] for item in items], [(1, 1, 1, 1), (-2, -2, -2, -2), (1000, -1000)])
+        self.assertEqual([item["keymap_notes"] for item in items], [46, 50, 96])
+        self.assertEqual((items[0]["loop_mode"], items[0]["loop_start"], items[0]["loop_length"]), ("pingpong", 1, 2))
+        self.assertEqual((items[0]["fadeout"], items[2]["bits"], items[2]["name"], items[2]["loop_mode"]),
+                         (300, 16, "Sample", "none"))
+        self.assertEqual(set(items[0]) >= {"name", "pcm", "bits", "volume", "finetune", "panning", "relative_note",
+                                           "volume_envelope", "panning_envelope", "vibrato", "fadeout"}, True)
+
+    def test_loop_type_3_plays_as_ping_pong_and_is_written_back(self):
+        payload = raw_xm(instrument_blobs=[instrument_blob(loop=(1, 2, 3))])
+        module = xm.decode(payload)
+        self.assertEqual((module.samples[0].loop_mode, module.samples[0].loop_start, module.samples[0].loop_length),
+                         ("pingpong", 1, 2))
+        self.assertEqual(module.metadata["xm"]["instruments"]["1"]["sample_loop_type"], 3)
+        self.assertEqual([note["code"] for note in xm.import_notes(module)], ["XM_LOOP_TYPE_KEPT"])
+        self.assertEqual(xm.encode(module), payload)
+        module.samples[0].loop_mode = "forward"
+        self.assertEqual(xm.decode(xm.encode(module)).samples[0].loop_mode, "forward")
+
+    def test_undefined_effects_are_cleared_with_their_place_noted(self):
+        cells = bytes((0x80 | 0x18, 14, 0xF1,  # EF1
+                       0x80, 0x80 | 0x18, 15, 0x00,  # F00
+                       0x80 | 0x19, 49, 14, 0x01))  # C-4 with E01
+        payload = raw_xm(channels=2, rows=2, pattern_data=cells, instrument_blobs=[instrument_blob()])
+        module = xm.decode(payload)
+        self.assertEqual(module.patterns[0].get(0, 0), Cell())
+        self.assertEqual(module.patterns[0].get(1, 1), Cell(49))
+        notes = xm.import_notes(module)
+        self.assertEqual([note["code"] for note in notes], ["EFFECT_IGNORED"] * 3)
+        self.assertEqual([note["details"]["effect"] for note in notes], ["EF1", "F00", "E01"])
+        self.assertEqual(notes[0]["details"]["cells"], [{"pattern": 0, "row": 0, "channel": 0}])
+        self.assertEqual(notes[2]["details"]["cells"], [{"pattern": 0, "row": 1, "channel": 1}])
+        validate(module)
+        with self.assertRaises(ValidationError):  # writing such an effect is still refused
+            apply_ops(module, [{"op": "set", "pattern": 0, "row": 0, "channel": 0, "cell": "--- -- -- EF1"}])
+            validate(module)
 
 
 class PlaybackPlanTests(unittest.TestCase):

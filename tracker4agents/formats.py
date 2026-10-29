@@ -25,15 +25,25 @@ def format_of_path(path: Path | str) -> str | None:
     return EXTENSIONS.get(Path(path).suffix.lower())
 
 
+def refuse_other_trackers(head: bytes) -> None:
+    """A clear refusal for the tracker formats ChipLoom recognises but does not read (whatever the extension)."""
+    if head[:4] == b"IMPM":
+        raise ValidationError("Impulse Tracker (.it) modules are not supported yet.", "IT_UNSUPPORTED")
+    if head[44:48] == b"SCRM":
+        raise ValidationError("Scream Tracker 3 (.s3m) modules are not supported yet.", "S3M_UNSUPPORTED")
+
+
 def decode(payload: bytes) -> Module:
+    refuse_other_trackers(payload[:48])
     return xm.decode(payload) if detect(payload) == "xm" else mod.decode(payload)
 
 
 def read(path: Path) -> Module:
     path = Path(path)
     with path.open("rb") as stream:
-        head = stream.read(17)
-    if path.suffix.lower() == ".xm" or head == XM_MAGIC:
+        head = stream.read(48)
+    refuse_other_trackers(head)
+    if path.suffix.lower() == ".xm" or head[:17] == XM_MAGIC:
         return xm.read(path)
     return mod.read(path)
 

@@ -1,7 +1,8 @@
 """FastTracker 2 XM reader/writer and validator: the first XM profile (`fasttracker2-xm-v1`).
 
 Scope: 2 to 32 channels, patterns of 1 to 256 rows, up to 128 instruments with exactly one sample
-each (multi-sample instruments are rejected with `XM_MULTISAMPLE`), 8-bit and 16-bit samples
+each (a multi-sample instrument is reduced to the sample its key map uses most, with an import
+note; `read_samples` returns every sample of a file for bank extraction), 8-bit and 16-bit samples
 (stored delta-encoded), forward and ping-pong loops, the volume column, per-sample panning,
 relative note and finetune, linear and Amiga frequency tables, and volume/panning envelopes,
 auto-vibrato and fadeout, which are stored and written back (not edited by the tools).
@@ -73,8 +74,10 @@ def import_notes(module: Module) -> list[dict]:
 _XM_KEYS = {"tracker_name", "version", "frequency_table", "restart_position", "default_speed", "default_bpm",
             "inactive_orders", "title_bytes", "instruments", "import_notes"}
 _INSTRUMENT_KEYS = {"name_bytes", "sample_name", "sample_name_bytes", "volume_envelope", "panning_envelope", "vibrato",
-                    "fadeout", "instrument_type", "header_size", "sample_header", "ignored_loop", "sample_reserved"}
-_ENVELOPE_KEYS = {"points", "extra_points", "sustain", "loop_start", "loop_end", "type"}
+                    "fadeout", "fadeout_raw", "instrument_type", "header_size", "sample_header", "sample_header_size",
+                    "ignored_loop", "sample_reserved", "sample_loop_type", "samples_dropped"}
+_ENVELOPE_KEYS = {"points", "extra_points", "sustain", "loop_start", "loop_end", "type", "ticks_as_read"}
+MAX_FADEOUT = 4095  # FastTracker II's own maximum; the file field is 16 bits wide
 _VIBRATO_KEYS = {"type", "sweep", "depth", "rate"}
 
 
@@ -97,13 +100,16 @@ def _validate_envelope(envelope: object, label: str) -> None:
     points = envelope.get("points", [])
     if not isinstance(points, list) or len(points) > 12:
         _fail(f"{label}.points: expected at most 12 [tick, value] pairs.")
+    as_read = envelope.get("ticks_as_read", False)
+    if as_read is not False and as_read is not True:
+        _fail(f"{label}.ticks_as_read: expected true (set by the importer when the file's ticks are out of order).")
     last = -1
     for point in points:
         if not (isinstance(point, list) and len(point) == 2):
             _fail(f"{label}.points: expected [tick, value] pairs.")
         require_int(point[0], f"{label}.points tick", 0, 65535, "XM_METADATA")
         require_int(point[1], f"{label}.points value", 0, 64, "XM_METADATA")
-        if point[0] <= last:
+        if point[0] <= last and not as_read:
             _fail(f"{label}.points: ticks must increase strictly.")
         last = point[0]
     extra = envelope.get("extra_points", [])
@@ -169,11 +175,15 @@ def validate_xm_metadata(module: Module) -> None:
                 _fail(f"{label}.vibrato: expected an object with keys among {sorted(_VIBRATO_KEYS)}.")
             for name, high in (("type", 3), ("sweep", 255), ("depth", 15), ("rate", 63)):
                 require_int(vibrato.get(name, 0), f"{label}.vibrato.{name}", 0, high, "XM_METADATA")
-        require_int(item.get("fadeout", 0), f"{label}.fadeout", 0, 4095, "XM_METADATA")
+        require_int(item.get("fadeout", 0), f"{label}.fadeout", 0, MAX_FADEOUT, "XM_METADATA")
+        require_int(item.get("fadeout_raw", MAX_FADEOUT + 1), f"{label}.fadeout_raw", MAX_FADEOUT + 1, 65535, "XM_METADATA")
         require_int(item.get("instrument_type", 0), f"{label}.instrument_type", 0, 255, "XM_METADATA")
         require_int(item.get("sample_reserved", 0), f"{label}.sample_reserved", 0, 255, "XM_METADATA")
-        if item.get("header_size", EXTENDED_SIZE) != EXTENDED_SIZE:
-            _fail(f"{label}.header_size: only {EXTENDED_SIZE} is supported.")
+        require_int(item.get("header_size", EXTENDED_SIZE), f"{label}.header_size", 29, 65535, "XM_METADATA")
+        require_int(item.get("sample_header_size", SAMPLE_HEADER_SIZE), f"{label}.sample_header_size", 0, 2**32 - 1,
+                    "XM_METADATA")
+        require_int(item.get("sample_loop_type", 3), f"{label}.sample_loop_type", 3, 3, "XM_METADATA")
+        require_int(item.get("samples_dropped", 1), f"{label}.samples_dropped", 1, 65535, "XM_METADATA")
         if "ignored_loop" in item:
             loop = item["ignored_loop"]
             if not (isinstance(loop, list) and len(loop) == 2 and all(type(v) is int and 0 <= v < 2**32 for v in loop)):
@@ -328,6 +338,12 @@ def _envelope_bytes(envelope: dict | None) -> tuple[bytes, int, tuple[int, int, 
                                                   envelope.get("loop_end", 0), envelope.get("type", 0))
 
 
+def _fadeout_bytes(extra: dict) -> int:
+    """The fadeout written: the file's own value above 4095 while the clamped value was not edited."""
+    value, raw = extra.get("fadeout", 0), extra.get("fadeout_raw")
+    return raw if raw is not None and value == min(raw, MAX_FADEOUT) else value
+
+
 def encode(module: Module) -> bytes:
     validate_xm(module)
     return _encode(module, xm_profile(module))
@@ -361,26 +377,33 @@ def _encode(module: Module, profile: dict) -> bytes:
         extra = instruments.get(str(slot), {})
         has_sample = bool(sample.pcm) or extra.get("sample_header", False)
         name = _text(sample.name, extra.get("name_bytes"), 22, "Instrument name")
-        if not has_sample and extra.get("header_size") != EXTENDED_SIZE:
-            output += struct.pack("<I", 29) + name + bytes((extra.get("instrument_type", 0),)) + struct.pack("<H", 0)
-            continue
-        volume_points, volume_count, volume_flags = _envelope_bytes(extra.get("volume_envelope"))
-        panning_points, panning_count, panning_flags = _envelope_bytes(extra.get("panning_envelope"))
-        vibrato = extra.get("vibrato", {})
-        output += struct.pack("<I", EXTENDED_SIZE) + name + bytes((extra.get("instrument_type", 0),))
-        output += struct.pack("<HI", 1 if has_sample else 0, SAMPLE_HEADER_SIZE) + bytes(96)
-        output += volume_points + panning_points
-        output += bytes((volume_count, panning_count, volume_flags[0], volume_flags[1], volume_flags[2],
-                         panning_flags[0], panning_flags[1], panning_flags[2], volume_flags[3], panning_flags[3],
-                         vibrato.get("type", 0), vibrato.get("sweep", 0), vibrato.get("depth", 0),
-                         vibrato.get("rate", 0)))
-        output += struct.pack("<H", extra.get("fadeout", 0)) + bytes(22)
+        # The header is 29 bytes for an empty instrument and 263 otherwise, unless the import kept another
+        # size: the extended layout is then cut or zero-padded to it, as the file laid it out.
+        size = extra.get("header_size", EXTENDED_SIZE if has_sample else 29)
+        head = bytearray(struct.pack("<I", size) + name + bytes((extra.get("instrument_type", 0),)))
+        head += struct.pack("<H", 1 if has_sample else 0)
+        if size > 29:
+            volume_points, volume_count, volume_flags = _envelope_bytes(extra.get("volume_envelope"))
+            panning_points, panning_count, panning_flags = _envelope_bytes(extra.get("panning_envelope"))
+            vibrato = extra.get("vibrato", {})
+            sample_header_size = SAMPLE_HEADER_SIZE if has_sample else extra.get("sample_header_size", SAMPLE_HEADER_SIZE)
+            head += struct.pack("<I", sample_header_size) + bytes(96)
+            head += volume_points + panning_points
+            head += bytes((volume_count, panning_count, volume_flags[0], volume_flags[1], volume_flags[2],
+                           panning_flags[0], panning_flags[1], panning_flags[2], volume_flags[3], panning_flags[3],
+                           vibrato.get("type", 0), vibrato.get("sweep", 0), vibrato.get("depth", 0),
+                           vibrato.get("rate", 0)))
+            head += struct.pack("<H", _fadeout_bytes(extra)) + bytes(22)
+            head = head[:size].ljust(size, b"\x00")
+        output += head
         if not has_sample:
             continue
         step = sample.bits // 8
         if sample.loop_length:
             loop_start, loop_length = sample.loop_start * step, sample.loop_length * step
             kind = 2 if sample.loop_mode == "pingpong" else 1
+            if kind == 2 and extra.get("sample_loop_type") == 3:
+                kind = 3  # both loop bits, as the source file had them (players read it as ping-pong)
         else:
             loop_start, loop_length = extra.get("ignored_loop", (0, 0))
             kind = 0
@@ -411,6 +434,8 @@ def _envelope(raw: bytes, count: int, sustain: int, loop_start: int, loop_end: i
     envelope: dict = {}
     if count:
         envelope["points"] = pairs[:count]
+        if any(later[0] <= earlier[0] for earlier, later in zip(pairs[:count], pairs[1:count])):
+            envelope["ticks_as_read"] = True
     if any(pair != [0, 0] for pair in pairs[count:]):
         envelope["extra_points"] = pairs[count:]
     for key, value in (("sustain", sustain), ("loop_start", loop_start), ("loop_end", loop_end), ("type", kind)):
@@ -419,7 +444,9 @@ def _envelope(raw: bytes, count: int, sustain: int, loop_start: int, loop_end: i
     return envelope or None
 
 
-def decode(payload: bytes) -> Module:
+def _header(payload: bytes) -> tuple:
+    """The validated file header: (orders, inactive, channels, pattern_count, instrument_count, flags, speed, bpm,
+    restart, cursor) with the cursor on the first pattern."""
     if len(payload) > MAX_XM_BYTES or len(payload) < 80 + MAX_ORDERS:
         raise ValidationError("Invalid XM size.", "XM_FORMAT")
     if payload[:17] != MAGIC or payload[37] != 0x1A:
@@ -444,7 +471,136 @@ def decode(payload: bytes) -> Module:
         raise ValidationError("An XM without patterns is not supported.", "XM_FORMAT")
     if max(max(orders), *inactive.values(), 0) >= pattern_count:
         raise ValidationError("The order list names a pattern the file does not contain.", "ORDERS")
+    return orders, inactive, channels, pattern_count, instrument_count, flags, speed, bpm, restart, 60 + header_size
 
+
+def _pattern_header(payload: bytes, cursor: int, index: int) -> tuple[int, int]:
+    """(rows, data size) of the pattern header at `cursor`."""
+    if cursor + 9 > len(payload):
+        raise ValidationError("The XM ends inside a pattern header.", "XM_FORMAT")
+    head, packing, rows, size = struct.unpack_from("<IBHH", payload, cursor)
+    if head != 9 or packing != 0 or not 1 <= rows <= 256:
+        raise ValidationError(f"Pattern {index}: unsupported header (length {head}, packing {packing}, "
+                              f"{rows} rows).", "XM_FORMAT")
+    if cursor + 9 + size > len(payload):
+        raise ValidationError(f"Pattern {index} runs past the end of the file.", "XM_FORMAT")
+    return rows, size
+
+
+def _unsupported_effect(command: int, param: int) -> bool:
+    """Effects the profile refuses in a cell: undefined letters, E0x/E8x/EFx, and F00 (ignored by
+    FastTracker II, a song stop in other players)."""
+    return (command not in XM_COMMANDS or (command == 14 and param >> 4 not in XM_EXTENDED)
+            or (command == 15 and param == 0))
+
+
+def _read_instruments(payload: bytes, cursor: int, count: int) -> tuple[list[dict], int]:
+    """Every instrument with every sample, as the file stores them (no profile reduction).
+
+    The instrument header size field says where the sample headers start; its fields are read from a
+    263-byte view (zero-padded when the header is shorter, cut when longer). A sample header size field
+    above 40 skips the extra bytes; below 40 the 40 known bytes are read anyway, as OpenMPT does."""
+    items = []
+    for slot in range(1, count + 1):
+        if cursor + 29 > len(payload):
+            raise ValidationError("The XM ends inside an instrument header.", "XM_FORMAT")
+        (size,) = struct.unpack_from("<I", payload, cursor)
+        if size < 29 or cursor + size > len(payload):
+            raise ValidationError(f"Instrument {slot}: header size {size} is below 29 bytes or runs past the end "
+                                  "of the file.", "XM_INSTRUMENT_HEADER")
+        head = payload[cursor:cursor + size]
+        view = head[:EXTENDED_SIZE].ljust(EXTENDED_SIZE, b"\x00")
+        (sample_count,) = struct.unpack_from("<H", view, 27)
+        (sample_header_size,) = struct.unpack_from("<I", view, 29)
+        volume_count, panning_count = view[225], view[226]
+        (vs, vls, vle, ps, pls, ple, vt, pt, vib_type, vib_sweep, vib_depth, vib_rate) = view[227:239]
+        (fadeout,) = struct.unpack_from("<H", view, 239)
+        item = {
+            "slot": slot, "header_size": size, "name_raw": view[4:26], "instrument_type": view[26],
+            "sample_count": sample_count, "sample_header_size": sample_header_size, "keymap": view[33:129],
+            "volume_envelope": _envelope(view[129:177], volume_count, vs, vls, vle, vt),
+            "panning_envelope": _envelope(view[177:225], panning_count, ps, pls, ple, pt),
+            "vibrato": {key: value for key, value in (("type", vib_type), ("sweep", vib_sweep), ("depth", vib_depth),
+                                                      ("rate", vib_rate)) if value},
+            "fadeout": fadeout, "reserved_nonzero": any(view[241:263]) or any(head[EXTENDED_SIZE:]), "samples": [],
+        }
+        cursor += size
+        stride = max(sample_header_size, SAMPLE_HEADER_SIZE)
+        headers = []
+        for index in range(sample_count):
+            if cursor + SAMPLE_HEADER_SIZE > len(payload):
+                raise ValidationError("The XM ends inside a sample header.", "XM_FORMAT")
+            headers.append((struct.unpack_from("<IIIBbBBbB", payload, cursor), payload[cursor + 18:cursor + 40]))
+            cursor += stride
+        for index, (fields, name_raw) in enumerate(headers):
+            length_bytes, loop_start, loop_length, volume, finetune, kind, panning, relative, reserved = fields
+            if kind & ~0x13:
+                raise ValidationError(f"Instrument {slot}: sample type 0x{kind:02X} is not supported (stereo or "
+                                      "unknown flags).", "XM_SAMPLE_TYPE")
+            if reserved == 0xAD:
+                raise ValidationError(f"Instrument {slot}: ADPCM-compressed samples are not supported.", "XM_SAMPLE_TYPE")
+            bits = 16 if kind & 16 else 8
+            step = bits // 8
+            if length_bytes % step or loop_start % step or loop_length % step:
+                raise ValidationError(f"Instrument {slot}: a 16-bit sample or loop has an odd byte count.", "XM_FORMAT")
+            if cursor + length_bytes > len(payload):
+                raise ValidationError(f"Instrument {slot}: sample data runs past the end of the file.", "XM_FORMAT")
+            if length_bytes // step > MAX_SAMPLE_FRAMES:
+                raise ValidationError(f"Instrument {slot}: sample longer than {MAX_SAMPLE_FRAMES} frames.", "SAMPLE_LENGTH")
+            if volume > 64:
+                raise ValidationError(f"Instrument {slot}: sample volume {volume} is above 64.", "XM_SAMPLE")
+            item["samples"].append({
+                "index": index, "name_raw": name_raw, "pcm": _undelta(payload[cursor:cursor + length_bytes], bits),
+                "bits": bits, "loop_start": loop_start, "loop_length": loop_length, "kind": kind, "volume": volume,
+                "finetune": finetune, "panning": panning, "relative_note": relative, "reserved": reserved,
+            })
+            cursor += length_bytes
+        items.append(item)
+    return items, cursor
+
+
+def _keymap_counts(keymap: bytes, sample_count: int) -> list[int]:
+    """How many of the 96 key map entries name each existing sample."""
+    counts = [0] * sample_count
+    for entry in keymap:
+        if entry < sample_count:
+            counts[entry] += 1
+    return counts
+
+
+def read_samples(payload: bytes) -> list[dict]:
+    """Every sample of every instrument, without the one-sample reduction of `decode` (for bank extraction).
+
+    Each item: `instrument` (1-based), `index` (within the instrument), `name`, `pcm` (signed ints), `bits`,
+    `loop_start`, `loop_length` (frames), `loop_mode` (none|forward|pingpong), `volume`, `finetune`,
+    `panning`, `relative_note`, `keymap_notes` (how many of the 96 key map entries name it), and the
+    instrument's `volume_envelope`, `panning_envelope`, `vibrato`, `fadeout` as the importer stores them."""
+    from .mod import sanitize_text
+    _, _, channels, pattern_count, instrument_count, *_rest, cursor = _header(payload)
+    for index in range(pattern_count):
+        cursor += 9 + _pattern_header(payload, cursor, index)[1]
+    instruments, _ = _read_instruments(payload, cursor, instrument_count)
+    out = []
+    for item in instruments:
+        counts = _keymap_counts(item["keymap"], item["sample_count"])
+        for sample in item["samples"]:
+            step = sample["bits"] // 8
+            start, span = sample["loop_start"] // step, sample["loop_length"] // step
+            mode = "none" if sample["kind"] & 3 == 0 or span == 0 else ("pingpong" if sample["kind"] & 2 else "forward")
+            out.append({
+                "instrument": item["slot"], "index": sample["index"], "name": sanitize_text(sample["name_raw"]),
+                "pcm": sample["pcm"], "bits": sample["bits"], "loop_start": start, "loop_length": span,
+                "loop_mode": mode, "volume": sample["volume"], "finetune": sample["finetune"],
+                "panning": sample["panning"], "relative_note": sample["relative_note"],
+                "keymap_notes": counts[sample["index"]], "volume_envelope": item["volume_envelope"],
+                "panning_envelope": item["panning_envelope"], "vibrato": item["vibrato"],
+                "fadeout": min(item["fadeout"], MAX_FADEOUT),
+            })
+    return out
+
+
+def decode(payload: bytes) -> Module:
+    orders, inactive, channels, pattern_count, instrument_count, flags, speed, bpm, restart, cursor = _header(payload)
     notes: list[dict] = []
     from .mod import sanitize_text
     metadata: dict = {"tracker_name": sanitize_text(payload[38:58]).ljust(20)[:20]}
@@ -462,18 +618,11 @@ def decode(payload: bytes) -> Module:
         _note(notes, "TEXT_KEPT_RAW", "preserved", "The title has bytes outside printable ASCII; shown with '?' and "
               "written back unchanged until renamed.")
 
-    cursor = 60 + header_size
     patterns = []
+    ignored_effects: dict[str, list[dict]] = {}
     for index in range(pattern_count):
-        if cursor + 9 > len(payload):
-            raise ValidationError("The XM ends inside a pattern header.", "XM_FORMAT")
-        head, packing, rows, size = struct.unpack_from("<IBHH", payload, cursor)
-        if head != 9 or packing != 0 or not 1 <= rows <= 256:
-            raise ValidationError(f"Pattern {index}: unsupported header (length {head}, packing {packing}, "
-                                  f"{rows} rows).", "XM_FORMAT")
+        rows, size = _pattern_header(payload, cursor, index)
         start = cursor + 9
-        if start + size > len(payload):
-            raise ValidationError(f"Pattern {index} runs past the end of the file.", "XM_FORMAT")
         pattern = Pattern(f"Pattern {index:02X}", {}, rows)
         position, end = start, start + size
         for row in range(rows):
@@ -496,91 +645,87 @@ def decode(payload: bytes) -> Module:
                         raise ValidationError(f"Pattern {index} is truncated.", "XM_FORMAT")
                     values[1:] = payload[position:position + 4]
                     position += 4
-                pattern.put(row, channel, Cell(values[0], values[1], values[3], values[4], values[2]))
+                value = Cell(values[0], values[1], values[3], values[4], values[2])
+                if (value.command or value.param) and _unsupported_effect(value.command, value.param):
+                    text = EFFECT_DIGITS[value.command] + f"{value.param:02X}" if value.command < 36 else f"?{value.param:02X}"
+                    ignored_effects.setdefault(text, []).append({"pattern": index, "row": row, "channel": channel})
+                    value = Cell(value.period, value.sample, 0, 0, value.volume)
+                pattern.put(row, channel, value)
         if position != end:
             raise ValidationError(f"Pattern {index} has {end - position} unused data bytes.", "XM_FORMAT")
         patterns.append(pattern)
         cursor = end
+    for text, cells in ignored_effects.items():
+        first = cells[0]
+        _note(notes, "EFFECT_IGNORED", "converted",
+              f"Effect {text} is undefined or ignored in FastTracker II (F00 stops the song in some players) and was "
+              f"cleared in {len(cells)} cell(s), the first at pattern {first['pattern']}, row {first['row']}, "
+              f"channel {first['channel']}; the export differs from the source.",
+              details={"effect": text, "cells": cells})
 
+    instruments, cursor = _read_instruments(payload, cursor, instrument_count)
     samples: list[Sample] = []
     instruments_meta: dict[str, dict] = {}
-    converted_loops, ignored_loops = [], []
-    for slot in range(1, instrument_count + 1):
-        begin = cursor
-        if cursor + 29 > len(payload):
-            raise ValidationError("The XM ends inside an instrument header.", "XM_FORMAT")
-        size = struct.unpack_from("<I", payload, cursor)[0]
-        name_raw = payload[cursor + 4:cursor + 26]
-        instrument_type = payload[cursor + 26]
-        (count,) = struct.unpack_from("<H", payload, cursor + 27)
-        if size not in (29, EXTENDED_SIZE):
-            raise ValidationError(f"Instrument {slot}: header size {size} is not supported (29 or {EXTENDED_SIZE}).",
-                                  "XM_INSTRUMENT_HEADER")
-        if count > 1:
-            raise ValidationError(f"Instrument {slot} holds {count} samples; this profile supports one sample per "
-                                  "instrument.", "XM_MULTISAMPLE")
-        name = sanitize_text(name_raw)
+    converted_loops, ignored_loops, odd_headers, fadeouts, loop_types = [], [], [], [], []
+    for item in instruments:
+        slot, count = item["slot"], item["sample_count"]
+        name = sanitize_text(item["name_raw"])
         extra: dict = {}
-        if name_raw != name.encode("ascii").ljust(22, b"\x00"):
-            extra["name_bytes"] = name_raw.hex()
-        if instrument_type:
-            extra["instrument_type"] = instrument_type
+        if item["name_raw"] != name.encode("ascii").ljust(22, b"\x00"):
+            extra["name_bytes"] = item["name_raw"].hex()
+        if item["instrument_type"]:
+            extra["instrument_type"] = item["instrument_type"]
+        if item["header_size"] != (EXTENDED_SIZE if count else 29):
+            extra["header_size"] = item["header_size"]
+            odd_headers.append(slot)
+        if item["sample_header_size"] != SAMPLE_HEADER_SIZE and (count or item["header_size"] > 29):
+            if count:
+                _note(notes, "XM_SAMPLE_HEADER_RESIZED", "converted",
+                      f"Instrument {slot}: its sample headers are declared {item['sample_header_size']} bytes long "
+                      f"(read as {max(item['sample_header_size'], SAMPLE_HEADER_SIZE)}); they are written back as "
+                      "40-byte headers, so the export differs from the source.", [slot])
+            else:
+                extra["sample_header_size"] = item["sample_header_size"]
+                if slot not in odd_headers:
+                    odd_headers.append(slot)
+        if item["reserved_nonzero"]:
+            _note(notes, "INSTRUMENT_RESERVED_DROPPED", "converted",
+                  "The reserved bytes of an instrument header are not kept.", [slot])
+        for key in ("volume_envelope", "panning_envelope"):
+            if item[key]:
+                extra[key] = item[key]
+                if item[key].get("ticks_as_read"):
+                    _note(notes, "XM_ENVELOPE_POINTS_KEPT", "preserved",
+                          f"Instrument {slot}: the {key.replace('_', ' ')} has ticks that do not increase strictly; "
+                          "the points are kept as read and written back (players reorder or clamp them).", [slot],
+                          {"instrument": slot, "envelope": key})
+        if item["vibrato"]:
+            extra["vibrato"] = item["vibrato"]
+        if item["fadeout"] > MAX_FADEOUT:
+            extra["fadeout"], extra["fadeout_raw"] = MAX_FADEOUT, item["fadeout"]
+            fadeouts.append(slot)
+        elif item["fadeout"]:
+            extra["fadeout"] = item["fadeout"]
         sample = Sample(name, (), 64, 0, 0, 0)
-        cursor += size
-        if size == EXTENDED_SIZE:
-            if cursor > len(payload):
-                raise ValidationError("The XM ends inside an instrument header.", "XM_FORMAT")
-            base = begin
-            (sample_header_size,) = struct.unpack_from("<I", payload, base + 29)
-            if count and sample_header_size != SAMPLE_HEADER_SIZE:
-                raise ValidationError(f"Instrument {slot}: sample header size {sample_header_size} is not supported.",
-                                      "XM_INSTRUMENT_HEADER")
-            if any(payload[base + 33:base + 129]):
-                raise ValidationError(f"Instrument {slot} maps notes to samples (keymap); this profile has one "
-                                      "sample per instrument.", "XM_MULTISAMPLE")
-            volume_count, panning_count = payload[base + 225], payload[base + 226]
-            (vs, vls, vle, ps, pls, ple, vt, pt, vib_type, vib_sweep, vib_depth, vib_rate) = payload[base + 227:base + 239]
-            (fadeout,) = struct.unpack_from("<H", payload, base + 239)
-            if any(payload[base + 241:base + 263]):
-                _note(notes, "INSTRUMENT_RESERVED_DROPPED", "converted",
-                      "The reserved bytes of an instrument header are not kept.", [slot])
-            volume_envelope = _envelope(payload[base + 129:base + 177], volume_count, vs, vls, vle, vt)
-            panning_envelope = _envelope(payload[base + 177:base + 225], panning_count, ps, pls, ple, pt)
-            if volume_envelope:
-                extra["volume_envelope"] = volume_envelope
-            if panning_envelope:
-                extra["panning_envelope"] = panning_envelope
-            vibrato = {key: value for key, value in (("type", vib_type), ("sweep", vib_sweep), ("depth", vib_depth),
-                                                     ("rate", vib_rate)) if value}
-            if vibrato:
-                extra["vibrato"] = vibrato
-            if fadeout:
-                extra["fadeout"] = fadeout
-            if not count:
-                extra["header_size"] = EXTENDED_SIZE
+        counts = _keymap_counts(item["keymap"], count)
+        chosen = max(range(count), key=counts.__getitem__) if count else 0
+        if count > 1:
+            extra["samples_dropped"] = count - 1
+            _note(notes, "XM_MULTISAMPLE_REDUCED", "converted",
+                  f"Instrument {slot} holds {count} samples; this profile keeps one per instrument, so sample "
+                  f"{chosen} (the one its key map uses for {counts[chosen]} of 96 notes) was kept and {count - 1} "
+                  "dropped. The export differs from the source; `read_samples` returns them all.", [slot],
+                  {"instrument": slot, "samples": count, "kept": chosen, "keymap_notes": counts[chosen]})
+        elif any(item["keymap"]):
+            _note(notes, "XM_KEYMAP_DROPPED", "converted",
+                  f"Instrument {slot}: its key map names samples the instrument does not hold; the map is not kept "
+                  "(every note plays the instrument's sample). The export differs from the source.", [slot])
         if count:
-            if cursor + SAMPLE_HEADER_SIZE > len(payload):
-                raise ValidationError("The XM ends inside a sample header.", "XM_FORMAT")
-            length_bytes, loop_start, loop_length, volume, finetune, kind, panning, relative, reserved = \
-                struct.unpack_from("<IIIBbBBbB", payload, cursor)
-            sample_name_raw = payload[cursor + 18:cursor + 40]
-            cursor += SAMPLE_HEADER_SIZE
-            if kind & ~0x13 or kind & 3 == 3:
-                raise ValidationError(f"Instrument {slot}: sample type 0x{kind:02X} is not supported (stereo or "
-                                      "unknown flags).", "XM_SAMPLE_TYPE")
-            if reserved == 0xAD:
-                raise ValidationError(f"Instrument {slot}: ADPCM-compressed samples are not supported.", "XM_SAMPLE_TYPE")
-            bits = 16 if kind & 16 else 8
+            raw = item["samples"][chosen]
+            bits, kind, pcm = raw["bits"], raw["kind"], raw["pcm"]
             step = bits // 8
-            if length_bytes % step or loop_start % step or loop_length % step:
-                raise ValidationError(f"Instrument {slot}: a 16-bit sample or loop has an odd byte count.", "XM_FORMAT")
-            if cursor + length_bytes > len(payload):
-                raise ValidationError(f"Instrument {slot}: sample data runs past the end of the file.", "XM_FORMAT")
-            if length_bytes // step > MAX_SAMPLE_FRAMES:
-                raise ValidationError(f"Instrument {slot}: sample longer than {MAX_SAMPLE_FRAMES} frames.", "SAMPLE_LENGTH")
-            frames = length_bytes // step
-            pcm = _undelta(payload[cursor:cursor + length_bytes], bits)
-            cursor += length_bytes
+            frames = len(pcm)
+            loop_start, loop_length = raw["loop_start"], raw["loop_length"]
             loop_mode, start, span = "forward", loop_start // step, loop_length // step
             if kind & 3 == 0:
                 if loop_start or loop_length:
@@ -588,7 +733,10 @@ def decode(payload: bytes) -> Module:
                     ignored_loops.append(slot)
                 start = span = 0
             else:
-                loop_mode = "pingpong" if kind & 3 == 2 else "forward"
+                loop_mode = "pingpong" if kind & 2 else "forward"
+                if kind & 3 == 3:
+                    extra["sample_loop_type"] = 3
+                    loop_types.append(slot)
                 if span == 0:
                     start, loop_mode = 0, "forward"  # a loop of length 0 is no loop for any player
                     extra["ignored_loop"] = [loop_start, 0]
@@ -600,18 +748,17 @@ def decode(payload: bytes) -> Module:
                         loop_mode = "forward"
                     else:
                         span = frames - start
-            if volume > 64:
-                raise ValidationError(f"Instrument {slot}: sample volume {volume} is above 64.", "XM_SAMPLE")
-            sample_name = sanitize_text(sample_name_raw)
+            sample_name = sanitize_text(raw["name_raw"])
             if sample_name != name:
                 extra["sample_name"] = sample_name
-            if sample_name_raw != sample_name.encode("ascii").ljust(22, b"\x00"):
-                extra["sample_name_bytes"] = sample_name_raw.hex()
-            if reserved:
-                extra["sample_reserved"] = reserved
+            if raw["name_raw"] != sample_name.encode("ascii").ljust(22, b"\x00"):
+                extra["sample_name_bytes"] = raw["name_raw"].hex()
+            if raw["reserved"]:
+                extra["sample_reserved"] = raw["reserved"]
             if not pcm:
                 extra["sample_header"] = True
-            sample = Sample(name, pcm, volume, finetune, start, span, None, bits, loop_mode, panning, relative)
+            sample = Sample(name, pcm, raw["volume"], raw["finetune"], start, span, None, bits, loop_mode,
+                            raw["panning"], raw["relative_note"])
         if extra:
             instruments_meta[str(slot)] = extra
         samples.append(sample)
@@ -623,6 +770,17 @@ def decode(payload: bytes) -> Module:
         _note(notes, "TRAILING_DATA_DROPPED", "converted",
               f"{len(payload) - cursor} bytes after the last sample (extension chunks or padding) are not kept.",
               details={"bytes": len(payload) - cursor})
+    if odd_headers:
+        _note(notes, "XM_HEADER_SIZE_KEPT", "preserved", "These instrument headers have an unusual size (such as 33 "
+              "bytes) or sample header size field; they are read as the file lays them out and written back as read.",
+              odd_headers)
+    if fadeouts:
+        _note(notes, "XM_FADEOUT_CLAMPED", "preserved", f"These instruments store a fadeout above {MAX_FADEOUT} "
+              "(FastTracker II's maximum); `fadeout` shows the clamped value and `fadeout_raw` the file's, which is "
+              "written back until `fadeout` is edited.", fadeouts)
+    if loop_types:
+        _note(notes, "XM_LOOP_TYPE_KEPT", "preserved", "These samples set both loop bits (type 3, undefined); they "
+              "play as ping-pong loops, like in libxmp and OpenMPT, and the type is written back as read.", loop_types)
     if converted_loops:
         for slot, start, span, frames in converted_loops:
             _note(notes, "SAMPLE_LOOP_CLAMPED", "converted",
