@@ -182,6 +182,13 @@ class McpProtocolTests(unittest.TestCase):
                 self.assertIn("type", spec, f"{tool['name']}.{name}")  # Enums carry their type too.
             self.assertFalse(tool["annotations"]["openWorldHint"])
 
+    def test_live_sync_tool_builds_the_cli_command(self):
+        tool = next(item for item in TOOLS if item["name"] == "live_sync")
+        self.assertEqual(tool["inputSchema"]["required"], ["project"])
+        self.assertEqual(tool["argv"]({"project": "song.json"}), ["live", "sync", "song.json"])
+        self.assertEqual(tool["argv"]({"project": "song.json", "dry_run": True, "label": "Regen", "session": "42"}),
+                         ["live", "--session", "42", "sync", "song.json", "--dry-run", "--label", "Regen"])
+
     def test_protocol_negotiation_and_object_results(self):
         server = Server()
         for requested, expected in (("2025-11-25", "2025-11-25"), ("2024-11-05", "2024-11-05"),

@@ -441,6 +441,18 @@ class LiveSession:
                 "samples": samples}
 
     @_guarded
+    def export(self) -> dict:
+        """The whole module and the revision it was read at, in one step (for `live sync`).
+
+        `project` is a schema v2 project dict with every sample's PCM (`recipes=False`, so the PCM is
+        exactly the session's); `recipes` maps the slots that carry a recipe to it."""
+        self._absorb()
+        module = self.document.module
+        return {"revision": self._revision, "project": project.to_dict(module, recipes=False),
+                "recipes": {str(slot): sample.recipe for slot, sample in enumerate(module.samples, 1)
+                            if sample.recipe is not None}}
+
+    @_guarded
     def snapshot(self) -> Module:
         """An independent copy of the current module (to render or inspect without holding the session)."""
         self._absorb()
@@ -780,6 +792,7 @@ API: dict[str, Callable[[LiveSession, dict], dict]] = {
     "ping": lambda s, p: {"api": API_VERSION, "pid": os.getpid(), "revision": s.revision} if _params(p) == {} else {},
     "status": lambda s, p: s.context() if _params(p) == {} else {},
     "score": lambda s, p: s.score(**_params(p, (), ("pattern", "start", "rows"))),
+    "module": lambda s, p: s.export() if _params(p) == {} else {},
     "patch": _api_patch,
     "changes": lambda s, p: s.changes(**_params(p, (), ("since", "author"))),
     "proposals": lambda s, p: {"proposals": s.proposals(**_params(p, (), ("status",)))},

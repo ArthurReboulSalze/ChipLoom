@@ -39,6 +39,13 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     patch.add_argument("--label", help="Name shown in the journal and the undo history.")
     patch.add_argument("--propose", action="store_true", help="Let the owner preview and accept instead of applying.")
     patch.add_argument("--author", default="agent", help="Who is editing (default: agent).")
+    sync = command("sync", "Send the differences between a project file and the session as undoable patches.")
+    sync.add_argument("project", type=Path, help="Project JSON (or MOD/XM) to bring into the session.")
+    sync.add_argument("--dry-run", action="store_true", help="Print the planned patches without sending them.")
+    sync.add_argument("--label", help="Label prefix of the patches (default: Sync).")
+    sync.add_argument("--author", default="agent", help="Who is editing (default: agent).")
+    sync.add_argument("--library", type=Path,
+                      help="Sample library for library samples (default exports/sample_library).")
     changes = command("changes", "Journal of edits (human and agent) after a revision.")
     changes.add_argument("--since", type=int, default=0)
     changes.add_argument("--author")
@@ -173,6 +180,10 @@ def run(args: argparse.Namespace, stop: threading.Event | None = None,
             ops = ops["ops"]
         return client.call("patch", ops=ops, base_revision=base, label=label, author=args.author,
                            propose=True if args.propose else None)
+    if name == "sync":
+        from .live_sync import sync
+        return sync(client, args.project, dry_run=args.dry_run, label=args.label, author=args.author,
+                    library=args.library)
     if name == "changes":
         return client.call("changes", since=args.since, author=args.author)
     if name == "proposals":

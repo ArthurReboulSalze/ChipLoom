@@ -202,6 +202,13 @@ TOOLS = [
           (),
           lambda a: ["live", *_flags(a, {"session": "--session"}), "patch", *_ops_json(a), *_flags(a, {
               "label": "--label", "base_revision": "--base", "propose": "--propose", "author": "--author"})]),
+    _tool("live_sync", "Bring a project file into the live song: the differences go as undoable patches (samples, "
+          "structure and order list, then one patch per changed pattern), each checked against the revision read "
+          "first so the owner's newer edits stop the sync instead of being overwritten. Lists what patches cannot "
+          "carry (XM envelopes, PCM edits, metadata) under not_synced and verifies the result. dry_run only plans.",
+          {"session": S, "project": S, "dry_run": B, "label": S}, ["project"],
+          lambda a: ["live", *_flags(a, {"session": "--session"}), "sync", a["project"], *_flags(a, {
+              "dry_run": "--dry-run", "label": "--label"})]),
     _tool("live_changes", "Changes since a revision, by author (owner or agent), as readable cell summaries.",
           {"session": S, "since": I}, (),
           lambda a: ["live", *_flags(a, {"session": "--session"}), "changes", *_flags(a, {"since": "--since"})], True),
