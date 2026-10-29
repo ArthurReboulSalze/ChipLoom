@@ -496,6 +496,8 @@ Songs made **only with created samples** are a mode for when the owner asks for 
 | `pluck` | `duration` (0.36), `frequency`, `duty` (0.1–0.9, 0.32), `peak`, `seed`, `drive` | One-shot plucked tone with a baked decay |
 | `draw` | `points` (4–256 values in −1…1, required), `cycles` (16), `frequency`, `peak` | Your own looped wave |
 
+`start` (`wave` and `draw` only): `"zero"` starts the loop on its rising zero crossing, so a note that retriggers the sample does not jump to a full-level first byte (that jump is heard as a click, a buzz on fast repeats); `"peak"`, the default of a recipe without the key, keeps the bytes earlier versions built. ChipLoom's tools (`synth add`, `synth palette`, the `recipe_sample` operation, the window's Create tab, the starter bank) add `"start": "zero"` to every looped sound they create; recipes already stored in projects are unchanged.
+
 Recipes are deterministic: the same recipe always builds the same bytes, and the recipe types that existed before `wave` build byte-identical samples.
 
 ### Starter palette

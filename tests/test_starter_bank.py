@@ -71,6 +71,12 @@ class StarterBankTests(unittest.TestCase):
         self.assertEqual(ids[:5], [f"PAL-000{index}" for index in range(1, 6)])
         self.assertEqual(copy_bank.palette("PAL-0001")["title"], "Classic 4ch")
 
+    def test_loops_start_at_zero_so_fast_retriggers_do_not_click(self):
+        for entry in self.bank._manifest()["samples"]:
+            if entry["loop_length"] and "1-bit" not in entry["name"]:
+                first = self.bank.read_sample(entry["id"]).pcm[0]
+                self.assertLessEqual(abs(first), 2, entry["name"])
+
     def test_the_bank_is_deterministic(self):
         again = self.folder / "again"
         starter_bank.build(again)

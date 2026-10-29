@@ -51,12 +51,13 @@ def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) ->
     kind = recipe.get("type")
     if kind == "wave":
         return _wave_sample(name, recipe, volume, finetune)
-    allowed = {"type", "seed", "peak", "duration", "frequency", "cycles", "points", "duty", "drive"}
+    allowed = {"type", "seed", "peak", "duration", "frequency", "cycles", "points", "duty", "drive", "start"}
     extra = set(recipe) - allowed
     if extra:
         raise ValidationError(f"Unknown recipe parameters {sorted(extra)} for type {kind!r}; allowed: {sorted(allowed)}.",
                               "RECIPE_INVALID")
     peak = number(recipe.get("peak", 0.88), "peak", 0.01, 1)
+    _start(recipe)   # "start" only applies to looped recipes
     seed = require_int(recipe.get("seed", 0), "seed", 0, 2**32 - 1)
     rng = random.Random(seed)
     looped = kind == "draw"
@@ -79,6 +80,8 @@ def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) ->
             left = int(position)
             blend = position - left
             values.append(points[left] * (1 - blend) + points[(left + 1) % len(points)] * blend)
+        if _start(recipe):
+            values = start_at_zero(values)
     elif kind in {"kick", "snare", "hat", "kick_hat", "snare_hat", "pluck"}:
         default_duration = {"kick": 0.24, "snare": 0.19, "hat": 0.048,
                             "kick_hat": 0.24, "snare_hat": 0.19, "pluck": 0.36}[kind]
@@ -134,7 +137,7 @@ def from_recipe(name: str, recipe: dict, volume: int = 40, finetune: int = 0) ->
 DEFAULT_FREQUENCY = 261.625565
 WAVE_SHAPES = ("pulse", "triangle", "saw", "sine", "noise")
 AUTO_TUNING_CENTS = 2.0
-_WAVE_COMMON = {"type", "shape", "peak"}
+_WAVE_COMMON = {"type", "shape", "peak", "start"}
 _WAVE_ALLOWED = {
     "pulse": _WAVE_COMMON | {"frequency", "cycles", "duty"},
     "triangle": _WAVE_COMMON | {"frequency", "cycles"},
@@ -200,12 +203,19 @@ def _saw_integral(position: float) -> float:
     return phase * phase - phase
 
 
-def _wave_cycle_values(shape: str, frames: int, cycles: int, duty: float) -> list[float]:
-    """One value per byte. Pulse and saw average each byte's time slot, which keeps hard edges to one byte."""
+def _wave_cycle_values(shape: str, frames: int, cycles: int, duty: float, zero_start: bool = False) -> list[float]:
+    """One value per byte. Pulse and saw average each byte's time slot, which keeps hard edges to one byte.
+
+    With `zero_start` (recipe `"start": "zero"`) the cycle starts on its rising zero crossing (the wave's mean
+    level), so a note that retriggers the sample does not jump to a full-level first byte: a pulse starts on its
+    rising edge, with the first byte straddling it so its average is the mean; a saw starts half way up its ramp;
+    sine and triangle already start at zero. Without it (`"start": "peak"`, the default of older recipes) the
+    bytes are those earlier versions built."""
     values = []
     step = cycles / frames
+    offset = {"pulse": -(1 - duty) * step, "saw": 0.5 - step / 2}.get(shape, 0.0) if zero_start else 0.0
     for index in range(frames):
-        start, end = index * step, (index + 1) * step
+        start, end = index * step + offset, (index + 1) * step + offset
         if shape == "pulse":
             values.append((_pulse_integral(end, duty) - _pulse_integral(start, duty)) / step)
         elif shape == "saw":
@@ -216,6 +226,38 @@ def _wave_cycle_values(shape: str, frames: int, cycles: int, duty: float) -> lis
             phase = start - math.floor(start)
             values.append(4 * phase if phase < 0.25 else 2 - 4 * phase if phase < 0.75 else 4 * phase - 4)
     return values
+
+
+LOOPED_TYPES = ("wave", "draw")
+
+
+def _start(recipe: dict) -> bool:
+    """True for `"start": "zero"`; "peak" (the default, for recipes written before the parameter) keeps old bytes."""
+    value = recipe.get("start", "peak")
+    if value not in ("zero", "peak"):
+        raise _bad(f"start must be 'zero' or 'peak', got {value!r}.")
+    if "start" in recipe and recipe.get("type") not in LOOPED_TYPES:
+        raise _bad("start only applies to looped recipes (wave, draw).")
+    return value == "zero"
+
+
+def smooth_start(recipe: dict) -> dict:
+    """The recipe with `"start": "zero"` when it is a looped one that does not say otherwise: what ChipLoom's tools
+    use for every sound they create, so retriggered notes do not click."""
+    if isinstance(recipe, dict) and recipe.get("type") in LOOPED_TYPES and "start" not in recipe:
+        return {**recipe, "start": "zero"}
+    return recipe
+
+
+def start_at_zero(values: list[float]) -> list[float]:
+    """A looped buffer turned (circularly, so the loop is unchanged) to start at its rising crossing of the mean
+    level, the one closest to it: a retriggered note then starts from silence instead of a jump."""
+    mean = sum(values) / len(values)
+    count = len(values)
+    rising = [index for index in range(count) if values[index - 1] < mean <= values[index]]
+    candidates = rising or range(count)
+    start = min(candidates, key=lambda index: abs(values[index] - mean))
+    return values[start:] + values[:start]
 
 
 def _noise_values(recipe: dict) -> list[float]:
@@ -252,6 +294,7 @@ def _wave_sample(name: str, recipe: dict, volume: int, finetune: int) -> Sample:
         raise _bad(f"Wave recipe: parameters {sorted(extra)} do not apply to shape {shape!r}; "
                    f"allowed: {sorted(_WAVE_ALLOWED[shape] - {'type'})}.")
     peak = _wave_number(recipe, "peak", 0.88, 0.01, 1)
+    zero_start = _start(recipe)
     if shape == "noise":
         values = _noise_values(recipe)
     else:
@@ -259,7 +302,9 @@ def _wave_sample(name: str, recipe: dict, volume: int, finetune: int) -> Sample:
         duty = _wave_number(recipe, "duty", 0.5, 0.05, 0.95) if shape == "pulse" else 0.5
         wanted = _wave_integer(recipe, "cycles", 1, 1, 64) if "cycles" in recipe else None
         cycles, frames = wave_geometry(frequency, wanted)
-        values = _wave_cycle_values(shape, frames, cycles, duty)
+        values = _wave_cycle_values(shape, frames, cycles, duty, zero_start)
+    if shape == "noise" and zero_start:
+        values = start_at_zero(values)
     pcm = quantize(values, peak, True)
     return Sample(name, pcm, volume, finetune, 0, len(pcm), dict(recipe))
 

@@ -307,7 +307,10 @@ class RecipeSampleOperationTests(unittest.TestCase):
         module = empty_module()
         module.metadata["sample_sources"] = {"1": {"library_id": "SMP-0001"}}  # stale entry of an emptied slot
         first = apply_ops(module, [{"op": "recipe_sample", "name": "A", "recipe": self.RECIPE, "volume": 33}])[0]
-        self.assertEqual((first["slot"], module.samples[0].volume, module.samples[0].recipe), (1, 33, self.RECIPE))
+        # A created loop starts on its zero crossing unless the recipe says otherwise (no click on retriggers).
+        self.assertEqual((first["slot"], module.samples[0].volume, module.samples[0].recipe),
+                         (1, 33, {**self.RECIPE, "start": "zero"}))
+        self.assertEqual(module.samples[0].pcm[0], 0)
         self.assertEqual(module.metadata["sample_sources"]["1"]["origin"], "synthesized")
         second = apply_ops(module, [{"op": "recipe_sample", "name": "B", "recipe": {"type": "kick"}}])[0]
         self.assertEqual((second["slot"], second["role"]), (2, "kick"))

@@ -141,7 +141,7 @@ def build(path: Path) -> dict:
     library.create()
     ids: dict[str, str] = {}
     for name, role, volume, recipe, tags in SOUNDS:
-        sample = synth.from_recipe(name, recipe, volume=volume)
+        sample = synth.from_recipe(name, synth.smooth_start(recipe), volume=volume)   # loops start at zero: no clicks
         result = library.add_entry(sample, "mod", name, role, tags=["starter", *tags], origin=ORIGIN,
                                    source={"file": SOURCE, "slot": None, "name": recipe["type"]})
         ids[name] = result["id"]

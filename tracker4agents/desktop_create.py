@@ -447,7 +447,8 @@ class CreatePanel(QWidget):
     def jam_sample(self):
         """The recipe as a sample, for playing it from the keyboard (None while the recipe cannot be built)."""
         try:
-            return synth.from_recipe(self.name.text() or "Created", self.recipe(), self._volume(), self.finetune.value())
+            return synth.from_recipe(self.name.text() or "Created", synth.smooth_start(self.recipe()), self._volume(),
+                                     self.finetune.value())
         except (ValidationError, ValueError):
             return None
 

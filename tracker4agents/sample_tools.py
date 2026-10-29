@@ -388,6 +388,7 @@ def preview_recipe(recipe: dict, note: str = "C-2", seconds: float = 1.0, volume
     require_int(volume, "volume", 0, 64)
     require_int(finetune, "finetune", -8, 7)
     ascii_field(name, 22, "Sample name")
+    recipe = synth.smooth_start(recipe)
     sample = synth.from_recipe(name, recipe, volume, finetune)
     wav, values = render_wav(sample, note, float(seconds))
     role = loudness.role_for_recipe(recipe) if role is None else loudness.check_role(role)

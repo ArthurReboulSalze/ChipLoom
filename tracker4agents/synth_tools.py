@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import loudness, sample_source
 from .model import Module, Pattern, Sample, ValidationError, ascii_field, require_int, validate
-from .synth import from_recipe, recipe_facts
+from .synth import from_recipe, recipe_facts, smooth_start
 
 MATCH_MODES = ("library", "defaults", "none")
 DEFAULT_VOLUME = 40  # without matching and without an explicit volume, as everywhere else in the score
@@ -92,8 +92,9 @@ def bank_entries(reference: dict | None) -> dict:
 
 def build(name: str, recipe: dict, finetune: int, role: str, reference: dict,
           volume: int | None = None) -> tuple[Sample, dict]:
-    """Build the sample, set its MOD volume (and the recipe peak if needed) and describe the result."""
-    recipe = copy.deepcopy(recipe)
+    """Build the sample, set its MOD volume (and the recipe peak if needed) and describe the result. A looped
+    recipe that does not say otherwise starts on its zero crossing (`synth.smooth_start`), so retriggers do not click."""
+    recipe = smooth_start(copy.deepcopy(recipe))
     group = loudness.ROLES[role]
     start_peak = recipe.get("peak", 0.88)
     sample = from_recipe(name, recipe, DEFAULT_VOLUME if volume is None else volume, finetune)
@@ -288,6 +289,7 @@ def preview(recipe: dict, name: str, output: Path, note: str = "C-2", seconds: f
     require_int(finetune, "finetune", -8, 7)
     ascii_field(name, 22, "Sample name")
     check_preview_note(note)
+    recipe = smooth_start(recipe)   # the preview sounds like the sample that would be inserted
     sample = from_recipe(name, recipe, volume, finetune)
     result = audio.audition_sample(sample, output, note, seconds)
     role = loudness.role_for_recipe(recipe) if role is None else loudness.check_role(role)
