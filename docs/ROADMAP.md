@@ -1,6 +1,6 @@
 # ChipLoom roadmap
 
-Updated 29 October 2026, after the 0.8.3 release. Earlier planning notes (translated from the original French) are kept in
+Updated 29 October 2026, after the 0.8.4 release. Earlier planning notes (translated from the original French) are kept in
 [docs/history](history/).
 
 ## 0.7.0: compose together
@@ -30,7 +30,7 @@ Version 0.8 groups what was proposed after 0.7 as four releases (0.8 to 1.0).
 | Wider formats | `E6x` pattern loops and `EEx` pattern delays, more four-channel MOD variants, MOD with 2 to 32 channels, and a first XM profile with its own validation, all editable in the window |
 | Playing by ear | Keyboard audition of the current instrument, sample, recipe or instrument, up to 6 notes mixed with the song in the real-time stream |
 
-Patch releases followed: 0.8.1 fixed a playback freeze and added the Linux build, 0.8.2 fixed the MCP tools in the standalone builds, and 0.8.3 made XM and wide MOD songs workable for agents from start to export (blank projects, sample insertion in the CLI, MCP and window, XM pattern length and header, engines at the same level), with the fixes from a ten-song test run by agents.
+Patch releases followed: 0.8.1 fixed a playback freeze and added the Linux build, 0.8.2 fixed the MCP tools in the standalone builds, and 0.8.3 made XM and wide MOD songs workable for agents from start to export (blank projects, sample insertion in the CLI, MCP and window, XM pattern length and header, engines at the same level), with the fixes from a ten-song test run by agents. 0.8.4 added Copper Skies, a ten-channel XM demo reworked live with the owner, and turned what that session taught into the agent skill and a `report` warning for held arpeggios.
 
 ## After 0.8
 

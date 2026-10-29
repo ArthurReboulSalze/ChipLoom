@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.4 — 2026-10-29
 
 - `render --mp3-output` takes `--mp3-normalize` (MCP `mp3_normalize`): the MP3 listening copy is scaled to a -1 dBFS peak and the result says by how much; the WAV keeps the engine's level. A ten-channel XM renders about 9 dB below full scale in libopenmpt, so its listening copy was much quieter than a four-channel MOD's.
 - New demo, Copper Skies: a cracktro-style XM in ten channels made only with created samples, on the listening page and in the README. `tools/compose_copper_skies.py` rebuilds its project with the Python API (envelopes, auto-vibrato, fadeout, ping-pong loops, relative notes, the volume column, patterns of 32 to 128 rows and every XM effect ChipLoom accepts but `E6x`); tests check that the shipped project encodes to the shipped XM. `.gitignore` now excludes `.xm` files outside the approved demos.
