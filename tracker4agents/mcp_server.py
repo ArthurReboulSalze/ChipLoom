@@ -48,7 +48,8 @@ def _enum(*values: str) -> dict:
 
 
 ROLE = _enum("kick", "snare", "hat", "bass", "lead", "chord", "texture")
-LIBRARY = {"type": "string", "description": "Sample library folder (default exports/sample_library)."}
+LIBRARY = {"type": "string", "description": "Sample bank folder (default: the active bank chosen in the window or "
+                                            "with samples_bank, else exports/sample_library)."}
 
 
 def _tool(name, description, properties, required=(), argv=None, read_only=False):
@@ -173,6 +174,48 @@ TOOLS = [
           ["id", "project", "output"],
           lambda a: ["samples", "add", a["id"], "--project", a["project"], "--output", a["output"], *_flags(a, {
               "library": "--library", "slot": "--slot", "replace": "--replace", "adapt": "--adapt"})]),
+    _tool("samples_bank", "Show the active sample bank (the one the window and the agent share: path, entry count, "
+          "recent banks), or make another folder the active bank with `set`, create an empty one with `new`, or build "
+          "the ChipLoom starter bank (62 generated sounds in tune, 5 palettes) with `starter` (a folder, or true for "
+          "its default place). Without any bank the starter bank is built on first use.",
+          {"set": S, "new": S, "starter": {"type": ["string", "boolean"]}}, (),
+          lambda a: ["samples", "bank", *_flags({**a, "starter": None}, {"set": "--set", "new": "--new"}),
+                     *(["--starter"] if a.get("starter") is True else
+                       ["--starter", a["starter"]] if isinstance(a.get("starter"), str) else [])]),
+    _tool("samples_slots", "List the samples of a MOD, XM or JSON project: name, frames, bits, loop, the role scored "
+          "from how the song plays it, the measured tuning (the note it sounds when C is written) and the bank entry "
+          "that already holds it.",
+          {"library": LIBRARY, "module": S}, ["module"],
+          lambda a: ["samples", "slots", a["module"], *_flags(a, {"library": "--library"})], True),
+    _tool("samples_import_slot", "Add one sample of a MOD, XM or JSON project to the bank with the owner's name, role, "
+          "category and tags (defaults: its own name, the scored role). A sample already in the bank is not added "
+          "twice.",
+          {"library": LIBRARY, "module": S, "slot": I, "name": S, "role": S, "category": S,
+           "tag": {"type": "array", "items": S}}, ["module", "slot"],
+          lambda a: ["samples", "import-slot", a["module"], "--slot", str(a["slot"]), *_flags(a, {
+              "library": "--library", "name": "--name", "role": "--role", "category": "--category", "tag": "--tag"})]),
+    _tool("samples_import_wav", "Add a PCM WAV file to the bank (mixed to mono; 16-bit when the file has more than 8 "
+          "bits; C-4 plays it at its own rate), with name, role, category, tags and an optional loop in frames.",
+          {"library": LIBRARY, "wav": S, "name": S, "role": S, "category": S, "tag": {"type": "array", "items": S},
+           "loop_start": I, "loop_length": I}, ["wav"],
+          lambda a: ["samples", "import-wav", a["wav"], *_flags(a, {
+              "library": "--library", "name": "--name", "role": "--role", "category": "--category", "tag": "--tag",
+              "loop_start": "--loop-start", "loop_length": "--loop-length"})]),
+    _tool("samples_edit", "Rename a bank entry, set its category, tags or role, or store a tuning correction "
+          "(`semitones`, 12 = an octave; `cents` -100..100) applied whenever it is inserted.",
+          {"library": LIBRARY, "id": S, "name": S, "category": S, "tag": {"type": "array", "items": S}, "role": S,
+           "semitones": I, "cents": I}, ["id"],
+          lambda a: ["samples", "edit", a["id"], *_flags(a, {
+              "library": "--library", "name": "--name", "category": "--category", "tag": "--tag", "role": "--role",
+              "semitones": "--semitones", "cents": "--cents"})]),
+    _tool("samples_use_palette", "Insert a palette's entries into a library-mode project in role order and write a new "
+          "project. The result's `tuning` says how each pitched entry is tuned against the most played one; `retune` "
+          "aligns them in an XM (relative note and finetune, PCM untouched).",
+          {"library": LIBRARY, "id": S, "project": S, "output": S, "slots": {"type": "array", "items": I},
+           "adapt": B, "all": B, "retune": B}, ["id", "project", "output"],
+          lambda a: ["samples", "use-palette", a["id"], a["project"], "--output", a["output"],
+                     *(["--slots", *map(str, a["slots"])] if a.get("slots") else []), *_flags(a, {
+                         "library": "--library", "adapt": "--adapt", "all": "--all", "retune": "--retune"})]),
     # Songs made only with created samples (owner's request; library samples stay the default).
     _tool("synth_types", "List the sample recipe types with parameters, ranges, defaults and purpose.", {}, (),
           lambda a: ["synth", "types"], True),

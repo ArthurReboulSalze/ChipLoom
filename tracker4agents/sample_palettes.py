@@ -113,7 +113,8 @@ def list_palettes(palettes: list[dict], role: str | None = None, fmt: str | None
             continue
         if fmt and palette["format"] != fmt or channels and palette["channels"] != channels:
             continue
-        rows.append({"id": palette["id"], "format": palette["format"], "channels": palette["channels"],
+        rows.append({"id": palette["id"], **({"title": palette["title"]} if palette.get("title") else {}),
+                     "format": palette["format"], "channels": palette["channels"],
                      "speed": palette["speed"], "bpm": palette["bpm"],
                      "duration_seconds": palette["duration_seconds"], "entries": len(palette["entries"]),
                      "played": len(played), "summary": palette.get("summary") or palette_summary(palette)})

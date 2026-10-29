@@ -64,8 +64,8 @@ music made with that PCM local unless the user explicitly requests publication.
    `--patterns`, `--speed`, `--bpm`; it records `"sample_source": "library"` and holds one
    empty slot), then embed the palette with `samples use-palette PAL-xxxx` (slots in role
    order; `--adapt` for a 16-bit or ping-pong XM entry going into a MOD) or selected PCM
-   through `samples add` or the `library_sample` patch operation (the bank defaults to
-   `exports/sample_library`). Record returned library IDs, slots and roles. Write original
+   through `samples add` or the `library_sample` patch operation (the bank defaults to the
+   active bank the owner chose in the window, `samples bank` says which). Record returned library IDs, slots and roles. Write original
    notes and arrangement rather than copying reference patterns. Patterns are grid `rows`:
    `"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"` (keys `00`-`3F`; one cell
    `NOTE SS EEE` per channel; `---`, `--`, `...` are empty).
@@ -76,6 +76,13 @@ music made with that PCM local unless the user explicitly requests publication.
    and orders count from 0 in operations and in every result (`ch0` is the first channel).
    `samples inspect` gives a sample's estimated pitch at C-2; a looped cycle's pitch
    follows its loop length, so check that the palette agrees before writing chords.
+   **Tuning across samples.** Samples from different songs were often tuned differently and
+   written transposed in their own song: a bank bass can sound E where the leads sound D# at
+   the same written note, so every chord clashes although each note is "right". Read
+   `use-palette`'s `tuning` (or `samples slots`, `written_c_sounds`) before writing, and fix
+   an entry that is off (`--retune` in an XM, `samples edit --semitones/--cents` to keep the
+   correction in the bank, or transpose its notes). When the owner says a library song sounds
+   dissonant, measure tuning first, before rewriting the music.
 5. Validate, run `lint` and fix what it lists (effects that do nothing or not what the
    cell suggests, held arpeggios), export the real MOD, then render that exported file if
    audio tools are available. For a longer score, use bounded section renders; each render is at

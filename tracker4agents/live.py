@@ -405,6 +405,8 @@ class LiveSession:
                   "orders": list(module.orders), "pattern_count": len(module.patterns),
                   "pending_proposals": sum(item["status"] == "pending" for item in self._proposals),
                   "open_comments": open_comments,
+                  "sample_source": module.metadata.get("sample_source") if isinstance(module.metadata, dict) else None,
+                  "bank": _active_bank(),
                   "takes": len(self._takes), "window": bool(self._handlers), "web_devices": len(self.web.devices()),
                   "last_change": last and {"revision": last["revision"], "author": last["author"],
                                            "label": last["label"], "at": last["at"]}}
@@ -729,6 +731,15 @@ class LiveSession:
         project.write_json(target, self.document.project_dict())
         return {"path": str(target), "copy": True, "session_path": str(own) if own else None,
                 "dirty": self.document.dirty, "revision": self._revision}
+
+
+def _active_bank() -> str | None:
+    """The active sample bank's folder (shared by the window and the agent), or None if it cannot be read."""
+    try:
+        from .sample_intake import active_library
+        return str(active_library())
+    except Exception:  # noqa: BLE001 - status must not fail on a broken bank setting
+        return None
 
 
 # --- discovery --------------------------------------------------------------------------

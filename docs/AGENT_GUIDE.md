@@ -296,7 +296,7 @@ python -m tracker4agents feedback exports/my-song/v2.project.json --text "Lead i
 
 ## MCP adapter
 
-`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 53 tools (estimate, validate, inspect, `new_project`, patch, export, render, preview, lint, report, compare, feedback, migrate, convert, `export_format`, six `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`, or as a path to a JSON file in `ops_file` for large generated patches.
+`python -m tracker4agents mcp [--root DIR]` runs a Model Context Protocol server on standard input and output. It exposes 59 tools (estimate, validate, inspect, `new_project`, patch, export, render, preview, lint, report, compare, feedback, migrate, convert, `export_format`, twelve `samples_*` tools, five `synth_*` tools, the sample-editing and `instruments_*` tools and the `live_*` set; [MCP.md](MCP.md#tools) lists them all) and wraps the CLI: each call runs the matching command in a child process, so a tool result is the CLI's JSON, with `isError` set when the command failed. Arguments and results follow the CLI reference; patch operations are passed as a JSON array in `ops`, or as a path to a JSON file in `ops_file` for large generated patches.
 
 A client that launches stdio servers can use this shape (field names vary by client):
 
