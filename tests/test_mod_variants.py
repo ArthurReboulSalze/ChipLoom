@@ -468,7 +468,7 @@ class ShippedFilesTests(unittest.TestCase):
                 self.assertEqual(mod.encode(project.load(ROOT / f"docs/listen/media/{name}.project.json")), shipped)
         shipped = (ROOT / "docs/listen/media/copper_skies.xm").read_bytes()
         copper = project.load(ROOT / "docs/listen/media/copper_skies.project.json")
-        self.assertEqual((copper.format, copper.channels, len(copper.samples)), ("xm", 10, 21))
+        self.assertEqual((copper.format, copper.channels, len(copper.samples)), ("xm", 10, 22))
         self.assertEqual(xm.encode(copper), shipped)
         self.assertEqual(xm.encode(xm.decode(shipped)), shipped)
 
