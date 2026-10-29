@@ -269,6 +269,8 @@ The browser studio is a local web page that joins the same live session as the w
 
 **What it offers.** The page has a **Score** tab with the order list, a pattern selector, the pattern grid, a **Select block** mode and a cell editor, and an **Agent** tab with the agent's proposals (accept or reject), recent changes and takes. A player bar at the bottom listens from a row or an order for a chosen length and can mute channels. When a window is attached to the session, a **Sound** switch chooses between **This device** (the page plays an excerpt rendered by the session) and **Computer** (the ChipLoom window plays). The page has its own theme and EN/FR language controls. If the connection drops (for example because the session was stopped), it says so and offers **Try again**.
 
+**Comments.** To tell your agent exactly where something is wrong, select a cell (or a block in **Select block** mode) and press **Comment** in the editor's header, type your remark and send it (Ctrl+Enter also sends). Cells covered by an open comment carry a small corner mark in the grid; hovering one shows the comment, and selecting it shows the comment above the editor, which is how you read it on a tablet. The **Agent** tab has a **Comments** list: open comments first, with their author, time, place (for example `Pattern 01 · rows 00-1F · channels 4-5`, rows in hexadecimal as in the grid) and replies, each with **Go to** (shows the pattern and selects the block), **Reply** and **Resolve**. **Comment on the whole song** writes a remark without a place, and **Show resolved** also lists the resolved ones with **Reopen**. The count of open comments appears on the Agent tab, and the list updates by itself when your agent replies or resolves. Comments from the browser are written as `human-web`; see [Comments in the CLI reference](CLI.md#comments) for how the agent reads them.
+
 **Getting the address.** The agent's token never reaches the browser. When the page opens, it joins the session by itself and the server gives that browser its own token in a cookie; there is nothing for you to type. There are three ways to find the address:
 
 - in the window, **Agent → Open in a browser…** (see above);
@@ -291,7 +293,7 @@ chiploom live serve exports/song/project.json --web --lan
 - There is no code or password. On the local network, anyone who knows the address can open the studio, listen and edit, and the traffic is **plain HTTP**. Turn the network option on only on a network you trust.
 - A joined browser holds its own token in an HttpOnly, SameSite=Strict cookie, plus a per-device request-forgery secret, both handed out automatically to a page of the studio itself. The token expires after 12 hours (the page then joins again by itself) and is stored only as a hash. At most twenty browsers are kept; the oldest makes room. Everything is kept in memory: stopping the session forgets every browser.
 - Requests must come from the studio's own origin and host name; no cross-origin access is allowed, so another website open in the same browser cannot join or edit. The pages carry a strict content security policy.
-- The studio's API is deliberately small: grid edits, proposals, takes, selection, play/stop and short renders. It cannot save, read or open files, or touch sample banks.
+- The studio's API is deliberately small: grid edits, proposals, takes, comments, selection, play/stop and short renders. It cannot save, read or open files, or touch sample banks.
 
 ## Planning, editing and measuring with an agent
 

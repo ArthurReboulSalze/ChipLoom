@@ -208,6 +208,7 @@ class StaticTests(WebCase):
     def test_page_files_and_content_types(self):
         expected = {"/web/": "text/html; charset=utf-8", "/web": "text/html; charset=utf-8",
                     "/web/index.html": "text/html; charset=utf-8", "/web/app.js": "text/javascript; charset=utf-8",
+                    "/web/cells.js": "text/javascript; charset=utf-8", "/web/comments.js": "text/javascript; charset=utf-8",
                     "/web/style.css": "text/css; charset=utf-8"}
         for path, content_type in expected.items():
             status, response, body = self.browser.request("GET", path)
@@ -224,7 +225,7 @@ class StaticTests(WebCase):
 
     def test_the_page_is_self_contained(self):
         text = "".join((ROOT / "tracker4agents" / "web" / name).read_text(encoding="utf-8")
-                       for name in ("index.html", "app.js", "style.css"))
+                       for name in ("index.html", "app.js", "cells.js", "comments.js", "style.css"))
         self.assertNotRegex(text, r"https?://(?!www\.w3\.org)")      # no CDN, no web font, no tracker
         self.assertNotIn("<style", text)
         self.assertNotIn(" style=", text)                            # the strict CSP forbids inline style attributes
@@ -254,7 +255,7 @@ class StaticTests(WebCase):
         text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         for pattern in ("web/*.html", "web/*.js", "web/*.css"):
             self.assertIn(pattern, text)
-        for name in ("index.html", "app.js", "style.css", "__init__.py"):
+        for name in ("index.html", "app.js", "cells.js", "comments.js", "style.css", "__init__.py"):
             self.assertTrue((ROOT / "tracker4agents" / "web" / name).is_file())
 
     def test_a_foreign_host_header_is_refused_even_for_the_static_page(self):
@@ -649,6 +650,99 @@ class WebEditingTests(WebCase):
 def read_wav(data: bytes):
     with wave.open(io.BytesIO(data)) as reader:
         return reader.getnchannels(), reader.getsampwidth(), reader.getframerate(), reader.getnframes(), reader.readframes(reader.getnframes())
+
+
+class CommentsPageTests(WebCase):
+    """comments.js: served like app.js, included by the page, both languages, and the API it calls."""
+
+    WEB = ROOT / "tracker4agents" / "web"
+
+    def test_the_comments_script_is_served_and_the_page_includes_it(self):
+        status, response, body = self.browser.request("GET", "/web/comments.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(response.headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(response.headers["Content-Security-Policy"], gateway.CSP)
+        self.assertIn("script-src 'self'", gateway.CSP)
+        self.assertIn(b"ChipLoomComments", body)
+        page = (self.WEB / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<script src="/web/comments.js" defer></script>', page)
+        self.assertLess(page.index("/web/comments.js"), page.index("/web/app.js"))     # deferred scripts run in order
+        for element in ('id="cmt-open"', 'id="cmt-editor"', 'id="comments-card"', 'id="comments-body"', 'id="comments-count"', 'id="tab-cmt"'):
+            self.assertIn(element, page)
+        self.assertIn("window.ChipLoomComments.create(", (self.WEB / "app.js").read_text(encoding="utf-8"))
+
+    def test_comment_text_never_goes_through_inner_html_and_files_stay_small(self):
+        script = (self.WEB / "comments.js").read_text(encoding="utf-8").split("*/", 1)[1]    # the code, not the header
+        self.assertNotIn("innerHTML", script)
+        self.assertNotIn("insertAdjacentHTML", script)
+        self.assertNotIn("setAttribute(\"style\"", script)
+        for name in ("app.js", "comments.js", "cells.js", "index.html"):
+            self.assertLess(len((self.WEB / name).read_text(encoding="utf-8").splitlines()), 1500, name)
+
+    def test_every_comment_string_exists_in_both_languages(self):
+        import re
+        script = (self.WEB / "comments.js").read_text(encoding="utf-8")
+        page = (self.WEB / "index.html").read_text(encoding="utf-8")
+        tables = {}
+        for lang in ("en", "fr"):
+            block = re.search(lang + r": \{(.*?)\n    \},", script, re.S).group(1)
+            tables[lang] = dict(re.findall(r'"([a-zA-Z_.]+)": "((?:[^"\\]|\\.)*)"', block))
+        self.assertEqual(set(tables["en"]), set(tables["fr"]))
+        self.assertGreater(len(tables["en"]), 30)
+        self.assertTrue(all(tables["fr"].values()))
+        used = set(re.findall(r'"(cmt\.[a-z.]+)"', script.split("const STRINGS", 1)[0] + script.split("function create", 1)[1]))
+        used |= set(re.findall(r'data-i18n(?:-aria)?="(cmt\.[a-z.]+)"', page))
+        self.assertTrue(used)
+        self.assertEqual(used - set(tables["en"]), set())
+        for key, text in tables["en"].items():                # the placeholders are the same in both languages
+            self.assertEqual(sorted(re.findall(r"\{\w+\}", text)), sorted(re.findall(r"\{\w+\}", tables["fr"][key])), key)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is not installed")
+    def test_the_scripts_parse_and_the_strings_merge_into_the_page_table(self):
+        import subprocess
+        for name in ("app.js", "comments.js", "cells.js"):
+            done = subprocess.run(["node", "--check", str(self.WEB / name)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(done.returncode, 0, (name, done.stderr))
+        script = ("const M = require(process.argv[1]); const I18N = {en: {}, fr: {}};\n"
+                  "const api = M.create({S: {}, I18N, h() {}, fill() {}, $: () => null, api() {}, t: (k) => k});\n"
+                  "console.log(JSON.stringify({en: Object.keys(I18N.en).length, fr: Object.keys(I18N.fr).length,"
+                  " max: M.MAX_TEXT, methods: Object.keys(api).sort()}));")
+        done = subprocess.run(["node", "-e", script, str(self.WEB / "comments.js")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        result = json.loads(done.stdout)
+        self.assertEqual(result["en"], result["fr"])
+        self.assertEqual(result["max"], 1000)
+        self.assertEqual(result["methods"], ["load", "onChanges", "onSelection", "onStatus", "paint", "render", "wire"])
+
+    def test_comments_round_trip_through_the_studio_api(self):
+        browser = self.joined()
+        place = {"pattern": 0, "row": 16, "rows": 16, "channel": 2, "channels": 2}
+        status, created, _ = browser.api("comment", {"text": "Track 3 <b>drags</b> here", "place": place})
+        self.assertEqual(status, 200, created)
+        comment = created["comment"]
+        self.assertEqual((comment["author"], comment["place"], comment["text"]), ("human-web", place, "Track 3 <b>drags</b> here"))
+        self.assertEqual(browser.api("comment", {"text": "The intro is too long", "place": None})[1]["comment"]["place"], None)
+        listed = browser.api("comments", {})[1]["comments"]
+        self.assertEqual([item["id"] for item in listed], [comment["id"], "c2"])
+        replied = browser.api("reply", {"id": comment["id"], "text": "Still there"})[1]["comment"]
+        self.assertEqual(replied["replies"][-1]["author"], "human-web")
+        self.assertEqual(browser.api("resolve", {"id": comment["id"]})[1]["comment"]["status"], "resolved")
+        self.assertEqual([item["id"] for item in browser.api("comments", {"status": "open"})[1]["comments"]], ["c2"])
+        self.assertEqual(len(browser.api("comments", {"status": "all"})[1]["comments"]), 2)
+        self.assertEqual(browser.api("resolve", {"id": comment["id"], "reopen": True})[1]["comment"]["status"], "open")
+        self.assertEqual(browser.api("status", {})[1]["open_comments"], 2)
+        # the page learns about comment changes from `changes`, like edits
+        entries = browser.api("changes", {"since": 0})[1]["entries"]
+        kinds = [entry["kind"] for entry in entries]
+        self.assertEqual(kinds.count("comment"), 5)
+        self.assertTrue(all(entry["patterns"] == [] and not entry["structure"] for entry in entries if entry["kind"] == "comment"))
+        # the server's checks reach the page as structured errors
+        status, error, _ = browser.api("comment", {"text": "x", "place": {"pattern": 0, "row": 99}})
+        self.assertEqual((status, error["code"]), (422, "COMMENT_INVALID"))
+        status, error, _ = browser.api("reply", {"id": "c99", "text": "x"})
+        self.assertEqual(error["code"], "COMMENT_UNKNOWN")
+        status, error, _ = browser.api("comment", {"text": "x"}, csrf=None)
+        self.assertEqual((status, error["code"]), (403, "LIVE_CSRF"))
 
 
 @unittest.skipUnless(HAS_XMP, "libxmp is not available")

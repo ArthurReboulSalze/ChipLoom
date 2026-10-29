@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/web/theme.css">
 <link rel="stylesheet" href="/web/style.css">
 <script src="/web/cells.js" defer></script>
+<script src="/web/comments.js" defer></script>
 <script src="/web/app.js" defer></script>
 </head>
 <body>
@@ -55,7 +56,7 @@
 
   <nav class="tabs" id="tabs" aria-label="Sections">
     <button class="btn" type="button" data-tab="score" aria-pressed="true"><span data-i18n="tab.score">Score</span></button>
-    <button class="btn" type="button" data-tab="agent" aria-pressed="false"><span data-i18n="tab.agent">Agent</span><span class="count" id="tab-count" hidden>0</span></button>
+    <button class="btn" type="button" data-tab="agent" aria-pressed="false"><span data-i18n="tab.agent">Agent</span><span class="count" id="tab-count" hidden>0</span><span class="count cmt" id="tab-cmt" hidden>0</span></button>
   </nav>
 
   <main data-tab="score" id="main">
@@ -78,13 +79,19 @@
 
     <aside class="pane" id="side-pane" aria-label="Details">
       <section class="card editor-card empty-state" id="editor" aria-labelledby="editor-h">
-        <header><h2 id="editor-h" data-i18n="editor">Cell editor</h2><button class="btn small ghost sheet-close" type="button" id="editor-close" data-i18n-aria="aria.close"><span aria-hidden="true">✕</span></button></header>
+        <header><h2 id="editor-h" data-i18n="editor">Cell editor</h2><button class="btn small" type="button" id="cmt-open" disabled data-i18n-aria="cmt.comment.aria"><span data-i18n="cmt.comment">Comment</span></button><button class="btn small ghost sheet-close" type="button" id="editor-close" data-i18n-aria="aria.close"><span aria-hidden="true">✕</span></button></header>
+        <div class="cmt-panel" id="cmt-editor" hidden></div>
         <div class="body" id="editor-body"></div>
       </section>
 
       <section class="card" id="proposals-card" aria-labelledby="proposals-h">
         <header><h2 id="proposals-h" data-i18n="proposals">Agent proposals</h2><span class="count" id="proposals-count">0</span></header>
         <div class="body"><ul class="list" id="proposals"></ul></div>
+      </section>
+
+      <section class="card" id="comments-card" aria-labelledby="comments-h">
+        <header><h2 id="comments-h" data-i18n="cmt.title">Comments</h2><span class="count" id="comments-count">0</span></header>
+        <div class="body" id="comments-body"></div>
       </section>
 
       <section class="card" id="activity-card" aria-labelledby="activity-h">

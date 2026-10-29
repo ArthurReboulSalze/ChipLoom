@@ -27,7 +27,8 @@ from .api import WEB_API, Binary, Call
 
 DIRECTORY = Path(__file__).resolve().parent
 STATIC = {"/web": "index.html", "/web/": "index.html", "/web/index.html": "index.html",
-          "/web/app.js": "app.js", "/web/cells.js": "cells.js", "/web/style.css": "style.css"}
+          "/web/app.js": "app.js", "/web/cells.js": "cells.js", "/web/comments.js": "comments.js",
+          "/web/style.css": "style.css"}
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8"}
 MAX_JOIN_BODY = 2048

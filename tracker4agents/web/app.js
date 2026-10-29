@@ -301,6 +301,9 @@
   }
   const who = (author) => (author === "human-web" ? t("who.me") : author === "human" ? t("who.window") : author === "file" ? t("who.file") : author);
   const whoClass = (author) => (author === "human-web" ? "me" : author === "human" || author === "file" ? "win" : "agent");
+  // comments.js: comments with a place (button, grid markers, the Agent tab's list); merges its strings into I18N.
+  const Comments = window.ChipLoomComments.create({ S, I18N, h, fill, $, api, t, toast, errText, who, whoClass, hex2,
+    selectPattern, toggleBlockMode, updateSelectionClasses, renderEditor, renderPlayer, paintGrid, showTab });
 
   // ---------------------------------------------------------------------------------------------
   // connecting
@@ -347,7 +350,7 @@
       S.order = 0; S.pattern = overview.orders[0] ?? 0;
       S.revision = overview.revision;
       await loadPattern();
-      await Promise.all([loadProposals(), loadTakes(), loadActivity()]);
+      await Promise.all([loadProposals(), loadTakes(), loadActivity(), Comments.load()]);
     } catch (e) {
       if (e.code === "LIVE_WEB_AUTH") return connectionLost();
       renderGridError(e);
@@ -445,6 +448,7 @@
       }
     }
     await loadProposals();
+    await Comments.onChanges(changes);
     S.revision = Math.max(S.revision, changes.revision);   // only once everything above was reloaded
   }
 
@@ -455,6 +459,7 @@
     if (Array.isArray(status.audible) && !S.audibleTouched && status.audible.length === S.channels) S.audible = status.audible.slice();
     renderHeader(); renderPlayer();
     if (takesChanged) await loadTakes();
+    await Comments.onStatus(status);
   }
 
   function setNet(state) {
@@ -627,6 +632,7 @@
         if (proposedText !== undefined) el.title = proposedText; else el.removeAttribute("title");
       }
     }
+    Comments.paint();
     updateSelectionClasses();
     if (S.sel) refreshEditorFromGrid();
   }
@@ -660,6 +666,7 @@
     if (S.rowHeads) S.rowHeads.forEach((head, r) => head.classList.toggle("cur", Boolean(S.sel && S.sel.row === r)));
     $$("[data-head]").forEach((head) => head.classList.toggle("cur", Boolean(S.sel && !S.blockMode && S.sel.channel === Number(head.dataset.head))));
     $("#grid-hint").textContent = S.blockMode ? t(S.block && S.anchor === null ? "hint.block3" : S.anchor ? "hint.block2" : "hint.block1") : t("hint.tap");
+    Comments.onSelection();
   }
 
   function pickCell(row, channel, opts = {}) {
@@ -1132,16 +1139,20 @@
     $("#listen-stop").addEventListener("click", stopListening);
     $("#listen-seconds").addEventListener("change", (e) => { S.seconds = Number(e.target.value); });
     $$("[data-speaker]").forEach((el) => el.addEventListener("click", () => { S.speaker = el.dataset.speaker; renderPlayer(); }));
-    $$("#tabs [data-tab]").forEach((el) => el.addEventListener("click", () => {
-      S.tab = el.dataset.tab; $("#main").dataset.tab = S.tab;
-      $$("#tabs [data-tab]").forEach((o) => o.setAttribute("aria-pressed", String(o === el)));
-    }));
+    $$("#tabs [data-tab]").forEach((el) => el.addEventListener("click", () => showTab(el.dataset.tab)));
+    Comments.wire();
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && S.sheet) { S.sheet = false; renderEditor(false); } });
     $("#audio").addEventListener("ended", () => { S.playerMessage = false; });
   }
 
+  function showTab(name) {
+    S.tab = name; $("#main").dataset.tab = name;
+    $$("#tabs [data-tab]").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.tab === name)));
+    if (name !== "score" && S.sheet) { S.sheet = false; renderEditor(false); }   // the bottom sheet's padding would squeeze the Agent tab
+  }
+
   function renderAll() {
-    renderHeader(); renderPlayer(); renderProposals(); renderActivity(); renderTakes(); renderEditor(false);
+    renderHeader(); renderPlayer(); renderProposals(); renderActivity(); renderTakes(); renderEditor(false); Comments.render();
     if (S.overview) { renderOrders(); renderPatternSelect(); }
     if (S.cells && S.els) { S.els.forEach((line, r) => line.forEach((el, c) => { el._text = null; })); paintGrid(); }
     updateSelectionClasses();
