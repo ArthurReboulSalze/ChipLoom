@@ -232,6 +232,7 @@ class CommentPanel(QWidget):
         window.table.viewport().update()
         if window.document:
             window._update_title()   # comments make the project unsaved (Document.dirty)
+            window.live.context_changed()   # and the session's status says so (live status `dirty`)
 
     def retranslate(self):
         self.refresh()
