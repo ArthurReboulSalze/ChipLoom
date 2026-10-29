@@ -186,6 +186,24 @@ class ColumnZoomTests(LayoutCase):
 
 
 @unittest.skipUnless(QApplication is not None and shutil.which("ffmpeg"), "PySide6 and FFmpeg required")
+class AgentTabHeightTests(LayoutCase):
+    def test_the_agent_tab_buttons_fit_without_scrolling_in_a_common_window(self):
+        from PySide6.QtWidgets import QScrollArea
+        window = self.window
+        window.sample_tabs.setCurrentIndex(window.sample_tabs.indexOf(window.agent_panel))
+        window.resize(1366, 768)
+        for _ in range(5):
+            self.app.processEvents()
+        area = window.agent_panel.findChild(QScrollArea)
+        self.assertEqual(area.verticalScrollBar().maximum(), 0)     # nothing below the fold
+        viewport = area.viewport().height()
+        for button in (window.agent_panel.accept_button, window.agent_panel.open_button,
+                       window.comment_panel.resolve_button):
+            top = button.mapTo(area.viewport(), button.rect().topLeft()).y()
+            self.assertTrue(0 <= top and top + button.height() <= viewport, button.objectName())
+        self.assertIn("Proposals from the agent", window.agent_panel.empty_hint.toolTip())   # the full hint stays in reach
+
+
 class ClearMonitorTests(LayoutCase):
     def test_ctrl_click_on_any_mute_or_solo_makes_every_track_audible_with_one_render(self):
         window = self.window

@@ -406,8 +406,12 @@ class AgentPanel(QWidget):
         self.proposal_list.setMinimumHeight(45)
         self.proposal_list.currentItemChanged.connect(self._selected)
         left.addWidget(self.proposal_list, 1)
-        self.empty_hint = window._label("Proposals from the agent appear here. Select one to preview it on the pattern.", "muted")
-        self.empty_hint.setWordWrap(True)
+        # One elided line (full text in the tooltip): a wrapping label would make the columns ask for their preferred
+        # height, which pushes the buttons below the fold of the Agent tab.
+        self.empty_hint = ElidedLabel("", "muted")
+        window._bind(self.empty_hint, "Proposals from the agent appear here. Select one to preview it on the pattern.")
+        window._bind(self.empty_hint, "Proposals from the agent appear here. Select one to preview it on the pattern.",
+                     "setToolTip")
         left.addWidget(self.empty_hint)
         buttons = QHBoxLayout()
         self.accept_button = window._button("Accept", self.accept_selected, "acceptProposal")

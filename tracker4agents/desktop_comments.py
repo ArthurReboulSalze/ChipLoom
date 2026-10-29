@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QInputDialog, QLabel, QLi
                                QVBoxLayout, QWidget)
 
 from . import comments as comment_store
+from .desktop_widgets import ElidedLabel
 from .model import ValidationError
 
 AUTHOR = "human"                                  # the window's author name in the session and in comments
@@ -132,9 +133,10 @@ class CommentPanel(QWidget):
                      "setToolTip")
         layout.addWidget(self.list, 1)
         # New comments start from the grid (Ctrl+M, right-click, Agent menu): the Agent tab has no height to spare.
-        self.hint = window._label("Select cells in the grid and press Ctrl+M (or right-click, Comment on the "
-                                  "selection…): your agent sees exactly where.", "muted")
-        self.hint.setWordWrap(True)
+        self.hint = ElidedLabel("", "muted")   # one line, as in the other Agent tab columns (see AgentPanel.empty_hint)
+        for setter in ("setText", "setToolTip"):
+            window._bind(self.hint, "Select cells in the grid and press Ctrl+M (or right-click, Comment on the "
+                                    "selection…): your agent sees exactly where.", setter)
         layout.addWidget(self.hint)
         actions = QHBoxLayout()
         self.go_button = window._button("Go to", self.go_to, "gotoComment")
