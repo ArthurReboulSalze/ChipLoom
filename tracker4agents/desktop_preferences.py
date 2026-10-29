@@ -93,6 +93,8 @@ class PreferencesMixin:
         self.sample_browser.retranslate()
         self.sample_workshop.editor.retranslate()
         self.sample_workshop.levels.retranslate()
+        self.sample_workshop.tuning.retranslate()
+        self.sample_mode.refresh()
         self.create_panel.retranslate()
         self.instrument_panel.retranslate()
         if self.browser_dialog is not None:

@@ -6,7 +6,7 @@ grid, sample list, panels, undo state). It also holds what follows the module's 
 `sample_selected`, `sample_summary`), and the Mute and Solo strip above the grid (`audible`, `set_channels`,
 `channel_color`, `_monitor_style`, `monitor_changed`, `clear_monitor`).
 Relies on: window.document, window.plan/times/current_order/_refreshing, window.rt, the header widgets and panels
-built by `desktop_layout`, and `prepare_audio`, `is_playing`, `playback_ms`, `update_keys_hint`, `_rebind`, `message`
+built by `desktop_layout` (including sample_mode and the workshop's tuning page), and `prepare_audio`, `is_playing`, `playback_ms`, `update_keys_hint`, `_rebind`, `message`
 and `t` from the other mixins.
 """
 
@@ -63,6 +63,7 @@ class SongViewMixin:
         self._refreshing = False
         self.sample_selected(self.samples.currentRow())
         self.cell_selected(self.table.currentIndex())
+        self.sample_mode.refresh()   # the declared sample source, before the tabs read what it allows
         self.sample_browser.update_slots()
         self.create_panel.refresh_slots()
         self.sample_workshop.levels.invalidate()
@@ -115,6 +116,7 @@ class SongViewMixin:
             self.edit_octave.blockSignals(False)
             self.update_keys_hint()
         self.sample_workshop.editor.update_format()
+        self.sample_workshop.tuning.update_format()
         self.sample_browser.update_controls()
         self.create_panel.update_format()
         self.instrument_panel.update_buttons()
@@ -145,6 +147,7 @@ class SongViewMixin:
         if self._refreshing:
             return
         self.sample_workshop.editor.load()   # the waveform, the edit fields, or the empty state
+        self.sample_workshop.tuning.load()   # the measured tuning and the bank entry of the slot
         self.instrument_panel.update_buttons()
         if not self.document or row < 0:
             return

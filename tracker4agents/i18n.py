@@ -416,6 +416,133 @@ FR = {
     "Comment on the whole song…": "Commenter tout le morceau…",
     "Comment on the selected cells (listed in the Agent tab)":
         "Commenter les cellules choisies (liste dans l'onglet Agent)",
+    # --- the sample bank in the window: Bank menu, active bank, auditions, add to bank, drops (desktop_bank)
+    "Bank": "Banque", "Open bank…": "Ouvrir une banque…", "New bank…": "Nouvelle banque…",
+    "New starter bank…": "Nouvelle banque de départ…",
+    "Choose a new or empty folder for the starter bank": "Choisir un dossier nouveau ou vide pour la banque de départ",
+    "Cannot build the starter bank here: {detail}": "Impossible de créer la banque de départ ici : {detail}",
+    "Starter bank built: {count} sounds and {palettes} palettes in {path}":
+        "Banque de départ créée : {count} sons et {palettes} palettes dans {path}",
+    "Recent banks": "Banques récentes", "Open bank folder": "Ouvrir le dossier de la banque",
+    "Open a sample bank folder": "Ouvrir un dossier de banque de samples",
+    "Choose a new or empty folder for the bank": "Choisir un dossier nouveau ou vide pour la banque",
+    "Cannot open this bank: {detail}": "Impossible d'ouvrir cette banque : {detail}",
+    "Cannot create a bank here: {detail}": "Impossible de créer une banque ici : {detail}",
+    "The bank folder does not exist yet: {path}": "Le dossier de la banque n'existe pas encore : {path}",
+    "Bank: {name}": "Banque : {name}", "Active bank: {path}": "Banque active : {path}",
+    "Samples": "Samples", "Palettes": "Palettes", "retune {retune}": "correction {retune}",
+    "Auto-play": "Lecture automatique", "Play a sample as soon as it is clicked.": "Joue un sample dès qu'on clique dessus.",
+    "Add to bank…": "Ajouter à la banque…", "Add to bank": "Ajouter à la banque",
+    "Select a song sample to add to the bank.": "Sélectionne un sample du morceau à ajouter à la banque.",
+    "Cannot read this sample: {detail}": "Lecture de ce sample impossible : {detail}",
+    "Cannot read this WAV: {detail}": "Lecture de ce WAV impossible : {detail}",
+    "Cannot read this module: {detail}": "Lecture de ce module impossible : {detail}",
+    "Drop a MOD, an XM, a project or a WAV file on the library to add its samples.":
+        "Dépose un MOD, un XM, un projet ou un WAV sur la bibliothèque pour ajouter ses samples.",
+    "Added {name} to the bank as {id}": "{name} ajouté à la banque sous {id}",
+    "Already in the bank as {id}": "Déjà dans la banque sous {id}",
+    "Slot {slot} holds {name!r}. Replace it with {entry}? The notes using the slot will play the new sample.":
+        "L'emplacement {slot} contient {name!r}. Le remplacer par {entry} ? Les notes de cet emplacement joueront le nouveau sample.",
+    "Adapt this sample?": "Adapter ce sample ?",
+    "{entry} is outside the MOD profile. Prepare a compatible copy for this song? The bank original is kept.":
+        "{entry} sort du profil MOD. Préparer une copie compatible pour ce morceau ? L'original de la banque est conservé.",
+    # --- the add-to-bank sheet and the slot chooser (desktop_bank_dialogs)
+    "Not pitched ({reason})": "Sans hauteur nette ({reason})",
+    "Written {reference} sounds {note} {cents:+d} cents": "{reference} écrit sonne {note} {cents:+d} cents",
+    "Cannot play this sample: {detail}": "Lecture de ce sample impossible : {detail}",
+    "Type": "Type", "Tags": "Étiquettes", "tags, separated by commas": "étiquettes, séparées par des virgules",
+    "Loop start (frames)": "Début de boucle (échantillons)", "Loop length (frames)": "Longueur de boucle (échantillons)",
+    "{frames} frames · {bits}-bit · {loop}": "{frames} échantillons · {bits} bits · {loop}",
+    "Source: {file}, slot {slot}": "Source : {file}, emplacement {slot}", "Source: {file}": "Source : {file}",
+    "This sample is already in the bank as {id}.": "Ce sample est déjà dans la banque sous {id}.",
+    "Select that entry": "Sélectionner cette entrée",
+    "Add samples from {file}": "Ajouter des samples de {file}",
+    "Check the samples to add, name them, pick their role. Click a row to hear it; roles and tuning are measured from "
+    "the file, confirm them by listening.":
+        "Coche les samples à ajouter, nomme-les, choisis leur rôle. Clique une ligne pour l'écouter ; rôles et accord "
+        "sont mesurés dans le fichier, confirme-les à l'oreille.",
+    "Tuning": "Accord", "In bank": "En banque", "Insert into the song at": "Insérer dans le morceau à",
+    "Insert into song": "Insérer dans le morceau", "Check at least one sample.": "Coche au moins un sample.",
+    "Slot {slot}: {detail}": "Emplacement {slot} : {detail}",
+    "{created} samples added to the bank ({known} already there)": "{created} samples ajoutés à la banque ({known} déjà présents)",
+    "Replace these samples?": "Remplacer ces samples ?",
+    "Slots {slots} are occupied. Replace them? The notes using them will play the new samples.":
+        "Les emplacements {slots} sont occupés. Les remplacer ? Les notes qui les utilisent joueront les nouveaux samples.",
+    "Adapt these samples?": "Adapter ces samples ?",
+    "Some samples are outside the MOD profile. Prepare compatible copies for this song? The bank originals are kept.":
+        "Certains samples sortent du profil MOD. Préparer des copies compatibles pour ce morceau ? Les originaux de la banque sont conservés.",
+    "Cannot insert into the song: {detail}": "Insertion dans le morceau impossible : {detail}",
+    "Inserted {count} samples: {slots}": "{count} samples insérés : {slots}",
+    "Inserted {count} samples into the song · Ctrl+Z to undo": "{count} samples insérés dans le morceau · Ctrl+Z pour annuler",
+    "Clap": "Clap", "Tom": "Tom", "Cymbal": "Cymbale", "Perc": "Percussion", "Pad": "Nappe", "Fx": "Effet",
+    # --- palettes (desktop_palettes)
+    "Select a palette": "Sélectionne une palette", "Use in song": "Utiliser dans le morceau",
+    "{played} of {entries} entries played · {bpm} BPM · {seconds:.0f} s": "{played} entrées jouées sur {entries} · {bpm} BPM · {seconds:.0f} s",
+    "No palettes in this bank": "Aucune palette dans cette banque", "{count} palettes": "{count} palettes",
+    "Palette unavailable: {detail}": "Palette indisponible : {detail}",
+    "{starts} note starts · confidence {confidence}": "{starts} départs de notes · confiance {confidence}",
+    "high": "haute", "medium": "moyenne", "low": "basse",
+    "Tuning: in tune": "Accord : juste", "Tuning: no pitched entry to compare": "Accord : aucune entrée tonale à comparer",
+    "Tuning: {count} to retune ({ids})": "Accord : {count} à réaccorder ({ids})",
+    "Adapt this palette?": "Adapter cette palette ?",
+    "Some entries are outside the MOD profile. Prepare compatible copies for this song? The bank originals are kept.":
+        "Certaines entrées sortent du profil MOD. Préparer des copies compatibles pour ce morceau ? Les originaux de la banque sont conservés.",
+    "Cannot use this palette: {detail}": "Utilisation de la palette impossible : {detail}",
+    "{count} retuned": "{count} réaccordés",
+    "Palette {id} used: {count} samples · Ctrl+Z to undo": "Palette {id} utilisée : {count} samples · Ctrl+Z pour annuler",
+    # --- the Tuning page (desktop_tuning)
+    "Relative note": "Note relative", "Notes of this sample": "Notes de ce sample", "Apply fine tune": "Appliquer l'accord fin",
+    "Save tuning to bank": "Enregistrer l'accord dans la banque",
+    "Raise or lower the sample by {count} semitones (the PCM is not touched).":
+        "Monte ou descend le sample de {count} demi-tons (le PCM n'est pas touché).",
+    "Transpose the notes that play this sample by {count} semitones, in every pattern.":
+        "Transpose de {count} demi-tons les notes qui jouent ce sample, dans tous les patterns.",
+    "XM fine tune, 1/128 of a semitone.": "Accord fin XM, 1/128 de demi-ton.",
+    "MOD fine tune, 1/8 of a semitone.": "Accord fin MOD, 1/8 de demi-ton.",
+    "Store how this slot is tuned, relative to its bank entry, as the entry's correction applied on insertion.":
+        "Enregistre l'accord de cet emplacement, par rapport à son entrée de banque, comme correction appliquée à l'insertion.",
+    "Put this sample in the bank with its own name, role and tags.":
+        "Place ce sample dans la banque avec son nom, son rôle et ses étiquettes.",
+    "Tuning is measured, not judged: confirm by listening. A MOD sample cannot hold whole semitones, so its notes are "
+    "transposed instead.":
+        "L'accord est mesuré, pas jugé : confirme à l'oreille. Un sample MOD ne peut pas porter de demi-tons entiers, "
+        "ce sont donc ses notes qui sont transposées.",
+    "Tuning is measured, not judged: confirm by listening.": "L'accord est mesuré, pas jugé : confirme à l'oreille.",
+    "in the patterns": "dans les patterns", "not from the bank": "pas issu de la banque",
+    "The relative note stays within -96..95.": "La note relative reste entre -96 et 95.",
+    "Cannot tune this sample: {detail}": "Accord de ce sample impossible : {detail}",
+    "Relative note {value:+d} · Ctrl+Z to undo": "Note relative {value:+d} · Ctrl+Z pour annuler",
+    "Moved {count} notes of sample {slot} by {delta:+d} semitones · Ctrl+Z to undo":
+        "{count} notes du sample {slot} déplacées de {delta:+d} demi-tons · Ctrl+Z pour annuler",
+    "No note plays sample {slot}.": "Aucune note ne joue le sample {slot}.",
+    "Fine tune {value:+d} · Ctrl+Z to undo": "Accord fin {value:+d} · Ctrl+Z pour annuler",
+    "This slot is not recorded as a bank entry.": "Cet emplacement n'est pas enregistré comme entrée de banque.",
+    "Cannot save the tuning: {detail}": "Enregistrement de l'accord impossible : {detail}",
+    "Tuning of {id} saved: {semitones:+d} st {cents:+d} c": "Accord de {id} enregistré : {semitones:+d} dt {cents:+d} c",
+    # --- the sample mode switch (desktop_source)
+    "Library": "Bibliothèque", "Synthesized": "Synthétisé", "Mixed": "Mixte",
+    "Only samples from the bank: created sounds are refused.": "Seulement des samples de la banque : les sons créés sont refusés.",
+    "Only sounds created by ChipLoom recipes: bank samples are refused.":
+        "Seulement des sons créés par des recettes ChipLoom : les samples de la banque sont refusés.",
+    "Bank samples and created sounds together.": "Samples de la banque et sons créés ensemble.",
+    "This song is declared synthesized: bank samples are refused. Switch the sample mode in the header to use the bank.":
+        "Ce morceau est déclaré synthétisé : les samples de la banque sont refusés. Change le mode de samples dans l'en-tête pour utiliser la banque.",
+    "This song is declared library-only: created sounds are refused. Switch the sample mode in the header to create sounds.":
+        "Ce morceau est déclaré bibliothèque seule : les sons créés sont refusés. Change le mode de samples dans l'en-tête pour créer des sons.",
+    "No sample mode declared: anything goes. Click a mode to declare one.":
+        "Aucun mode de samples déclaré : tout est permis. Clique un mode pour le déclarer.",
+    "Allow both kinds of samples?": "Autoriser les deux sortes de samples ?",
+    "A mixed song takes bank samples and created sounds together. The agent only mixes them when you ask for it. "
+    "Declare this song mixed?":
+        "Un morceau mixte prend des samples de la banque et des sons créés ensemble. L'agent ne les mélange que si tu le "
+        "demandes. Déclarer ce morceau mixte ?",
+    "Cannot switch to {mode}: {detail}": "Passage en {mode} impossible : {detail}",
+    # --- drops on the window (desktop_drops)
+    "Drop to open": "Dépose pour ouvrir", "Drop to choose samples for the bank": "Dépose pour choisir des samples pour la banque",
+    "Drop to add this WAV to the bank": "Dépose pour ajouter ce WAV à la banque",
+    "Drop to choose samples for the song": "Dépose pour choisir des samples pour le morceau",
+    "Drop to insert the bank entry here": "Dépose pour insérer l'entrée de la banque ici",
+    "MIDI import is planned for the next version.": "L'import MIDI est prévu pour la prochaine version.",
     "MOD and XM tracker.\nDouble-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\nPiano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. In Smp and Effect columns type hexadecimal digits.\nThe piano keys also play what they type: the current instrument with Edit mode off, the selected sound in Song samples, Sample library, Create and Instruments. Space still plays and pauses.\nCtrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · Ctrl+Up/Down: transpose (Shift: octave).\nThe file reloads by itself when the agent saves it; F5 forces a reload.\nClick a track header to mute or unmute it, Ctrl+click Mute or Solo to hear every track again; the grid scrolls sideways when the channels do not fit and Ctrl+wheel widens or narrows the tracks.\nAn XM adds a volume column and key off (key 1, the key before 2, in Edit mode; === in a cell).\nSpace in patterns: play/pause · Ctrl+Z: undo.\nReal-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\nFour-channel ProTracker MOD, MOD with 2 to 32 channels and the FastTracker II XM profile; IT is planned.":
         "Tracker MOD et XM.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nLes touches de piano jouent aussi ce qu'elles écrivent : l'instrument courant quand le mode saisie est désactivé, le son choisi dans Samples du morceau, Bibliothèque, Créer et Instruments. Espace lance toujours la lecture et la pause.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver, Ctrl+clic sur Voie ou Solo pour réentendre toutes les voies ; la grille défile sur le côté quand les voies ne tiennent pas et Ctrl+molette élargit ou resserre les voies.\nUn XM ajoute une colonne de volume et la fin de note (touche 1, celle d'avant le 2, en mode saisie ; === dans une cellule).\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nMOD ProTracker à quatre voies, MOD de 2 à 32 voies et profil XM de FastTracker II ; IT est prévu.",
 }

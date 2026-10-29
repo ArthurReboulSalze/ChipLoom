@@ -8,6 +8,7 @@ shown as readable sentences, and the documented flags (`adapt`, `adjust_loop`, `
 are offered as explicit choices.
 
 `LevelsPanel` lists each song sample's loudness against its role's target (`loudness.py`) with a Match button.
+`SampleWorkshop` hosts them with the Tuning page (`desktop_tuning.TuningPanel`) behind an Edit / Levels / Tuning switch.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHea
                                QVBoxLayout, QWidget)
 
 from . import loudness, sample_tools, synth_tools
+from .desktop_tuning import TuningPanel
 from .desktop_widgets import XM_REFUSED_TIP, button as make_button, label
 from .model import Sample, ValidationError
 
@@ -783,7 +785,7 @@ class LevelsPanel(QWidget):
 
 
 class SampleWorkshop(QWidget):
-    """The "Song samples" tab body: the sample editor, and the levels view one click away."""
+    """The "Song samples" tab body: the sample editor, with the levels and tuning views one click away."""
 
     def __init__(self, window):
         super().__init__()
@@ -795,7 +797,8 @@ class SampleWorkshop(QWidget):
         switch.setSpacing(6)
         self.edit_button = window._button("Edit", lambda: self.show_page(0), "pageEdit")
         self.levels_button = window._button("Levels", lambda: self.show_page(1), "pageLevels")
-        for control in (self.edit_button, self.levels_button):
+        self.tuning_button = window._button("Tuning", lambda: self.show_page(2), "pageTuning")
+        for control in (self.edit_button, self.levels_button, self.tuning_button):
             control.setCheckable(True)
             control.setProperty("compact", True)
             switch.addWidget(control)
@@ -803,8 +806,10 @@ class SampleWorkshop(QWidget):
         self.pages = QStackedWidget()
         self.editor = SampleEditor(window)
         self.levels = LevelsPanel(window)
+        self.tuning = TuningPanel(window)   # desktop_tuning: relative note, fine tune, notes, save to bank
         self.pages.addWidget(self.editor)
         self.pages.addWidget(self.levels)
+        self.pages.addWidget(self.tuning)
         layout.addWidget(self.pages, 1)
         self.show_page(0)
 
@@ -812,8 +817,11 @@ class SampleWorkshop(QWidget):
         self.pages.setCurrentIndex(index)
         self.edit_button.setChecked(index == 0)
         self.levels_button.setChecked(index == 1)
+        self.tuning_button.setChecked(index == 2)
         if index == 1:
             self.levels.rebuild()
+        elif index == 2:
+            self.tuning.load()
 
 
 __all__ = ["LevelsPanel", "SampleEditor", "SampleWorkshop", "WaveEditor", "even"]
