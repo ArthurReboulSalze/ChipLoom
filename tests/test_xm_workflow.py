@@ -137,7 +137,7 @@ class RecipesIntoXmTests(unittest.TestCase):
         recipe = {"type": "wave", "shape": "pulse", "duty": 0.25}
         apply_ops(module, [{"op": "recipe_sample", "name": "Lead", "recipe": recipe, "finetune": -2, "volume": 40}])
         sample = module.samples[0]
-        self.assertEqual((sample.finetune, sample.recipe, sample.volume), (-52, recipe, 40))
+        self.assertEqual((sample.finetune, sample.recipe, sample.volume), (-52, {**recipe, "start": "zero"}, 40))
         for index in range(2, 34):
             apply_ops(module, [{"op": "recipe_sample", "name": f"W{index}", "recipe": recipe, "volume": 30}])
         self.assertEqual(len(module.samples), 33)

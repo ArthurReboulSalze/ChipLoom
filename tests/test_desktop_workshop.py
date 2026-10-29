@@ -418,7 +418,7 @@ class CreateTests(Workshop):
         self.assertEqual(window.document.module.metadata["sample_sources"][str(info["slot"])]["origin"], "drawn")
         create.pcm.setChecked(False)                                             # or as the recipe that rebuilds it
         info = create.add_to_song()
-        self.assertEqual(self.sample(info["slot"]).pcm, synth.from_recipe("x", create.recipe()).pcm)
+        self.assertEqual(self.sample(info["slot"]).pcm, synth.from_recipe("x", synth.smooth_start(create.recipe())).pcm)
 
     def test_start_a_synthesized_song_opens_the_palette_as_a_new_project(self):
         window, create = self.window, self.create
