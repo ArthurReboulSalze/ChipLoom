@@ -30,9 +30,11 @@ LEVEL_WARNING_DB = 6.0
 # (a new note every few rows, or a cut) stay well below it.
 HELD_ARPEGGIO_SECONDS = 1.2
 # Behaviour over time. A silence shorter than MIN_REST_SECONDS (a retrigger, a one-shot ending just before the
-# next note) does not count as a rest; runs longer than NEVER_RESTS_SECONDS are flagged.
+# next note) does not count as a rest. A run is flagged when it is both long and slow: held material (one note
+# per bar under an arpeggio, a held continuo) tires the ear, a busy legato line does not.
 MIN_REST_SECONDS = 0.05
 NEVER_RESTS_SECONDS = 16.0
+NEVER_RESTS_MAX_NOTE_RATE = 1.0  # note starts per second inside the run
 SUSTAIN_MIN_CHANNELS = 4
 SUSTAIN_CHANNEL_FRACTION = 0.6
 # Heard fundamentals outside this range are flagged (a bass two octaves too low, a lead in the whistle range).
@@ -470,13 +472,18 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         close_segment(channel, duration)
     row_starts = [item["seconds"] for item in timeline]
 
-    def run_entry(run: list | None) -> dict | None:
+    def run_entry(run: list | None, starts: list[float] | None = None) -> dict | None:
+        """A run as JSON; with the channel's note-start times, also the note starts that fall inside it."""
         if run is None:
             return None
         first = bisect_right(row_starts, run[0] + 1e-9) - 1
         last = bisect_left(row_starts, run[1] - 1e-9) - 1
-        return {"start_played_row": first, "start_seconds": _round(run[0]), "rows": last - first + 1,
-                "seconds": _round(run[1] - run[0]), "percussion_only": run[2]}
+        entry = {"start_played_row": first, "start_seconds": _round(run[0]), "rows": last - first + 1,
+                 "seconds": _round(run[1] - run[0]), "percussion_only": run[2]}
+        if starts is not None:
+            inside = bisect_left(starts, run[1] - 1e-9) - bisect_left(starts, run[0] - 1e-9)
+            entry.update(note_starts=inside, notes_per_second=_round(inside / (run[1] - run[0])))
+        return entry
 
     channel_runs = [_sounding_runs(segments[channel], MIN_REST_SECONDS) for channel in range(count)]
     channels = []
@@ -488,12 +495,13 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
         longest = max(runs, key=lambda run: run[1] - run[0], default=None)
         counted = max((run for run in runs if not run[2]), key=lambda run: run[1] - run[0], default=None)
         sounding_seconds = sum(end - start for start, end, _ in segments[channel])
+        starts = [row_starts[index] for index, flag in enumerate(note_flags[channel]) if flag]
         sounding = {
             "fraction": _round(min(1.0, sounding_seconds / duration)) if duration else 0.0,
             "seconds": _round(sounding_seconds),
             "longest_run_seconds": _round(longest[1] - longest[0]) if longest else 0.0,
-            "longest_run": run_entry(longest),
-            "longest_non_percussion_run": run_entry(counted),
+            "longest_run": run_entry(longest, starts),
+            "longest_non_percussion_run": run_entry(counted, starts),
             "rests": max(0, len(runs) - 1) + (1 if runs and duration - runs[-1][1] >= MIN_REST_SECONDS else 0),
         }
         measured, unmeasured = pitch_counts[channel]
@@ -710,14 +718,18 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
                                         f"{longest['start_played_row']}). Struck arpeggios (a new note every few "
                                         "rows, or a cut between hits) do not trigger this."})
         run = entry["sounding"]["longest_non_percussion_run"]
-        if run and run["seconds"] > NEVER_RESTS_SECONDS:
+        if run and run["seconds"] > NEVER_RESTS_SECONDS and run["notes_per_second"] < NEVER_RESTS_MAX_NOTE_RATE:
             warnings.append({"code": "channel_never_rests", "channel": entry["channel"], "seconds": run["seconds"],
-                             "start_played_row": run["start_played_row"],
-                             "message": f"Channel {entry['channel']} sounds for {run['seconds']:.2f} s without a rest "
-                                        f"of {MIN_REST_SECONDS} s or more ({run['rows']} rows from played-row index "
-                                        f"{run['start_played_row']}), above {NEVER_RESTS_SECONDS:.0f} s. A rest needs "
-                                        "a key off, a note cut (ECx), C00 or XM volume 10, or a one-shot sample "
-                                        "that runs out; runs of percussion one-shots only are not counted."})
+                             "start_played_row": run["start_played_row"], "note_starts": run["note_starts"],
+                             "notes_per_second": run["notes_per_second"],
+                             "message": f"Channel {entry['channel']} holds slow material for {run['seconds']:.2f} s "
+                                        f"without a rest of {MIN_REST_SECONDS} s or more ({run['rows']} rows from "
+                                        f"played-row index {run['start_played_row']}, {run['note_starts']} note "
+                                        f"start(s), {run['notes_per_second']:.2f} per second): longer than "
+                                        f"{NEVER_RESTS_SECONDS:.0f} s with fewer than {NEVER_RESTS_MAX_NOTE_RATE:.1f} "
+                                        "note starts per second. A rest needs a key off, a note cut (ECx), C00 or XM "
+                                        "volume 10, or a one-shot sample that runs out; runs of percussion one-shots "
+                                        "only, and busy lines, are not counted."})
         for code, end, compare, limit in (("pitch_too_low", "lowest", float.__lt__, PITCH_LOW_HZ),
                                           ("pitch_too_high", "highest", float.__gt__, PITCH_HIGH_HZ)):
             heard = entry["pitch"][end]

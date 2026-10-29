@@ -531,6 +531,7 @@ class SoundingTests(unittest.TestCase):
                           sounding["longest_run"]["percussion_only"], sounding["rests"]), (0, 192, False, 0))
         warning = codes(report, "channel_never_rests")
         self.assertEqual([(item["channel"], item["seconds"]) for item in warning], [(0, round(SONG, 6))])
+        self.assertEqual((warning[0]["note_starts"], warning[0]["notes_per_second"]), (1, round(1 / SONG, 6)))
         self.assertIn("23.04 s", warning[0]["message"])
         self.assertIn("16 s", warning[0]["message"])
         # the same looped sample struck every 8 rows, with C00 four rows after each note
@@ -542,6 +543,24 @@ class SoundingTests(unittest.TestCase):
         self.assertAlmostEqual(sounding["longest_run_seconds"], 4 * ROW)
         self.assertAlmostEqual(sounding["fraction"], 0.5)
         self.assertEqual(sounding["rests"], 24)
+        self.assertEqual(codes(report, "channel_never_rests"), [])
+
+    def test_only_a_long_and_slow_run_never_rests(self):
+        # a looped bass with one note per bar (16 rows, 1.92 s) for 23 s: held material, flagged
+        bars = pattern(*[(row, 1, cell("A-1", 1)) for row in range(0, 64, 16)])
+        report = analyze(Module("Bars", [LEAD], [bars] * 3, [0, 1, 2]))
+        run = report["channels"][1]["sounding"]["longest_non_percussion_run"]
+        self.assertAlmostEqual(run["seconds"], SONG)
+        self.assertEqual((run["note_starts"], run["notes_per_second"]), (12, round(12 / SONG, 6)))
+        warning = codes(report, "channel_never_rests")
+        self.assertEqual([(item["channel"], item["note_starts"]) for item in warning], [(1, 12)])
+        self.assertIn("fewer than 1.0 note starts per second", warning[0]["message"])
+        # the same channel playing eighth notes (every 2 rows, 4.2 per second): just as long, but a busy line
+        eighths = pattern(*[(row, 1, cell("A-1", 1)) for row in range(0, 64, 2)])
+        report = analyze(Module("Eighths", [LEAD], [eighths] * 3, [0, 1, 2]))
+        run = report["channels"][1]["sounding"]["longest_non_percussion_run"]
+        self.assertAlmostEqual(run["seconds"], SONG)  # the measurement is kept
+        self.assertEqual(run["note_starts"], 96)
         self.assertEqual(codes(report, "channel_never_rests"), [])
 
     def test_cuts_and_volume_bring_a_voice_back(self):
@@ -564,8 +583,8 @@ class SoundingTests(unittest.TestCase):
         self.assertTrue(sounding["longest_run"]["percussion_only"])  # one-shot PCM: percussion by heuristic
 
     def test_percussion_one_shots_never_count_as_a_channel_that_never_rests(self):
-        crash = Sample("Crash", (0, 0) + (60, -60) * 29_999)  # 60000 frames: 7.2 s at C-2, struck every 4 rows
-        hits = pattern(*[(row, 0, cell("C-2", 1)) for row in range(0, 64, 4)])
+        crash = Sample("Crash", (0, 0) + (60, -60) * 29_999)  # 60000 frames: 7.2 s at C-2, struck once a bar
+        hits = pattern(*[(row, 0, cell("C-2", 1)) for row in range(0, 64, 16)])
         report = analyze(Module("Crash", [crash], [hits] * 3, [0, 1, 2]))
         sounding = report["channels"][0]["sounding"]
         self.assertGreater(sounding["longest_run_seconds"], 16)
@@ -668,10 +687,8 @@ class PublishedSongTests(unittest.TestCase):
             with self.subTest(name):
                 report = analyze(project.load(ROOT / name))
                 found = [item for item in report["warnings"] if item["code"] in self.NEW_CODES]
-                if "copper_skies" in name:
-                    # Its pulse bass (channel 2) and two legato leads (5, 6) really play without a rest for 25-66 s
-                    # (looped samples, sustained envelopes, no key off or cut); only that flag is accepted here.
-                    found = [item for item in found if item["code"] != "channel_never_rests"]
+                # Copper Skies' bass and legato leads run 25-66 s without a rest, but as busy lines (over 4 note
+                # starts per second), which channel_never_rests leaves alone.
                 self.assertEqual(found, [])
                 json.dumps(report, allow_nan=False)
 

@@ -471,7 +471,7 @@ Two values are estimates and say so: the key, and the PCM pitch estimate behind 
 | Field | Meaning |
 | --- | --- |
 | `fraction`, `seconds` | Sounding time, as a fraction of the cycle and in seconds |
-| `longest_run_seconds`, `longest_run` | The longest stretch without a rest: `start_played_row`, `start_seconds`, `rows`, `seconds`, `percussion_only` (every note in it plays a percussion one-shot) |
+| `longest_run_seconds`, `longest_run` | The longest stretch without a rest: `start_played_row`, `start_seconds`, `rows`, `seconds`, `percussion_only` (every note in it plays a percussion one-shot), `note_starts` (the channel's note starts inside the run) and `notes_per_second` |
 | `longest_non_percussion_run` | The longest run with at least one note that is not a percussion one-shot (null if none); `channel_never_rests` reads this one |
 | `rests` | Silences of at least 0.05 s after the channel's first note (a final silence before the cycle ends counts). Shorter gaps, such as a retrigger or a one-shot ending just before the next note, join the runs on both sides |
 
@@ -481,7 +481,7 @@ Two values are estimates and say so: the key, and the PCM pitch estimate behind 
 
 Warnings, factual with the threshold in the message:
 
-- `channel_never_rests` (`channel`, `seconds`, `start_played_row`): a channel sounds for more than 16 s without a rest. Runs made only of percussion one-shots do not count. A rest needs a key off, a cut, `C00` / XM volume `10`, or a one-shot that runs out.
+- `channel_never_rests` (`channel`, `seconds`, `start_played_row`, `note_starts`, `notes_per_second`): a channel holds slow material, a run without a rest that is both longer than 16 s and has fewer than 1.0 note starts per second (one note per bar under an arpeggio, a held continuo or pad). A busy legato line (a bass in eighth notes) is measured but not flagged, and runs made only of percussion one-shots do not count. A rest needs a key off, a cut, `C00` / XM volume `10`, or a one-shot that runs out.
 - `crowded_sustain` (`seconds`, `threshold_channels`, `start_played_row`): `global.sustain` lasts more than 16 s.
 - `pitch_too_low` / `pitch_too_high` (`channel`, `note`, `slot`, `hz`): a channel's lowest heard fundamental is below 40 Hz, or its highest above 3000 Hz. A bass recipe at 130.8 Hz with `relative_note` −24 played at XM `C-3` is heard at about 16.5 Hz.
 
