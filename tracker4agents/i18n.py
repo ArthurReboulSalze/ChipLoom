@@ -420,6 +420,34 @@ FR = {
         "Tracker MOD et XM.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nLes touches de piano jouent aussi ce qu'elles écrivent : l'instrument courant quand le mode saisie est désactivé, le son choisi dans Samples du morceau, Bibliothèque, Créer et Instruments. Espace lance toujours la lecture et la pause.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver, Ctrl+clic sur Voie ou Solo pour réentendre toutes les voies ; la grille défile sur le côté quand les voies ne tiennent pas et Ctrl+molette élargit ou resserre les voies.\nUn XM ajoute une colonne de volume et la fin de note (touche 1, celle d'avant le 2, en mode saisie ; === dans une cellule).\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nMOD ProTracker à quatre voies, MOD de 2 à 32 voies et profil XM de FastTracker II ; IT est prévu.",
 }
 
+# The Agent tab: what each empty column will hold, where to write, and the agent's latest action.
+FR.update({
+    "No proposal yet. When your agent suggests a change instead of making it, it appears here: select it to see it "
+    "on the pattern and hear it, then Accept or Reject.":
+        "Aucune proposition pour l'instant. Quand ton agent propose un changement au lieu de le faire, il apparaît "
+        "ici : sélectionne-le pour le voir sur le pattern et l'écouter, puis Accepte ou Refuse.",
+    "Select a proposal: what it changes is described here (read only).":
+        "Sélectionne une proposition : ce qu'elle change est décrit ici (lecture seule).",
+    "No take yet. Finished versions your agent saves appear here: open one, or compare it with the current song.":
+        "Aucune version pour l'instant. Les versions terminées que ton agent enregistre apparaissent ici : ouvre-en "
+        "une ou compare-la avec le morceau actuel.",
+    "No message yet. Write to your agent in the box below: select cells in the grid first to point at a place, or "
+    "leave the box unticked for the whole song. Its answers appear here under your message.":
+        "Aucun message pour l'instant. Écris à ton agent dans la case en dessous : sélectionne d'abord des cellules "
+        "dans la grille pour montrer un endroit, ou décoche la case pour tout le morceau. Ses réponses apparaissent "
+        "ici sous ton message.",
+    "Write to your agent here, then press Enter…": "Écris à ton agent ici, puis appuie sur Entrée…",
+    "Send": "Envoyer", "About the selected cells": "À propos des cellules choisies",
+    "Agent: live collaboration is off. Turn it on in the Agent menu, then ask your agent to join this window.":
+        "Agent : la collaboration en direct est désactivée. Active-la dans le menu Agent, puis demande à ton agent "
+        "de rejoindre cette fenêtre.",
+    "Agent: nothing yet. Ask your agent to join this window (it finds it with `chiploom live`); what it does will "
+    "show here, and you can write to it in the box on the right.":
+        "Agent : rien pour l'instant. Demande à ton agent de rejoindre cette fenêtre (il la trouve avec `chiploom "
+        "live`) ; ce qu'il fait s'affichera ici, et tu peux lui écrire dans la case à droite.",
+    "Agent ({author}), revision {revision}: {label}": "Agent ({author}), révision {revision} : {label}",
+})
+
 
 def translate(language: str, source: str, **values) -> str:
     text = FR.get(source, source) if language == "fr" else source

@@ -94,6 +94,41 @@ class DesktopCommentTests(base.WindowCase):
         self.assertFalse(self.panel.go_button.isEnabled())
         self.assertEqual(self.panel.header.text(), "COMMENTS · 2 open")
 
+    def test_the_agent_tab_says_where_to_write_and_what_the_agent_did(self):
+        window, panel, agent = self.window, self.panel, self.window.agent_panel
+        self.assertIn("Write to your agent", panel.compose.placeholderText())
+        self.assertIn("No message yet", panel.list.hint())
+        self.assertIn("No proposal yet", agent.proposal_list.hint())
+        self.assertIn("No take yet", agent.take_list.hint())
+        self.assertIn("read only", agent.details.placeholderText())
+        agent.refresh()
+        self.assertIn("nothing yet", agent.activity.text())
+        # Typed in the box with cells selected: a comment on that block.
+        window.show_pattern(0)
+        self.table.select_block(4, 2, 0, 1)
+        panel.update_target()
+        self.assertIn("rows 04-05", panel.target.text())
+        panel.compose.setText("Make this bar breathe")
+        QTest.keyClick(panel.compose, Qt.Key.Key_Return)
+        comment = window.document.comments[-1]
+        self.assertEqual((comment["text"], comment["place"]["row"], comment["place"]["rows"]), ("Make this bar breathe", 4, 2))
+        self.assertEqual(panel.compose.text(), "")
+        # Unticked: the whole song.
+        panel.at_selection.setChecked(False)
+        self.assertIn("Whole song", panel.target.text())
+        panel.compose.setText("Shorter intro please")
+        panel.send_compose()
+        self.assertIsNone(window.document.comments[-1]["place"])
+        panel.compose.setText("   ")
+        self.assertIsNone(panel.send_compose())
+        # An agent's edit shows on the activity line.
+        session = window.live.session
+        session.apply_patch([{"op": "title", "title": "Agent title"}], author="agent-test", label="Retitle the song")
+        self.app.processEvents()
+        agent.refresh()
+        self.assertIn("Retitle the song", agent.activity.text())
+        self.assertIn("agent-test", agent.activity.text())
+
     def test_go_to_reply_resolve_and_reopen(self):
         window, panel = self.window, self.panel
         comment = self.comment_block(row=2, rows=3, channel=0, channels=1)

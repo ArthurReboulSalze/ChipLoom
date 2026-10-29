@@ -50,6 +50,22 @@ journaled as `human-web` and count as the owner's. `live web` prints the studio 
 8. **Save.** `live save` writes the session's own project file. `live save --output PATH`
    writes a copy (`"copy": true`); the session and the owner's window keep their file.
 
+## Keep the owner informed
+
+The owner follows you in the window's Agent tab: a line shows your latest journaled action
+(its `--label`), and the COMMENTS column is where you and the owner talk. Say what is going on:
+
+- When you join, post one whole-song comment: what you understood, what you are about to do,
+  and how to steer you ("Reading the song. I will tighten the bass in patterns 2-3 first;
+  tell me here if you prefer another order.").
+- Label every patch in plain words the owner recognizes ("Bass: shorter notes in bar 3"),
+  never "update" or "fix".
+- Answer each owner comment with `live reply` as soon as you start on it, then resolve it
+  with a sentence saying what changed and where. Ask in a reply when a remark is unclear.
+- After a longer piece of work, post a short summary comment (what changed, what to listen to,
+  what you suggest next) and point at the passage with `live select`.
+- Keep it short: one or two sentences per message, no logs.
+
 ## Comments from the owner
 
 The owner can attach a comment to a block in the window or the browser studio. Read them

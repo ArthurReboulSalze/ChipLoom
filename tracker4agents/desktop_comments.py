@@ -29,11 +29,11 @@ from datetime import datetime
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygon
-from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QInputDialog, QLabel, QListWidget, QListWidgetItem, QMenu,
+from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidgetItem, QMenu,
                                QVBoxLayout, QWidget)
 
 from . import comments as comment_store
-from .desktop_widgets import ElidedLabel
+from .desktop_widgets import HintList, ElidedLabel
 from .model import ValidationError
 
 AUTHOR = "human"                                  # the window's author name in the session and in comments
@@ -123,8 +123,11 @@ class CommentPanel(QWidget):
         self.show_resolved.toggled.connect(lambda *_: self.refresh())
         header.addWidget(self.show_resolved)
         layout.addLayout(header)
-        self.list = QListWidget()
+        self.list = HintList()
         self.list.setObjectName("comments")
+        window._bind(self.list, "No message yet. Write to your agent in the box below: select cells in the grid "
+                                "first to point at a place, or leave the box unticked for the whole song. Its "
+                                "answers appear here under your message.", "set_hint")
         self.list.setMinimumHeight(45)
         self.list.setWordWrap(True)
         self.list.currentItemChanged.connect(lambda *_: self._buttons_state())
@@ -138,6 +141,26 @@ class CommentPanel(QWidget):
             window._bind(self.hint, "Select cells in the grid and press Ctrl+M (or right-click, Comment on the "
                                     "selection…): your agent sees exactly where.", setter)
         layout.addWidget(self.hint)
+        self.hint.setVisible(False)   # the list says it in its own box; the tooltip stays
+        # The one place to write to the agent from the Agent tab (Ctrl+M in the grid does the same).
+        compose = QHBoxLayout()
+        self.compose = QLineEdit()
+        self.compose.setObjectName("composeComment")
+        window._bind(self.compose, "Write to your agent here, then press Enter…", "setPlaceholderText")
+        self.compose.returnPressed.connect(self.send_compose)
+        compose.addWidget(self.compose, 1)
+        self.send_button = window._button("Send", self.send_compose, "sendComment")
+        compose.addWidget(self.send_button)
+        layout.addLayout(compose)
+        target = QHBoxLayout()
+        self.at_selection = window._bind(QCheckBox(), "About the selected cells")
+        self.at_selection.setObjectName("commentAtSelection")
+        self.at_selection.setChecked(True)
+        self.at_selection.toggled.connect(lambda *_: self.update_target())
+        target.addWidget(self.at_selection)
+        self.target = ElidedLabel("", "muted")
+        target.addWidget(self.target, 1)
+        layout.addLayout(target)
         actions = QHBoxLayout()
         self.go_button = window._button("Go to", self.go_to, "gotoComment")
         self.reply_button = window._button("Reply", self.reply_selected, "replyComment")
@@ -229,7 +252,8 @@ class CommentPanel(QWidget):
         self.list.blockSignals(False)
         count = self.open_count()
         self.header.setText(window.t("COMMENTS · {count} open", count=count) if count else window.t("COMMENTS"))
-        self.hint.setVisible(not shown)
+        self.hint.setVisible(False)
+        self.update_target()
         self._buttons_state()
         window.table.viewport().update()
         if window.document:
@@ -238,6 +262,30 @@ class CommentPanel(QWidget):
 
     def retranslate(self):
         self.refresh()
+
+    def compose_place(self) -> dict | None:
+        """Where a message typed in the box goes: the grid selection when the box is ticked, else the whole song."""
+        return self.selection_place() if self.at_selection.isChecked() else None
+
+    def update_target(self):
+        place = self.compose_place() if self.window.document else None
+        self.target.setText("→ " + self.place_text(place))
+        self.target.setToolTip(self.target.text())
+
+    def send_compose(self, *_) -> dict | None:
+        """Send the typed message as a comment (with the selection's place, or on the whole song)."""
+        window = self.window
+        text = self.compose.text().strip()
+        if not text:
+            return None
+        if not window.document:
+            window.message("Open a song first.", True)
+            return None
+        place = self.compose_place()
+        result = self._run(lambda: self.store.add(text, place), "Comment added: {place}", place=self.place_text(place))
+        if result is not None:
+            self.compose.clear()
+        return result
 
     def _buttons_state(self):
         comment = self.selected()

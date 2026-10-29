@@ -15,10 +15,10 @@ import time
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidgetItem, QMessageBox,
                                QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget)
 
-from .desktop_widgets import ElidedLabel, media_call
+from .desktop_widgets import ElidedLabel, HintList, media_call
 from .document import Document
 from . import live as live_module
 from .live import LiveConflict, LiveServer, LiveSession
@@ -394,6 +394,9 @@ class AgentPanel(QWidget):
         content = QWidget()
         area.setWidget(content)
         outer.addWidget(area)
+        # One line above the columns says what the agent did last, so the tab is never silent about it.
+        self.activity = ElidedLabel("", "agentActivity")
+        outer.insertWidget(0, self.activity)
         layout = QHBoxLayout(content)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(14)   # room between the proposals, details and takes columns
@@ -401,8 +404,11 @@ class AgentPanel(QWidget):
 
         left = QVBoxLayout()
         left.addWidget(window._label("PROPOSALS", "section"))
-        self.proposal_list = QListWidget()
+        self.proposal_list = HintList()
         self.proposal_list.setObjectName("proposals")
+        window._bind(self.proposal_list, "No proposal yet. When your agent suggests a change instead of making it, "
+                                         "it appears here: select it to see it on the pattern and hear it, then "
+                                         "Accept or Reject.", "set_hint")
         self.proposal_list.setMinimumHeight(45)
         self.proposal_list.currentItemChanged.connect(self._selected)
         left.addWidget(self.proposal_list, 1)
@@ -429,14 +435,18 @@ class AgentPanel(QWidget):
         self.details = QPlainTextEdit()
         self.details.setObjectName("proposalDetails")
         self.details.setReadOnly(True)
+        window._bind(self.details, "Select a proposal: what it changes is described here (read only).",
+                     "setPlaceholderText")
         self.details.setMinimumHeight(45)
         middle.addWidget(self.details, 1)
         layout.addLayout(middle, 2)
 
         right = QVBoxLayout()
         right.addWidget(window._label("TAKES", "section"))
-        self.take_list = QListWidget()
+        self.take_list = HintList()
         self.take_list.setObjectName("takes")
+        window._bind(self.take_list, "No take yet. Finished versions your agent saves appear here: open one, or "
+                                     "compare it with the current song.", "set_hint")
         self.take_list.setMinimumHeight(45)
         self.take_list.itemDoubleClicked.connect(lambda item: self.open_take())
         right.addWidget(self.take_list, 1)
@@ -480,6 +490,29 @@ class AgentPanel(QWidget):
         item = self.proposal_list.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
+    def update_activity(self):
+        """The line above the columns: the agent's latest journaled action, or how to bring an agent in."""
+        window, session = self.window, self.session
+        latest = None
+        if session is not None:
+            try:
+                journal = session.changes(max(0, session.context()["revision"] - 60))["entries"]
+            except (ValidationError, KeyError):
+                journal = []
+            latest = next((entry for entry in reversed(journal)
+                           if entry["author"] not in (*HUMAN_AUTHORS, "file")), None)
+        if session is None:
+            text = window.t("Agent: live collaboration is off. Turn it on in the Agent menu, then ask your agent "
+                            "to join this window.")
+        elif latest is None:
+            text = window.t("Agent: nothing yet. Ask your agent to join this window (it finds it with `chiploom "
+                            "live`); what it does will show here, and you can write to it in the box on the right.")
+        else:
+            text = window.t("Agent ({author}), revision {revision}: {label}", author=latest["author"],
+                            revision=latest["revision"], label=latest["label"])
+        self.activity.setText(text)
+        self.activity.setToolTip(text)
+
     def proposal_text(self, proposal: dict) -> str:
         cells = proposal["diff"].get("cells_total", len(proposal["diff"].get("cells", [])))
         text = self.window.t("{id} · {label} · {author} · {cells} cells", id=proposal["id"], label=proposal["label"],
@@ -510,8 +543,10 @@ class AgentPanel(QWidget):
             self.take_list.addItem(item)
             if take["id"] == wanted_take:
                 self.take_list.setCurrentItem(item)
-        self.empty_hint.setVisible(not self._proposals)
-        self.take_hint.setVisible(self.take_list.count() == 0)
+        # The empty lists explain themselves in their own box (HintList); the one-line hints keep their tooltips.
+        self.empty_hint.setVisible(False)
+        self.take_hint.setVisible(False)
+        self.update_activity()
         if self.previewing is not None and self.selected_id() != self.previewing:
             self.previewing = None
             window.pattern_model.set_overlay(None)

@@ -8,7 +8,7 @@ import tempfile
 
 from PySide6.QtCore import Q_ARG, QCoreApplication, QEvent, QMetaObject, QObject, QPointF, QRunnable, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QListWidget, QPushButton, QSizePolicy, QWidget
 
 from .model import Sample
 from .themes import icon_colors
@@ -114,6 +114,34 @@ class ElidedLabel(QLabel):
         painter.setPen(self.palette().color(self.foregroundRole()))
         shown = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
         painter.drawText(self.rect(), int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), shown)
+
+
+class HintList(QListWidget):
+    """A list that says, in muted text inside its own box, what will appear in it while it is empty, so an empty
+    column of the window never looks like a field to type in."""
+
+    def __init__(self):
+        super().__init__()
+        self._hint = ""
+
+    def set_hint(self, text: str) -> None:
+        self._hint = text
+        self.viewport().update()
+
+    def hint(self) -> str:
+        return self._hint
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.count() or not self._hint:
+            return
+        painter = QPainter(self.viewport())
+        color = self.palette().color(self.foregroundRole())
+        color.setAlpha(140)
+        painter.setPen(color)
+        area = self.viewport().rect().adjusted(10, 8, -10, -8)
+        painter.drawText(area, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
+                         self._hint)
 
 
 def separator() -> QFrame:
