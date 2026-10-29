@@ -40,7 +40,7 @@ class SampleLibraryTests(unittest.TestCase):
     def extract(self):
         return self.bank.extract(self.source)
 
-    def test_extract_preserves_unsupported_source_pcm_and_settings_with_neutral_names(self):
+    def test_extract_preserves_unsupported_source_pcm_and_settings_with_readable_names(self):
         original = self.source.read_bytes()
         result = self.extract()
         entry = self.bank.get("SMP-0001")
@@ -50,11 +50,11 @@ class SampleLibraryTests(unittest.TestCase):
         self.assertEqual((sample.loop_start, sample.loop_length, sample.finetune, sample.volume), (0, 16, -2, 40))
         self.assertEqual(changes, [])
         self.assertEqual(self.source.read_bytes(), original)
-        self.assertNotIn("PRIVATE", (self.bank.path / "library.json").read_text())
+        # The bank is the owner's local data: the sample keeps its own name and a readable source.
+        self.assertEqual(entry["name"], "PRIVATE old sample")
+        self.assertEqual((entry["source"]["slot"], entry["source"]["name"]), (1, "PRIVATE old sample"))
         private = (self.bank.path / "private/provenance.json").read_text()
-        self.assertIn("PRIVATE old sample", private)
         self.assertIn("PRIVATE old title", private)
-        self.assertNotEqual(sample.name, "PRIVATE old sample")
         self.assertEqual(self.bank.audit()["compatible_entries"], 1)
 
     def test_deduplicate_pcm_but_preserve_settings_and_user_labels_on_reimport(self):
@@ -138,7 +138,7 @@ class SampleLibraryTests(unittest.TestCase):
         self.bank.path.rename(self.root / "bank moved")
         payload = mod.encode(project.from_dict(saved))
         self.assertEqual(mod.encode(mod.decode(payload)), payload)
-        self.assertNotIn("PRIVATE", json.dumps(saved))
+        self.assertEqual(saved["samples"][0]["name"], "PRIVATE old sample")   # the bank name travels with the sample
         self.assertNotIn(str(self.root), json.dumps(saved))
 
     def test_document_library_insertion_is_one_atomic_undoable_transaction(self):

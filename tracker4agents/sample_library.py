@@ -1,7 +1,10 @@
-"""Portable local sample banks: exact PCM, playback variants, neutral labels, roles and palettes.
+"""Portable local sample banks: exact PCM, playback variants, readable labels, roles and palettes.
 
-No Qt, model provider or audio decoder is required. Source labels live only in
-private/provenance.json. Imported PCM is never normalized during extraction.
+No Qt, model provider or audio decoder is required. A bank is the owner's local data (never published): an
+entry keeps the sample's own name (cleaned to 22 printable ASCII characters, or a neutral name when it has
+none) and a readable `source` (file, slot, original name); private/provenance.json keeps every occurrence for
+the roles and palettes. Imported PCM is never normalized. `add_entry` adds one sample with the name, role
+and tags the owner chose (see `sample_intake` for module slots and WAV files).
 
 Entries come from MOD and XM modules (files, ZIP archives, folders). An 8-bit sample is stored
 as `pcm/<sha256>.pcm` (signed bytes), a 16-bit one as `pcm/<sha256>.pcm16` (signed little-endian
@@ -47,7 +50,8 @@ SETTINGS = ("pcm_sha256", "loop_start", "loop_length", "finetune", "volume", "bi
 # Fields a v1 entry lacks: a v1 bank holds 8-bit MOD samples without roles.
 ENTRY_DEFAULTS = {"format_origin": "mod", "bits": 8, "loop_mode": "forward", "panning": 128, "relative_note": 0,
                   "envelope": None, "role": None, "role_confidence": None, "role_evidence": [],
-                  "role_occurrences": 0, "role_source": None}
+                  "role_occurrences": 0, "role_source": None, "retune": None}
+MAX_RETUNE_SEMITONES = 48   # the owner's tuning correction of an entry: up to four octaves either way
 XM_C4_RATE = 8363.0  # FastTracker II plays C-4 of an untransposed sample at this rate
 MODULE_SUFFIXES = (".mod", ".xm")
 SOURCE_SUFFIXES = MODULE_SUFFIXES + (".zip",)
@@ -70,6 +74,42 @@ PITCH_NOTE = ("Measured estimate, not a listening judgment: fundamental frequenc
               "tracker note C-2 with its finetune (PAL ProTracker periods). nearest_note uses scientific pitch "
               "names (A4 = 440 Hz); transpose_semitones is the pitch-class offset from the written note to the "
               "heard one (+2: a written C sounds D). Each semitone up multiplies the frequency by 2^(1/12).")
+
+
+def clean_name(text: str | None) -> str | None:
+    """A sample name usable in the bank: printable ASCII, spaces collapsed, at most 22 characters; None when
+    nothing is left. The text is source data, kept as a label only."""
+    cleaned = " ".join("".join(char if 32 <= ord(char) < 127 else " " for char in str(text or "")).split())
+    return cleaned[:22].rstrip() or None
+
+
+def check_retune(value: dict) -> dict:
+    """An entry's tuning correction: whole `semitones` (an octave is 12) and `cents` (-100..100)."""
+    if not isinstance(value, dict) or set(value) != {"semitones", "cents"}:
+        raise ValidationError("retune: {semitones, cents} expected.", "SAMPLE_LIBRARY")
+    require_int(value["semitones"], "retune.semitones", -MAX_RETUNE_SEMITONES, MAX_RETUNE_SEMITONES)
+    require_int(value["cents"], "retune.cents", -100, 100)
+    return value
+
+
+def apply_retune(sample: Sample, retune: dict | None, fmt: str) -> tuple[Sample, dict | None]:
+    """The sample with the owner's tuning correction applied for a song of format `fmt`: an XM takes it in its
+    relative note and finetune (1/128 semitone); a MOD takes the cents in its finetune (1/8 semitone) and cannot
+    hold whole semitones, so the result says how many semitones to transpose the notes. The PCM is not touched."""
+    import dataclasses
+    if not retune or (not retune["semitones"] and not retune["cents"]):
+        return sample, None
+    if fmt == "xm":
+        steps = sample.relative_note * 128 + sample.finetune + retune["semitones"] * 128 + round(retune["cents"] * 1.28)
+        relative = max(-96, min(95, round(steps / 128)))
+        finetune = max(-128, min(127, steps - relative * 128))
+        return dataclasses.replace(sample, relative_note=relative, finetune=finetune), {
+            **retune, "applied": "relative_note and finetune", "transpose_notes": 0}
+    finetune = max(-8, min(7, sample.finetune + round(retune["cents"] / 12.5)))
+    return dataclasses.replace(sample, finetune=finetune), {
+        **retune, "applied": "finetune" if retune["cents"] else "none", "transpose_notes": retune["semitones"],
+        "note": "A MOD sample has no relative note: transpose its notes by transpose_notes semitones."
+                if retune["semitones"] else None}
 
 
 def _digest(raw: bytes) -> str:
@@ -664,6 +704,8 @@ class SampleLibrary:
                 raise ValidationError("Invalid sample role.")
             if entry["envelope"] is not None and not isinstance(entry["envelope"], dict):
                 raise ValidationError("Invalid envelope facts.")
+            if entry["retune"] is not None:
+                check_retune(entry["retune"])
         value["schema"] = SCHEMA
         return value
 
@@ -806,12 +848,15 @@ class SampleLibrary:
                             raise ValidationError("Sample library entry limit exceeded.")
                         metrics, category, prefix, tags = characterize(
                             high_bytes(payload, settings["bits"]), settings["loop_start"], settings["loop_length"])
-                        # Names do not depend on an untrusted source label.
-                        entry = {"id": f"SMP-{next_id:04d}", "name": f"{prefix} {next_id:02d}", **settings,
+                        # The sample's own name (a label only, never read as an instruction), else a neutral one.
+                        entry = {"id": f"SMP-{next_id:04d}",
+                                 "name": clean_name(found["original_name"]) or f"{prefix} {next_id:02d}", **settings,
                                  "pcm": f"pcm/{settings['pcm_sha256']}.pcm{'16' if settings['bits'] == 16 else ''}",
                                  "bytes": len(payload), "category": category, "tags": tags, "metrics": metrics,
                                  "origin": "module-extracted", "classification": "heuristic-v1",
                                  "format_origin": item["format"], "envelope": found["envelope"],
+                                 "source": {"file": item["name"], "slot": found["slot"],
+                                            "name": clean_name(found["original_name"])},
                                  **{key: copy.deepcopy(ENTRY_DEFAULTS[key]) for key in
                                     ("role", "role_confidence", "role_evidence", "role_occurrences", "role_source")}}
                         entry["compatibility"] = _compatibility(entry, payload)
@@ -895,8 +940,84 @@ class SampleLibrary:
                 "roles_from_pcm_alone": pcm_roles, "palettes_new": new_palettes, "palettes": len(palettes),
                 "modules_without_palette": len(modules) - len(by_module), "source_unchanged": True}
 
+    def create(self) -> dict:
+        """Start an empty bank in a new or empty directory."""
+        with self._writer():
+            if self._path("library.json").exists():
+                raise ValidationError("This folder already holds a sample bank.", "SAMPLE_LIBRARY")
+            manifest = self._manifest(create=True)
+            project.atomic_bytes(self._path(".gitignore"), b"*\n!.gitignore\n")
+            project.write_json(self._path("library.json"), manifest)
+        return {"ok": True, "library": str(self.path), "entries": 0}
+
+    def add_entry(self, sample: Sample, fmt: str = "mod", name: str | None = None, role: str | None = None,
+                  category: str | None = None, tags: list[str] | None = None, origin: str = "module-added",
+                  source: dict | None = None, envelope: dict | None = None, xm_meta: dict | None = None,
+                  role_scored: tuple[str, str, list[str]] | None = None) -> dict:
+        """Add one sample with the name, role, category and tags the owner chose. A sample already in the bank
+        (same PCM and playback settings) is not added twice: the result names the existing entry. Without a
+        role, `role_scored` (from the song) or the sound alone (`usage.sample_role`) gives one."""
+        from .usage import ROLE_NAMES, sample_role
+        if fmt not in ("mod", "xm"):
+            raise ValidationError("format: mod or xm expected.")
+        xm.validate_xm_sample(sample, 1) if fmt == "xm" else validate_sample(sample, 1)
+        if not sample.pcm:
+            raise ValidationError("An empty sample cannot enter the bank.", "SAMPLE_LIBRARY")
+        if role is not None and role not in ROLE_NAMES:
+            raise ValidationError(f"Unknown role; expected one of {', '.join(sorted(ROLE_NAMES))}.")
+        if category is not None and category not in CATEGORIES:
+            raise ValidationError("Unknown category.")
+        if name is not None:
+            ascii_field(name, 22, "Sample name")
+            name = name.strip() or None
+        payload = pcm_bytes(sample.pcm, sample.bits)
+        looped = bool(sample.loop_length)
+        settings = {"pcm_sha256": _digest(payload), "loop_start": sample.loop_start if looped else 0,
+                    "loop_length": sample.loop_length if looped else 0, "finetune": sample.finetune,
+                    "volume": sample.volume, "bits": sample.bits,
+                    "loop_mode": sample.loop_mode if looped else "forward", "panning": sample.panning,
+                    "relative_note": sample.relative_note}
+        with self._writer():
+            manifest = self._manifest(create=True)
+            key = tuple(settings[field] for field in SETTINGS)
+            existing = next((entry for entry in manifest["samples"]
+                             if tuple(entry[field] for field in SETTINGS) == key), None)
+            if existing is not None:
+                return {"ok": True, "created": False, "library": str(self.path), "id": existing["id"],
+                        "entry": copy.deepcopy(existing),
+                        "note": "This sample is already in the bank (same PCM and playback settings)."}
+            if len(manifest["samples"]) >= MAX_ENTRIES:
+                raise ValidationError("Sample library entry limit exceeded.")
+            next_id = max((int(entry["id"][4:]) for entry in manifest["samples"]), default=0) + 1
+            metrics, measured_category, prefix, measured_tags = characterize(
+                high_bytes(payload, sample.bits), settings["loop_start"], settings["loop_length"])
+            if role is not None:
+                role_fields = {"role": role, "role_confidence": "high", "role_evidence": ["chosen by the owner"],
+                               "role_occurrences": 1, "role_source": "owner"}
+            else:
+                scored = role_scored or sample_role(sample, xm_meta, (source or {}).get("name"))
+                role_fields = {"role": scored[0], "role_confidence": scored[1], "role_evidence": list(scored[2])[:8],
+                               "role_occurrences": 1, "role_source": "song" if role_scored else "sound"}
+            entry = {"id": f"SMP-{next_id:04d}", "name": name or f"{prefix} {next_id:02d}", **settings,
+                     "pcm": f"pcm/{settings['pcm_sha256']}.pcm{'16' if sample.bits == 16 else ''}",
+                     "bytes": len(payload), "category": category or measured_category,
+                     "tags": _tags(list(tags or []) + measured_tags), "metrics": metrics, "origin": origin,
+                     "classification": "user-added", "format_origin": fmt, "envelope": envelope,
+                     "source": source, **role_fields, "source_occurrences": 1}
+            entry["compatibility"] = _compatibility(entry, payload)
+            destination = self._path(entry["pcm"])
+            if destination.exists():
+                if destination.read_bytes() != payload:
+                    raise ValidationError("Existing PCM differs from its content digest.")
+            else:
+                project.atomic_bytes(destination, payload)
+            manifest["samples"].append(entry)
+            project.atomic_bytes(self._path(".gitignore"), b"*\n!.gitignore\n")
+            project.write_json(self._path("library.json"), manifest)
+        return {"ok": True, "created": True, "library": str(self.path), "id": entry["id"], "entry": copy.deepcopy(entry)}
+
     def edit(self, sample_id: str, name: str | None = None, category: str | None = None,
-             tags: list[str] | None = None) -> dict:
+             tags: list[str] | None = None, role: str | None = None, retune: dict | None = None) -> dict:
         with self._writer():
             manifest = self._manifest()
             entry = next((item for item in manifest["samples"] if item["id"] == sample_id), None)
@@ -913,6 +1034,15 @@ class SampleLibrary:
                 entry["category"] = category
             if tags is not None:
                 entry["tags"] = _tags(tags)
+            if role is not None:
+                from .usage import ROLE_NAMES
+                if role not in ROLE_NAMES:
+                    raise ValidationError(f"Unknown role; expected one of {', '.join(sorted(ROLE_NAMES))}.")
+                entry.update(role=role, role_confidence="high", role_evidence=["chosen by the owner"],
+                             role_source="owner")
+            if retune is not None:   # {semitones: 0, cents: 0} clears it
+                check_retune(retune)
+                entry["retune"] = retune if retune["semitones"] or retune["cents"] else None
             entry["classification"] = "user-edited"
             project.write_json(self._path("library.json"), manifest)
         return self.get(sample_id)
@@ -970,6 +1100,7 @@ class SampleLibrary:
         xm = module.format == "xm"
         entry = self.get(sample_id)
         sample, changes = self.sample(sample_id, adapt, module.format)
+        sample, retuned = apply_retune(sample, entry.get("retune"), module.format)
         result = copy.deepcopy(module)
         used = {value.sample for pattern in result.patterns for value in pattern.cells.values() if value.sample}
         if slot is None:
@@ -985,7 +1116,9 @@ class SampleLibrary:
             result.samples[slot - 1] = sample
         else:
             result.samples.append(sample)
-        info = {"library_id": sample_id, "origin": "module-extracted", "adaptations": changes}
+        info = {"library_id": sample_id, "origin": entry.get("origin", "module-extracted"), "adaptations": changes}
+        if retuned:
+            info["retune"] = retuned
         if entry.get("role"):
             info["role"] = entry["role"]
         sources = result.metadata.setdefault("sample_sources", {})
@@ -1050,10 +1183,18 @@ class SampleLibrary:
         return copy.deepcopy(find_palette(self._palettes(), palette_id))
 
     def use_palette(self, palette_id: str, module: Module, slots: list[int] | None = None, adapt: bool = False,
-                    include_unplayed: bool = False) -> tuple[Module, dict]:
-        """Insert a palette's entries into a library-mode project in role order (see `sample_palettes.use_palette`)."""
+                    include_unplayed: bool = False, retune: bool = False) -> tuple[Module, dict]:
+        """Insert a palette's entries into a library-mode project in role order (see `sample_palettes.use_palette`),
+        with a measured `tuning` check of its pitched entries; `retune` aligns them in an XM."""
+        from . import sample_intake
         from .sample_palettes import find_palette, use_palette
-        return use_palette(self, find_palette(self._palettes(), palette_id), module, slots, adapt, include_unplayed)
+        palette = find_palette(self._palettes(), palette_id)
+        result, info = use_palette(self, palette, module, slots, adapt, include_unplayed)
+        info["tuning"] = sample_intake.palette_tuning(self, palette)
+        if retune:
+            info["retuned"] = sample_intake.retune(result, info["slot_map"], info["tuning"])
+            validate(result)
+        return result, info
 
     def audit(self) -> dict:
         entries = self._manifest()["samples"]

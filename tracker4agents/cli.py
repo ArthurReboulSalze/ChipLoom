@@ -359,11 +359,31 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--probe", action="store_true", help="Also estimate duration with ffprobe/libopenmpt.")
     from .sample_library import CATEGORIES, DEFAULT_LIBRARY
     from .usage import ROLE_ORDER
-    samples = commands.add_parser("samples", help="Local sample library: extract, search, audition, insert, palettes.")
+    samples = commands.add_parser("samples", help="Local sample library: extract, search, audition, insert, palettes, "
+                                                  "manage the active bank and add samples one by one.")
     sample_commands = samples.add_subparsers(dest="sample_command", required=True)
-    for name in ("extract", "list", "inspect", "preview", "add", "edit", "audit", "palettes", "palette", "use-palette"):
+    for name in ("extract", "list", "inspect", "preview", "add", "edit", "audit", "palettes", "palette", "use-palette",
+                 "bank", "slots", "import-slot", "import-wav", "relabel"):
         command = sample_commands.add_parser(name)
-        command.add_argument("--library", type=Path, default=DEFAULT_LIBRARY)
+        command.add_argument("--library", type=Path, default=None,
+                             help=f"Sample bank folder (default: the active bank, else {DEFAULT_LIBRARY}).")
+        if name == "bank":
+            group = command.add_mutually_exclusive_group()
+            group.add_argument("--set", type=Path, dest="set_path", help="Make this bank folder the active bank.")
+            group.add_argument("--new", type=Path, dest="new_path", help="Create an empty bank here and make it active.")
+        if name in ("slots", "import-slot"):
+            command.add_argument("module", type=Path, help="MOD, XM or JSON project to read; read only.")
+        if name == "import-slot":
+            command.add_argument("--slot", type=int, required=True)
+        if name == "import-wav":
+            command.add_argument("wav", type=Path, help="PCM WAV file (8/16/24/32-bit, mono or mixed down).")
+            command.add_argument("--loop-start", type=int, default=0, help="Loop start in frames.")
+            command.add_argument("--loop-length", type=int, default=0, help="Loop length in frames (0: one-shot).")
+        if name in ("import-slot", "import-wav"):
+            command.add_argument("--name", help="Name in the bank (default: the sample's or file's own name).")
+            command.add_argument("--role", choices=ROLE_ORDER[:-1], help="Role (default: scored from the song or sound).")
+            command.add_argument("--category", choices=CATEGORIES)
+            command.add_argument("--tag", action="append", default=[])
         if name == "extract":
             command.add_argument("source", type=Path, help="Reference MOD, XM, ZIP of either, or folder (recursive); read only.")
         if name in ("inspect", "preview", "add", "edit"):
@@ -389,6 +409,9 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--slots", type=int, nargs="+", help="Target slot of each entry, in role order.")
             command.add_argument("--adapt", action="store_true", help="Adapt entries outside the MOD profile on a copy.")
             command.add_argument("--all", action="store_true", help="Also insert the entries the song never plays.")
+            command.add_argument("--retune", action="store_true",
+                                 help="XM: align entries tuned differently from the palette's most played one "
+                                      "(relative note and finetune; the PCM is not touched).")
         if name == "preview":
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--note", default="C-2")
@@ -403,6 +426,10 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--name")
             command.add_argument("--category", choices=CATEGORIES)
             command.add_argument("--tag", action="append", default=None, help="Replaces tags; repeat for multiple tags.")
+            command.add_argument("--role", choices=ROLE_ORDER[:-1], help="Set the role (recorded as the owner's choice).")
+            command.add_argument("--semitones", type=int,
+                                 help="Tuning correction kept in the bank, applied on insertion (12 = one octave up).")
+            command.add_argument("--cents", type=int, help="Fine tuning correction, -100..100 cents.")
     add_synth_parser(commands)
     add_sample_parser(commands)
     add_instrument_parser(commands)
@@ -550,10 +577,29 @@ def main(argv: list[str] | None = None) -> int:
             from .preview import create_bundle
             result = create_bundle(args.source, args.output, args.mp3, args.ffmpeg, args.language)
         elif args.command == "samples":
+            from . import sample_intake
             from .sample_library import SampleLibrary
-            bank = SampleLibrary(args.library)
+            bank = SampleLibrary(args.library or sample_intake.active_library())
             action = args.sample_command
-            if action == "extract":
+            if action == "bank":
+                if args.new_path:
+                    created = SampleLibrary(args.new_path).create()
+                    result = {**sample_intake.set_active_library(args.new_path), "created": created["library"]}
+                elif args.set_path:
+                    result = sample_intake.set_active_library(args.set_path)
+                else:
+                    result = sample_intake.describe_active()
+            elif action == "slots":
+                result = sample_intake.song_slots(sample_intake.load_song(args.module), bank)
+            elif action == "import-slot":
+                result = sample_intake.add_from_module(bank, args.module, args.slot, name=args.name, role=args.role,
+                                                       category=args.category, tags=args.tag)
+            elif action == "import-wav":
+                result = sample_intake.add_from_wav(bank, args.wav, args.name, args.role, args.category, args.tag,
+                                                    args.loop_start, args.loop_length)
+            elif action == "relabel":
+                result = sample_intake.relabel(bank)
+            elif action == "extract":
                 result = bank.extract(args.source)
             elif action == "list":
                 result = bank.search(args.query, args.tag, args.category, args.compatible, args.offset, args.limit,
@@ -568,7 +614,8 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValidationError("Output must differ from the input project and be outside the sample bank.")
                 if output.suffix.lower() != ".json":
                     raise ValidationError("Palette insertion outputs an editable JSON project.")
-                module, info = bank.use_palette(args.id, project.load(args.project), args.slots, args.adapt, args.all)
+                module, info = bank.use_palette(args.id, project.load(args.project), args.slots, args.adapt, args.all,
+                                                args.retune)
                 project.write_json(output, project.to_dict(module))
                 result = {"ok": True, "output": str(output), **info}
             elif action == "inspect":
@@ -578,9 +625,14 @@ def main(argv: list[str] | None = None) -> int:
             elif action == "preview":
                 result = bank.audition(args.id, args.output, args.note, args.seconds)
             elif action == "edit":
-                if args.name is None and args.category is None and args.tag is None:
-                    raise ValidationError("Provide --name, --category or --tag to edit a library entry.")
-                result = {"ok": True, "sample": bank.edit(args.id, args.name, args.category, args.tag)}
+                retune = None
+                if args.semitones is not None or args.cents is not None:
+                    retune = {"semitones": args.semitones or 0, "cents": args.cents or 0}
+                if (args.name, args.category, args.tag, args.role, retune) == (None,) * 5:
+                    raise ValidationError("Provide --name, --category, --tag, --role, --semitones or --cents to edit "
+                                          "a library entry.")
+                result = {"ok": True, "sample": bank.edit(args.id, args.name, args.category, args.tag, args.role,
+                                                          retune)}
             elif action == "add":
                 output = args.output.resolve()
                 if output == args.project.resolve() or output.is_relative_to(bank.path):

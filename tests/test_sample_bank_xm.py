@@ -140,7 +140,7 @@ class XmBankTests(unittest.TestCase):
         self.assertEqual((pitch["reference_note"], pitch["loop_cycles"]), ("C-4", 1))
         self.assertAlmostEqual(pitch["playback_rate_hz"], 8363 * 2 ** (-1 - 16 / 1536), places=1)
 
-    def test_palette_is_neutral_and_provenance_holds_the_mapping(self):
+    def test_palette_names_no_file_and_the_bank_keeps_readable_sources(self):
         self.bank.extract(self.source)
         palettes = project.read_json(self.bank.path / "palettes.json")
         self.assertEqual(palettes["schema"], "chiploom.sample-palettes.v1")
@@ -158,12 +158,13 @@ class XmBankTests(unittest.TestCase):
         self.assertEqual(structure["sections"], [{"start_order": 0, "orders": 2, "seconds": 7.68, "active_channels": 3}])
         self.assertEqual(structure["channel_entry_order"], [0, 0, 0, None])
         self.assertNotIn("order_patterns", structure)
-        public = (self.bank.path / "library.json").read_text() + (self.bank.path / "palettes.json").read_text()
-        for secret in PRIVATE.values():
-            self.assertNotIn(secret, public)
-        self.assertNotIn("PRIVATE", public)
+        palette_text = (self.bank.path / "palettes.json").read_text()
+        self.assertNotIn("PRIVATE", palette_text)   # palettes hold counts and IDs, never file or sample names
         for note in ("C-2", "E-2", "C-5", "047"):
-            self.assertNotIn(f'"{note}"', public)
+            self.assertNotIn(f'"{note}"', palette_text + (self.bank.path / "library.json").read_text())
+        bass = self.bank.get("SMP-0001")
+        self.assertEqual(bass["name"], PRIVATE["bass"][:22].rstrip())
+        self.assertEqual((bass["source"]["file"], bass["source"]["slot"]), (PRIVATE["file"], 1))
         provenance = project.read_json(self.bank.path / "private/provenance.json")
         self.assertEqual(provenance["palettes"]["PAL-0001"]["filename"], PRIVATE["file"])
         self.assertEqual(provenance["palettes"]["PAL-0001"]["module_title"], PRIVATE["title"])
@@ -193,9 +194,8 @@ class XmBankTests(unittest.TestCase):
         self.assertEqual({row["format"] for row in listing["palettes"]}, {"mod", "xm"})
         mod_palette = next(row for row in listing["palettes"] if row["format"] == "mod")
         self.assertEqual(mod_palette["summary"], "kick · bass")
-        public = (self.bank.path / "library.json").read_text() + (self.bank.path / "palettes.json").read_text()
-        self.assertNotIn("PRIVATE", public)
-        self.assertNotIn("nested", public)
+        self.assertNotIn("PRIVATE", (self.bank.path / "palettes.json").read_text())
+        self.assertNotIn("nested", (self.bank.path / "palettes.json").read_text())
         with self.assertRaises(ValueError):
             self.bank.extract(self.folder / "PRIVATE impulse.xm")
 
@@ -239,7 +239,7 @@ class XmBankTests(unittest.TestCase):
         self.assertEqual(info["adaptations"], [])
         payload = xm.encode(module)
         self.assertEqual(xm.decode(payload).samples[0], inserted)
-        self.assertNotIn("PRIVATE", json.dumps(project.to_dict(module)))
+        self.assertEqual(module.samples[0].name, self.bank.get("SMP-0001")["name"])
 
     def test_use_palette_fills_slots_in_role_order(self):
         self.bank.extract(self.folder)
