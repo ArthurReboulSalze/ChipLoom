@@ -2,9 +2,9 @@
 
 `MenuBarMixin._build_menus` runs first in `_build_ui`. It creates the window's actions (open_action, save_action,
 export_action, undo_action, redo_action, edit_action, cut/copy/paste/clear_action, instrument_action, realtime_action,
-buffer_actions, live_action, browser_action) and connects them to methods of the other mixins (choose_file,
+buffer_actions, live_action, browser_action, comment_action, song_comment_action) and connects them to methods of the other mixins (choose_file,
 save_project, reload_document, export_mod, export_audio, undo, redo, set_edit_mode, set_realtime, set_audio_buffer,
-set_live, open_browser). Widgets built later (table, instrument_panel, agent_panel, sample_tabs) are reached through
+set_live, open_browser). Widgets built later (table, instrument_panel, agent_panel, comment_panel, sample_tabs) are reached through
 lambdas, so they need not exist yet. Relies on: window.live (created before the UI) and the text-binding helpers
 `_bind`, `_action`, `_menu_action` and `t` of `TrackerWindow`.
 """
@@ -116,6 +116,11 @@ class MenuBarMixin:
         self._menu_action(agent_menu, "Reject proposal", lambda: self.agent_panel.reject_selected())
         self._menu_action(agent_menu, "Show the Agent tab",
                           lambda: self.sample_tabs.setCurrentIndex(self.sample_tabs.indexOf(self.agent_panel)))
+        agent_menu.addSeparator()
+        self.comment_action = self._menu_action(agent_menu, "Comment on the selection…",
+                                                lambda: self.comment_panel.comment_selection(), "Ctrl+M")
+        self.song_comment_action = self._menu_action(agent_menu, "Comment on the whole song…",
+                                                     lambda: self.comment_panel.comment_song())
         agent_menu.addSeparator()
         self.browser_action = self._menu_action(agent_menu, "Open in a browser\u2026", self.open_browser)
         self._menu_action(agent_menu, "Compare a take with the current song", lambda: self.agent_panel.toggle_compare(),

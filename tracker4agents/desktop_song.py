@@ -70,6 +70,7 @@ class SongViewMixin:
         self.redo_action.setEnabled(self.document.can_redo)
         self.order_editor.refresh()
         self._monitor_style()
+        self.comment_panel.refresh()   # comments follow the document (open, reload, agent edits)
         self._update_title()
 
     def _song_labels(self):

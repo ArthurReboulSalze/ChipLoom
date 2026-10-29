@@ -1,7 +1,7 @@
 """Live co-composition inside the window: session lifecycle, agent edits, proposals and requests.
 
 `LiveBridge` owns the `LiveSession` and its `LiveServer`; `AgentPanel` is the "Agent" tab with
-pending proposals and takes. The session never touches Qt: this module is the adapter. Every
+pending proposals and takes (its COMMENTS column is `desktop_comments.CommentPanel`). The session never touches Qt: this module is the adapter. Every
 session call from the window and every call from the server's threads runs on the GUI thread
 (`GuiDispatcher`), so the document is only ever edited there.
 """
@@ -202,7 +202,8 @@ class LiveBridge(QObject):
     def _event(self, kind: str, payload: dict):
         """Called on the GUI thread by the session."""
         if kind == "change":
-            if payload["author"] != "human" and not self.quiet:
+            # A comment entry changes no cell: the comment panel presents it (below), the score needs no reload.
+            if payload["author"] != "human" and not self.quiet and payload.get("kind") != "comment":
                 if payload["author"] not in HUMAN_AUTHORS:
                     self._saw_agent(payload["author"])
                 self.window.agent_changed(payload)
@@ -220,6 +221,8 @@ class LiveBridge(QObject):
             self.refresh_panel()
         elif kind == "reset":
             self.refresh_panel()
+        elif kind == "comment":
+            self.window.comment_panel.on_event(payload)
         elif kind == "request":
             self._saw_agent()
         self.update_status()
@@ -394,6 +397,7 @@ class AgentPanel(QWidget):
         layout = QHBoxLayout(content)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(14)   # room between the proposals, details and takes columns
+        self.columns = layout   # desktop_comments adds its COMMENTS column here
 
         left = QVBoxLayout()
         left.addWidget(window._label("PROPOSALS", "section"))

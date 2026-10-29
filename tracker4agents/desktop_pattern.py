@@ -1,7 +1,8 @@
 """Pattern grid: model, and a view with tracker keyboard entry and block editing.
 
 Every musical change is a `Document.patch` transaction issued through
-`TrackerWindow.apply_patch`; the model only displays (change highlights, proposal overlay).
+`TrackerWindow.apply_patch`; the model only displays (change highlights, proposal overlay, comment markers
+and tooltips from `window.comment_panel`, see desktop_comments).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from PySide6.QtCore import (QAbstractTableModel, QItemSelection, QItemSelectionM
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QHBoxLayout, QHeaderView, QPushButton, QTableView, QWidget
 
+from .desktop_comments import COMMENTS_ROLE
 from .desktop_input import effect_letter, format_block, hex_digit, is_key_off, note_name, parse_block, semitone
 from .model import XM_KEY_OFF_NAME, Cell, Module, ValidationError
 from .patch import cell_text
@@ -171,11 +173,17 @@ class PatternModel(QAbstractTableModel):
                 return QColor(colors["beat"])
         if role == Qt.ItemDataRole.TextAlignmentRole:
             return int(Qt.AlignmentFlag.AlignCenter)
+        comments = getattr(self.window, "comment_panel", None)   # desktop_comments: markers and their text
+        if role == COMMENTS_ROLE:
+            return comments.covering(self.pattern, row, channel) if comments else []
         if role == Qt.ItemDataRole.ToolTipRole:
             if self.fmt == "xm":
-                return self.window.t("Double-click to edit. Notes C-0..B-7, === is key off; instrument, volume and "
+                hint = self.window.t("Double-click to edit. Notes C-0..B-7, === is key off; instrument, volume and "
                                      "effect in hexadecimal (effect letters 0-9 then A-Z).")
-            return self.window.t("Double-click to edit. Notes C-1..B-3; sample and effect in hexadecimal.")
+            else:
+                hint = self.window.t("Double-click to edit. Notes C-1..B-3; sample and effect in hexadecimal.")
+            note = comments.tooltip(self.pattern, row, channel) if comments else ""
+            return f"{note}\n\n{hint}" if note else hint
         return None
 
     def flags(self, index):
@@ -701,6 +709,9 @@ class PatternView(QTableView):
     def paintEvent(self, event):
         super().paintEvent(event)
         self._paint_channel_lines()
+        comments = getattr(self.window, "comment_panel", None)
+        if comments is not None:
+            comments.paint_markers(self)   # corner marks on cells covered by an open comment
         rect = self.drop_rect()
         if rect is None:
             return

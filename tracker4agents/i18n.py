@@ -390,6 +390,32 @@ FR = {
     "Takes the agent saves appear here.": "Les versions de l'agent apparaissent ici.",
     "Takes the agent saves appear here. Open one to work from it, or compare it with the current song.":
         "Les versions enregistrées par l'agent apparaissent ici. Ouvre-en une pour partir de celle-ci, ou compare-la au morceau courant.",
+    # Comments with a place (desktop_comments)
+    "COMMENTS": "COMMENTAIRES", "COMMENTS · {count} open": "COMMENTAIRES · {count} ouvert(s)",
+    "Show resolved": "Afficher les résolus", "Go to": "Aller à", "Reply": "Répondre", "Resolve": "Résoudre",
+    "Reopen": "Rouvrir", "Whole song": "Tout le morceau",
+    "Ctrl+M in the grid: comment on the selected cells · double-click: go to the place":
+        "Ctrl+M dans la grille : commenter les cellules choisies · double-clic : aller à l'emplacement",
+    "Select cells in the grid and press Ctrl+M (or right-click, Comment on the selection…): your agent sees exactly where.":
+        "Choisis des cellules dans la grille et appuie sur Ctrl+M (ou clic droit, Commenter la sélection…) : ton agent voit exactement où.",
+    "Pattern {pattern}": "Pattern {pattern}", "row {row}": "ligne {row}", "rows {first}-{last}": "lignes {first}-{last}",
+    "channel {channel}": "voie {channel}", "channels {first}-{last}": "voies {first}-{last}",
+    "Resolved by {author}": "Résolu par {author}", "Comments here:": "Commentaires ici :",
+    "{author} commented: {snippet}": "{author} a commenté : {snippet}",
+    "{author} replied to {id}: {snippet}": "{author} a répondu à {id} : {snippet}",
+    "{author} resolved {id}": "{author} a résolu {id}", "Comment {id} reopened": "Commentaire {id} rouvert",
+    "Comment {id} resolved": "Commentaire {id} résolu", "Reply sent to {id}": "Réponse envoyée à {id}",
+    "Comment added: {place}": "Commentaire ajouté : {place}",
+    "Comment not saved: {detail}": "Commentaire non enregistré : {detail}",
+    "Select a cell or a block first.": "Choisis d'abord une cellule ou un bloc.",
+    "Comment": "Commentaire", "What should your agent look at here?": "Que doit regarder ton agent ici ?",
+    "What should your agent know about the whole song?": "Que doit savoir ton agent sur tout le morceau ?",
+    "This place is no longer in the song.": "Cet emplacement n'existe plus dans le morceau.",
+    "Reply to {id}": "Répondre à {id}", "Your reply": "Ta réponse",
+    "Comment on the selection…": "Commenter la sélection…",
+    "Comment on the whole song…": "Commenter tout le morceau…",
+    "Comment on the selected cells (listed in the Agent tab)":
+        "Commenter les cellules choisies (liste dans l'onglet Agent)",
     "MOD and XM tracker.\nDouble-click a cell to edit it, or turn on Edit mode (Ctrl+E) and play notes on the keyboard.\nPiano keys: lower row = base octave, upper row = the next one; F1-F3 or numpad +/- change the octave. In Smp and Effect columns type hexadecimal digits.\nThe piano keys also play what they type: the current instrument with Edit mode off, the selected sound in Song samples, Sample library, Create and Instruments. Space still plays and pauses.\nCtrl+C / X / V: copy, cut, paste cells (as grid text) · Del: clear · Alt+arrows: move the block · Ctrl+Up/Down: transpose (Shift: octave).\nThe file reloads by itself when the agent saves it; F5 forces a reload.\nClick a track header to mute or unmute it, Ctrl+click Mute or Solo to hear every track again; the grid scrolls sideways when the channels do not fit and Ctrl+wheel widens or narrows the tracks.\nAn XM adds a volume column and key off (key 1, the key before 2, in Edit mode; === in a cell).\nSpace in patterns: play/pause · Ctrl+Z: undo.\nReal-time playback uses libxmp (ProTracker mode) while exports use libopenmpt, so small differences in sound are expected.\nFour-channel ProTracker MOD, MOD with 2 to 32 channels and the FastTracker II XM profile; IT is planned.":
         "Tracker MOD et XM.\nDouble-clique une cellule pour l'éditer, ou active le mode saisie (Ctrl+E) et joue les notes au clavier.\nTouches de piano : rangée basse = octave de base, rangée haute = l'octave suivante ; F1-F3 ou pavé numérique +/- changent l'octave. Dans les colonnes Smp et Effet, tape des chiffres hexadécimaux.\nLes touches de piano jouent aussi ce qu'elles écrivent : l'instrument courant quand le mode saisie est désactivé, le son choisi dans Samples du morceau, Bibliothèque, Créer et Instruments. Espace lance toujours la lecture et la pause.\nCtrl+C / X / V : copier, couper, coller des cellules (en texte de grille) · Suppr : effacer · Alt+flèches : déplacer le bloc · Ctrl+Haut/Bas : transposer (Maj : octave).\nLe fichier se recharge tout seul quand l'agent l'enregistre ; F5 force un rechargement.\nClique sur l'en-tête d'une voie pour la couper ou la réactiver, Ctrl+clic sur Voie ou Solo pour réentendre toutes les voies ; la grille défile sur le côté quand les voies ne tiennent pas et Ctrl+molette élargit ou resserre les voies.\nUn XM ajoute une colonne de volume et la fin de note (touche 1, celle d'avant le 2, en mode saisie ; === dans une cellule).\nEspace dans les patterns : lecture/pause · Ctrl+Z : annuler.\nLa lecture en temps réel utilise libxmp (mode ProTracker) et les exports utilisent libopenmpt : de petites différences de son sont normales.\nMOD ProTracker à quatre voies, MOD de 2 à 32 voies et profil XM de FastTracker II ; IT est prévu.",
 }

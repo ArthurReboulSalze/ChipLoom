@@ -98,6 +98,7 @@ class PreferencesMixin:
         if self.browser_dialog is not None:
             self.browser_dialog.retranslate()
         self.agent_panel.retranslate()
+        self.comment_panel.retranslate()
         self._update_buffer_ui()
         self.live.update_status()
         if self.document:

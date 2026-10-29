@@ -10,7 +10,7 @@ speed, origin, summary, play_button, stop_button, seek, position_label, loop, vo
 order_editor, follow, edit_button, edit_step, edit_octave, keyboard_combo, keys_hint, table, channel_strip, mutes,
 solos, pattern_model, pattern_hint, help_button, shortcut_popup, xm_hint, samples, sample_workshop, waveform,
 sample_title, sample_info, sample_volume, finetune, sample_tabs, sample_browser, create_panel, instrument_panel,
-agent_panel, tab_titles, live_status, web_status, center_splitter, workspace, play_action) and connects their signals
+agent_panel, comment_panel, tab_titles, live_status, web_status, center_splitter, workspace, play_action) and connects their signals
 to methods of the other mixins. Relies on: window.live, window.language/theme, the text-binding helpers
 (`_bind`, `_label`, `_button`, `t`) and `message`. Also here: the automatic height of the bottom tabs (`_fit_split`)
 and the "?" shortcut popup.
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, 
                                QLabel, QLineEdit, QListWidget, QSlider, QSpinBox, QSplitter, QTabWidget, QTreeWidget,
                                QVBoxLayout, QWidget)
 
+from .desktop_comments import CommentPanel
 from .desktop_create import CreatePanel, scroll_page
 from .desktop_input import LAYOUTS
 from .desktop_instruments import InstrumentPanel
@@ -49,6 +50,7 @@ SHORTCUTS = (
     ("Row number", "Click to seek there"),
     ("Ctrl+wheel", "Widen or narrow the track columns, to see more or fewer channels"),
     ("Ctrl+click Mute / Solo", "Make every track audible again (clears all mutes and solos)"),
+    ("Ctrl+M", "Comment on the selected cells (listed in the Agent tab)"),
     ("Space", "Play / pause"),
     ("Ctrl+Z", "Undo"),
 )
@@ -384,6 +386,7 @@ class WindowLayoutMixin:
                                     (self.agent_panel, "Agent", self.agent_panel)):
             self.sample_tabs.addTab(page, self.t(title))
             self.tab_titles[page] = title
+        self.comment_panel = CommentPanel(self)   # the Agent tab's COMMENTS column, the grid's comment markers
         self.live_status = status_label()
         self.statusBar().addPermanentWidget(self.live_status)
         self.web_status = QLabel()
