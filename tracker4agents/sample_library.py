@@ -782,6 +782,7 @@ class SampleLibrary:
                        ("id", "name", "category", "tags", "bytes", "volume", "finetune", "loop_start", "loop_length",
                         "bits", "loop_mode", "relative_note", "format_origin", "role", "role_confidence")}
             summary["compatible"] = compatible
+            summary["retune"] = copy.deepcopy(item.get("retune"))   # the owner's tuning correction, shown in lists
             results.append((summary, raw))
         page = results[offset:offset + limit]
         for summary, raw in page:
