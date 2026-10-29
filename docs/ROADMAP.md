@@ -63,9 +63,18 @@ These are proposals. Each still needs the owner's agreement.
    bridge) with durations and densities measured on the owner's references.
 2. **XM in the window.** An `instrument_envelope` patch operation and an envelope editor, panning and
    relative note on the sample card, and the row count of a new pattern.
-3. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
+3. **MIDI import** (agreed with the owner for the release after 0.9). Read a Standard MIDI File with the
+   standard library: ticks quantized to a chosen row grid, tempo to speed/BPM, each instrument spread
+   over as many channels as its polyphony (or chords turned into `0xy` arpeggios), velocity to the volume
+   column or `Cxx`, note ends to key offs or cuts, channel 10 drums mapped by note to kick, snare and hats,
+   notes outside a MOD's three octaves transposed with a warning. At import the owner picks a bank sample
+   or a recipe per instrument, proposed by role from the General MIDI program, and the measured tuning of
+   each sample is corrected so written C sounds C. The result is an ordinary project the agent reads and
+   reworks in the live session. `import-midi FILE --map ...` and an MCP tool for agents. Importing someone
+   else's song reproduces it: fine for private work, never a source for published compositions.
+4. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
    builds to GitHub releases.
-4. **macOS.** Not tested yet: window, real-time audio and a standalone build.
-5. **Richer XM.** Multi-sample instruments, the rest of the XM effect set, then IT.
-6. **Local phrase model** (see the October study in the history folder), only if the agent with
+5. **macOS.** Not tested yet: window, real-time audio and a standalone build.
+6. **Richer XM.** Multi-sample instruments, the rest of the XM effect set, then IT.
+7. **Local phrase model** (see the October study in the history folder), only if the agent with
    references, variations and the taste profile proves insufficient.
