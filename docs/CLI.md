@@ -89,27 +89,56 @@ The library is optional and uses only the standard library. Its default location
 
 ```sh
 python -m tracker4agents samples extract path/to/selection.zip --library exports/sample_library
+python -m tracker4agents samples extract path/to/modules/ --library exports/sample_library   # folder: MOD, XM, ZIP, recursive
 python -m tracker4agents samples audit
 python -m tracker4agents samples list --category cycle --tag bass-candidate --compatible --limit 10
-python -m tracker4agents samples list --query smooth --offset 0 --limit 10
+python -m tracker4agents samples list --role kick --limit 10
+python -m tracker4agents samples list --query smooth --format xm --offset 0 --limit 10
 python -m tracker4agents samples inspect SMP-0001
 python -m tracker4agents samples preview SMP-0001 --note C-2 --seconds 1 --output exports/auditions/pulse.wav
 python -m tracker4agents samples edit SMP-0001 --name "Warm Pulse" --category cycle --tag bass-candidate --tag warm
 python -m tracker4agents samples add SMP-0001 --project exports/song/project.json --output exports/song/with-pulse.project.json
+python -m tracker4agents samples palettes --role bass --format xm
+python -m tracker4agents samples palette PAL-0003
+python -m tracker4agents samples use-palette PAL-0003 exports/song/blank.json --output exports/song/v1.project.json
 ```
 
-`extract` accepts the same bounded 31-sample layouts as structural analysis, including
-the supplied two-channel references. Unsupported patterns/restart bytes do not prevent
-reading their samples. It validates all layouts before updating a bank; malformed or
-unsupported layouts fail rather than producing a partial import. Archive paths are never
-extracted. Limits are 512 members, 64 MiB expanded ZIP data and 4 MiB per MOD.
+`extract SOURCE` reads a `.mod`, an `.xm`, a ZIP holding either, or a folder (recursive;
+its ZIPs are opened too). A MOD is read with the same bounded 31-sample layouts as structural
+analysis, including the supplied two-channel references: unsupported patterns/restart bytes
+do not prevent reading their samples. An XM yields every sample of every instrument
+(`xm.read_samples`), multi-sample instruments included. Every module is read before the bank
+is written. A single refused file is an error; in a ZIP or folder, refused members are counted
+by code in `refused` (`IT_UNSUPPORTED`, `S3M_UNSUPPORTED`, `MOD_LAYOUT`, `XM_FORMAT` ...) and
+the other modules are imported. Archive paths are never extracted. Limits are 512 members and
+64 MiB expanded per ZIP, 4 MiB per MOD, 24 MiB per XM, 256 MiB per folder.
 
-The manifest `library.json` contains stable `SMP-0001` IDs, neutral names, PCM digests,
-playback settings, measured features and editable labels. `pcm/` holds exact signed
-8-bit bytes, with one file per distinct payload. Different loop, volume or fine-tune
-settings remain separate entries. Original filenames, titles, sample labels and source
-fingerprints exist only in `private/provenance.json`; ordinary search/inspect results
-do not include them. A generated `.gitignore` excludes bank contents from Git.
+The manifest `library.json` (`chiploom.sample-library.v2`; a v1 bank is read and rewritten
+as v2 on its next update) contains stable `SMP-0001` IDs, neutral names, PCM digests,
+playback settings, measured features, editable labels and the fields below. `pcm/` holds
+exact PCM, one file per distinct payload: `<sha256>.pcm` for signed 8-bit bytes,
+`<sha256>.pcm16` for signed little-endian 16-bit frames (`bits` says which; `loop_start`,
+`loop_length` and `bytes` count frames and bytes respectively). Different loop, volume,
+fine-tune, bit depth, loop mode, panning or relative-note settings remain separate entries.
+Original filenames, titles, sample labels and source fingerprints exist only in
+`private/provenance.json`; ordinary search/inspect results do not include them. A generated
+`.gitignore` excludes bank contents from Git.
+
+Per entry: `format_origin` (`mod` or `xm`), `bits` (8 or 16), `loop_mode` (`forward` or
+`pingpong`), `panning` (0-255, 128 centred), `relative_note` (-96..95), `finetune` (-8..7 for
+a MOD sample, -128..127 in 1/128 semitone for an XM one), `envelope` (XM only, else null:
+`volume_envelope`, `sustained`, `vibrato` booleans and the `fadeout` value; the envelope itself
+is not copied), and the role fields: `role` (kick, snare, hat, clap, tom, cymbal, perc, bass,
+chord, lead, pluck, pad, texture, fx, unknown), `role_confidence` (high/medium/low),
+`role_evidence` (short reasons), `role_occurrences` (source occurrences that agree) and
+`role_source`: `song` when `usage.study` scored it from how a reference plays the slot,
+`sound` when only the PCM and the XM instrument were available (a sample dropped from a
+multi-sample instrument, a module the importer refuses), `pcm` when the module is no longer on
+disk (entries of an older bank; the evidence says so). When the same PCM occurs in several
+modules, the role with the most evidence wins. Roles are evidence-based suggestions to confirm
+by listening, never a listening verdict. `compatibility.adapt` lists what `--adapt` would
+change to fit a MOD (null when nothing can). `samples list` filters with `--role` and
+`--format`; `samples audit` counts entries by role, confidence, bits, loop mode and origin.
 
 **Pitch estimate.** `samples inspect` adds `sample.pitch`, a measurement (`"measurement": "estimate"`) of the
 fundamental heard when the sample plays at tracker note `C-2`:
@@ -121,7 +150,7 @@ fundamental heard when the sample plays at tracker note `C-2`:
  "pitch_class": "D", "cents": 13.5, "transpose_semitones": 2, "reason": null, "note": "..."}
 ```
 
-- `playback_rate_hz` is the PAL rate at `C-2` for the sample's finetune (ProTracker period table: 8287 Hz at finetune 0).
+- `playback_rate_hz` is the PAL rate at `C-2` for the sample's finetune (ProTracker period table: 8287 Hz at finetune 0). For an XM-origin entry the reference is FastTracker's `C-4` (`reference_note`): 8363 Hz shifted by the relative note and the 1/128-semitone finetune; the field keeps its `_at_c2` name.
 - `method: "loop-cycles"` (loops up to 1024 bytes): the loop repeats, so the pitch is `playback_rate_hz x loop_cycles / loop_length`. `loop_cycles` is the largest number of whole cycles for which every shift by a multiple of `loop_length / loop_cycles` still correlates at 0.85 or more (circular autocorrelation). A 112-byte loop can hold 4 cycles of 28. `periodicity` is the weakest of those correlations.
 - `method: "autocorrelation"`: a YIN estimate over a longer loop, or over a one-shot after its loudest attack. `cycle_length` is the period in bytes; `periodicity` is 1 minus the aperiodicity (1 is perfectly periodic).
 - `method: null`, with every frequency field null and a `reason`, for silent samples, flat loops, loops that repeat below 20 Hz, and noise or drums with no stable period.
@@ -143,28 +172,64 @@ an interrupted update can leave unreferenced PCM files, never a partially writte
 or manifest. Automatic multi-process editing is not supported.
 
 Categories are `cycle`, `percussion`, `texture`, `effect`, `unclassified` and `silent`.
-Roles such as `bass-candidate` are heuristic suggestions, not a listening verdict.
-`list` supports all requested `--tag` filters, case-insensitive query words, pagination
-and `--compatible`. `inspect` returns the complete entry and checks the stored PCM.
-`audit` verifies every referenced payload and recomputes compatibility with the current
-MOD profile. It does not rewrite imported sounds.
+Tags such as `bass-candidate` and the scored `role` are heuristic suggestions, not a
+listening verdict. `list` supports all requested `--tag` filters, `--role`, `--format`,
+case-insensitive query words (the role counts as text), pagination and `--compatible`.
+`inspect` returns the complete entry and checks the stored PCM. `audit` verifies every
+referenced payload and recomputes compatibility with the current MOD profile. It does not
+rewrite imported sounds.
 
 `preview` produces a mono 44.1 kHz PCM16 WAV for a tracker note C-1 through B-3, with
 0.05–5 seconds duration. It honors volume, loop and fine tune, using nearest-neighbor
-sampling and a fine-tune frequency approximation. It is an audition without pattern
-effects, not a reference MOD replay or an estimate of the original recording rate.
-Preview output must be outside the bank. Invalid loops or volumes are rejected.
+sampling and a fine-tune frequency approximation. An XM-origin entry is played so that
+tracker note `C-2` sounds like the XM's `C-4` at the sample's own rate (relative note and
+finetune included); 16-bit PCM is played at its own scale and a ping-pong loop forward. It
+is an audition without pattern effects, not a reference replay or an estimate of the
+original recording rate. Preview output must be outside the bank. Invalid loops or volumes
+are rejected.
 
 `add` outputs a complete editable JSON project, embedding PCM and settings. Output must
 differ from input and be outside the bank. Without `--slot`, it uses an unreferenced empty
 slot or appends a slot. Occupied slots require explicit `--slot N --replace`; MOD has at
 most 31 slots. No existing notes or sample numbers are shifted. A bank is not needed to
-reopen that JSON or play its exported MOD.
+reopen that JSON or play its exported MOD. The project's `metadata.sample_sources[slot]`
+records the library ID, the adaptations and the entry's `role`.
 
-`--adapt` explicitly permits two limited changes on an inserted copy of a one-shot:
-clear an inactive loop start, and prepend two zero bytes when required by the strict
-MOD profile. Original PCM is retained, and the project records the adaptations. Oversized
-samples, invalid active loops and other unsupported settings still fail validation.
+Into an XM project, an XM-origin entry is inserted **native** (16-bit, ping-pong loop,
+panning, relative note, finetune kept; the result's `xm.native` is true) and a MOD-origin
+entry is converted like `convert` converts a MOD sample. Into a MOD project, an entry outside
+the MOD profile is refused (`SAMPLE_INCOMPATIBLE`, the message lists what `--adapt` would do)
+unless `--adapt` is passed, which applies these changes on the inserted copy, in order, and
+reports them in `adaptations`: `convert-16-bit-to-8-bit` (high byte), `unfold-pingpong-loop`
+(the loop followed by its reverse, twice as long, forward), `drop-panning`, `map-xm-tuning`
+(the nearest MOD finetune; a relative note is not applied, the message says how many semitones
+to transpose the notes), `align-to-even-bytes` (length and loop points), and the two one-shot
+changes of earlier versions, `clear-inactive-loop-start` and `prepend-two-zero-bytes`. The
+bank PCM is never changed. Samples longer than 65534 bytes after conversion, invalid active
+loops and other unsupported settings still fail.
+
+**Palettes.** `palettes.json` (`chiploom.sample-palettes.v1`) holds one palette per readable
+source module with a neutral ID `PAL-0001`: `format`, `channels`, `speed`, `bpm`,
+`duration_seconds`, `entries` (bank IDs with `role`, `confidence`, `note_starts`, `share` of
+the song's note starts and the `channels` that play them; `note_starts` 0 for a sample the
+song never plays, such as a dropped multi-sample), `channel_layout` (per channel: `role`,
+`roles`, the `entries` it plays, `note_ons`, `notes_per_second`, `sounding_fraction`),
+`structure` (`orders`, `orders_played`, `distinct_patterns`, `sections` as `start_order` /
+`orders` / `seconds` / `active_channels` count, `channel_entry_order` by channel,
+`loop_start_seconds`) and a one-line `summary` such as `kick snare hat · bass · chord · lead×2`.
+No notes, no names, no pattern data; the private provenance alone maps a `PAL` ID to its
+source, and a re-extraction of the same module keeps its ID. A module the importer refuses or
+cannot decode yields its samples but no palette (`modules_without_palette`).
+
+- `samples palettes [--role ROLE] [--format mod|xm] [--channels N]` lists palettes with their summary.
+- `samples palette PAL-0003` shows one palette.
+- `samples use-palette PAL-0003 PROJECT --output NEW.json [--slots N ...] [--adapt] [--all]`
+  inserts the palette's played entries into a library-mode project in role order (drums,
+  bass, chords, leads, pads, textures, effects; the most played first inside a role) and
+  returns `slot_map` (slot, ID, role, confidence, adaptations) and the palette's channel
+  layout. `--slots` gives the target slot of each entry in that order (no gaps, no occupied
+  slot), `--all` also inserts the entries the song never plays, `--adapt` is needed for
+  entries outside the MOD profile when the project is a MOD. Write your own notes afterwards.
 
 For a local listening catalog and the original test composition using the selected bank:
 

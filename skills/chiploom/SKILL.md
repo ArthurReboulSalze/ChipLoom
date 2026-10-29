@@ -30,10 +30,12 @@ MOD export work without FFmpeg. Do not install Qt for a headless music task.
 
 ## Build or extend a bank
 
-When the user supplies modules, an archive, or a folder from which to choose a
-selection, follow [references/sample-bank.md](references/sample-bank.md). It covers
-selection, repeated imports into one bank, naming, classification, audition and a
-small test MOD. A fresh clone contains **no reference sample bank**.
+When the user supplies modules (MOD or XM), an archive, or a folder from which to
+choose a selection, follow [references/sample-bank.md](references/sample-bank.md). It
+covers selection, repeated imports into one bank, roles scored from how each reference
+plays its samples, palettes (the samples a reference song used together and how it is
+built), naming, audition and a small test MOD. A fresh clone contains **no reference
+sample bank**.
 
 Select only from the supplied or otherwise authorized collection. When asked to
 choose, select a useful palette for the brief; do not import an entire drive.
@@ -51,15 +53,20 @@ music made with that PCM local unless the user explicitly requests publication.
 1. Establish mood, approximate duration, tempo and arrangement. Use library samples
    by default; if the owner asks for a song made only with created samples, follow
    "Created samples only" below instead. Preserve existing songs and reference inputs.
-2. Search and audition a coherent palette. Inspect loops, volume, fine tune and MOD
-   compatibility. IDs are local to a bank: discover them, never assume `SMP-0001`
-   is a particular instrument. A tracker note does not establish a sample's pitch.
+2. Pick a palette (`samples palettes`, `samples palette PAL-xxxx`: the samples a reference
+   song chose to go together, with their roles and the song's channel layout) or samples
+   by role (`samples list --role kick`), never samples at random; keep a palette's roles
+   together and complete it by role. Roles are evidence-based suggestions: audition them.
+   Inspect loops, volume, fine tune and MOD compatibility. IDs are local to a bank:
+   discover them, never assume `SMP-0001` is a particular instrument. A tracker note does
+   not establish a sample's pitch.
 3. Start a new schema v2 JSON project under `exports/<song>/` with `new` (`--channels`,
    `--patterns`, `--speed`, `--bpm`; it records `"sample_source": "library"` and holds one
-   empty slot), then embed selected PCM through `samples add` or the `library_sample`
-   patch operation (the bank defaults to `exports/sample_library`). Record returned
-   library IDs and slots. Write original notes and arrangement rather than copying
-   reference patterns. Patterns are grid `rows`:
+   empty slot), then embed the palette with `samples use-palette PAL-xxxx` (slots in role
+   order; `--adapt` for a 16-bit or ping-pong XM entry going into a MOD) or selected PCM
+   through `samples add` or the `library_sample` patch operation (the bank defaults to
+   `exports/sample_library`). Record returned library IDs, slots and roles. Write original
+   notes and arrangement rather than copying reference patterns. Patterns are grid `rows`:
    `"00": "C-2 04 F06 | A-1 06 F7D | --- -- ... | A-2 08 E01"` (keys `00`-`3F`; one cell
    `NOTE SS EEE` per channel; `---`, `--`, `...` are empty).
 4. Plan duration with `estimate`. A MOD has four channels by default and 2 to 32 with

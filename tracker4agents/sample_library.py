@@ -1,7 +1,16 @@
-"""Portable local sample banks: exact PCM, playback variants and neutral labels.
+"""Portable local sample banks: exact PCM, playback variants, neutral labels, roles and palettes.
 
 No Qt, model provider or audio decoder is required. Source labels live only in
 private/provenance.json. Imported PCM is never normalized during extraction.
+
+Entries come from MOD and XM modules (files, ZIP archives, folders). An 8-bit sample is stored
+as `pcm/<sha256>.pcm` (signed bytes), a 16-bit one as `pcm/<sha256>.pcm16` (signed little-endian
+16-bit frames); `bits`, `loop_mode`, `panning`, `relative_note` and `format_origin` say what the
+sample is, `envelope` keeps the XM instrument facts an agent can use (sustain, vibrato, fadeout),
+and `role` / `role_confidence` / `role_evidence` say what the sample is *for*, scored by
+`usage.study` on the module that plays it (or from the PCM alone when the module is gone).
+`palettes.json` (see `sample_palettes`) remembers which entries played together and how each
+song is built. Schema v2; a v1 manifest is read and rewritten as v2 on the next update.
 """
 from __future__ import annotations
 
@@ -14,19 +23,39 @@ import math
 from operator import mul
 from pathlib import Path
 import re
+import struct
 import zipfile
 
-from . import project, sample_source
+from . import formats, mod, project, sample_source, xm
 from .model import (NOTE_TO_PERIOD, PAL_CLOCK, Module, Sample, ValidationError,
                     ascii_field, require_int, validate, validate_sample)
 from .reference_layout import MAX_ARCHIVE, MAX_FILE, parse_layout
 
-SCHEMA = "chiploom.sample-library.v1"
+SCHEMA = "chiploom.sample-library.v2"
+SCHEMAS = ("chiploom.sample-library.v1", SCHEMA)
+PROVENANCE_SCHEMA = "chiploom.sample-provenance.v1"
 DEFAULT_LIBRARY = Path("exports/sample_library")
 MAX_ENTRIES = 10_000
 MAX_PCM = 131_070  # A 16-bit length in words in a 31-sample reference header.
+MAX_FRAMES = xm.MAX_SAMPLE_FRAMES      # loop points of an XM sample, in frames
+MAX_PCM_BYTES = 2 * MAX_FRAMES        # a 16-bit XM sample of the longest accepted length
+MAX_FOLDER = 256 * 1024 * 1024        # bytes read from a folder in one extraction
+MAX_MOD_LENGTH = 65_534               # bytes of a MOD sample
 CATEGORIES = ("cycle", "percussion", "texture", "effect", "unclassified", "silent")
-SETTINGS = ("pcm_sha256", "loop_start", "loop_length", "finetune", "volume")
+SETTINGS = ("pcm_sha256", "loop_start", "loop_length", "finetune", "volume", "bits", "loop_mode", "panning",
+            "relative_note")
+# Fields a v1 entry lacks: a v1 bank holds 8-bit MOD samples without roles.
+ENTRY_DEFAULTS = {"format_origin": "mod", "bits": 8, "loop_mode": "forward", "panning": 128, "relative_note": 0,
+                  "envelope": None, "role": None, "role_confidence": None, "role_evidence": [],
+                  "role_occurrences": 0, "role_source": None}
+XM_C4_RATE = 8363.0  # FastTracker II plays C-4 of an untransposed sample at this rate
+MODULE_SUFFIXES = (".mod", ".xm")
+SOURCE_SUFFIXES = MODULE_SUFFIXES + (".zip",)
+
+
+def _limit(suffix: str) -> int:
+    """Size limit of one input by extension (a MOD 4 MiB, an XM 24 MiB, a ZIP 64 MiB; others as a MOD)."""
+    return {".xm": xm.MAX_XM_BYTES, ".zip": MAX_ARCHIVE}.get(suffix.lower(), MAX_FILE)
 
 # Pitch estimates. C-2 periods for finetunes 0..7 then -8..-1 (ProTracker tuning, the same table as
 # audio.sample_preview); a sample plays PAL_CLOCK / period bytes per second at tracker note C-2.
@@ -60,17 +89,123 @@ def _tags(values: list[str]) -> list[str]:
     return sorted(set(values))
 
 
+def pcm_values(raw: bytes, bits: int = 8) -> tuple[int, ...]:
+    """Signed frames of stored PCM: one byte each, or little-endian 16-bit words."""
+    if bits == 16:
+        return struct.unpack(f"<{len(raw) // 2}h", raw[:len(raw) // 2 * 2])
+    return _signed(raw)
+
+
+def pcm_bytes(values: tuple[int, ...], bits: int = 8) -> bytes:
+    if bits == 16:
+        return struct.pack(f"<{len(values)}h", *values)
+    return bytes(value & 255 for value in values)
+
+
+def high_bytes(raw: bytes, bits: int) -> bytes:
+    """An 8-bit view of stored PCM for the signal heuristics (the high byte of each 16-bit frame)."""
+    return raw[1::2] if bits == 16 else raw
+
+
+def xm_c4_rate(sample: Sample) -> float:
+    """Frames per second an XM plays this sample at note C-4 (relative note and finetune in 1/128 semitone)."""
+    return XM_C4_RATE * 2 ** (sample.relative_note / 12 + sample.finetune / (128 * 12))
+
+
 def _sample(entry: dict, raw: bytes) -> Sample:
-    return Sample(entry["name"], _signed(raw), entry["volume"], entry["finetune"],
-                  entry["loop_start"], entry["loop_length"])
+    bits = entry.get("bits", 8)
+    return Sample(entry["name"], pcm_values(raw, bits), entry["volume"], entry["finetune"],
+                  entry["loop_start"], entry["loop_length"], None, bits, entry.get("loop_mode", "forward"),
+                  entry.get("panning", 128), entry.get("relative_note", 0))
+
+
+def mod_adaptations(sample: Sample) -> list[str]:
+    """What `adapt` would change to fit this sample into a MOD, in the order `adapt_for_mod` applies it; empty
+    when the sample already fits. Raises when no adaptation can make it fit (too long, invalid loop)."""
+    changes = []
+    length = len(sample.pcm)
+    if sample.bits == 16:
+        changes.append("convert-16-bit-to-8-bit")
+    looped = bool(sample.loop_length)
+    if looped and sample.loop_start + sample.loop_length > length:
+        raise ValidationError("invalid loop (runs past the end of the sample); it is not adapted.", "SAMPLE_LOOP")
+    if looped and sample.loop_mode == "pingpong":
+        changes.append("unfold-pingpong-loop")
+        length = sample.loop_start + 2 * sample.loop_length + max(0, length - sample.loop_start - sample.loop_length)
+    if sample.panning != 128:
+        changes.append("drop-panning")
+    if sample.relative_note or not -8 <= sample.finetune <= 7:
+        changes.append("map-xm-tuning")
+    if length % 2 or (looped and (sample.loop_start % 2 or sample.loop_length % 2)):
+        changes.append("align-to-even-bytes")
+        length += length % 2
+    if not looped:
+        if sample.loop_start:
+            changes.append("clear-inactive-loop-start")
+        if any(sample.pcm[:2]):
+            changes.append("prepend-two-zero-bytes")
+            length += 2
+    if length > MAX_MOD_LENGTH or length < 4:
+        raise ValidationError(f"{length} bytes: a MOD sample holds 4 to {MAX_MOD_LENGTH} bytes; it is not adapted.",
+                              "SAMPLE_LENGTH")
+    return changes
+
+
+def adapt_for_mod(sample: Sample) -> tuple[Sample, list[str]]:
+    """A copy of `sample` that fits the MOD profile, with what changed (see `mod_adaptations`). The PCM is
+    reduced to 8 bits (high byte), a ping-pong loop is unfolded (the loop then its reverse, twice as long),
+    panning is dropped, the XM tuning becomes the nearest MOD finetune (the relative note is reported, not
+    applied: transpose the notes instead), loop points and the length are aligned to even bytes."""
+    changes = mod_adaptations(sample)
+    out = copy.deepcopy(sample)
+    pcm = list(out.pcm)
+    if "convert-16-bit-to-8-bit" in changes:
+        pcm = [value >> 8 for value in pcm]
+        out.bits = 8
+    if "unfold-pingpong-loop" in changes:
+        start, end = out.loop_start, out.loop_start + out.loop_length
+        pcm = pcm[:end] + pcm[start:end][::-1] + pcm[end:]
+        out.loop_length *= 2
+        out.loop_mode = "forward"
+    if "drop-panning" in changes:
+        out.panning = 128
+    if "map-xm-tuning" in changes:
+        tune = max(-8, min(7, round(out.finetune / 16)))
+        detail = f"finetune {out.finetune}/128 -> {tune}/8"
+        if out.relative_note:
+            sign = "+" if out.relative_note > 0 else ""
+            detail += f"; relative note {sign}{out.relative_note} dropped: write notes {sign}{out.relative_note} semitones"
+        changes[changes.index("map-xm-tuning")] = f"map-xm-tuning ({detail})"
+        out.finetune, out.relative_note = tune, 0
+    if "align-to-even-bytes" in changes:
+        if out.loop_length:
+            if out.loop_start % 2:
+                out.loop_start -= 1
+                out.loop_length += 1
+            if out.loop_length % 2:
+                out.loop_length -= 1
+        if len(pcm) % 2:
+            pcm.append(0)
+    if "clear-inactive-loop-start" in changes:
+        out.loop_start = 0
+    if "prepend-two-zero-bytes" in changes:
+        pcm = [0, 0] + pcm
+    out.pcm = tuple(pcm)
+    return out, changes
 
 
 def _compatibility(entry: dict, raw: bytes) -> dict:
+    """Does the entry fit a MOD as it is; if not, why, and what `adapt` would do (null when nothing can)."""
+    sample = _sample(entry, raw)
     try:
-        validate_sample(_sample(entry, raw))
+        validate_sample(sample)
     except ValueError as exc:
-        return {"compatible": False, "issue": str(exc)}
-    return {"compatible": True, "issue": None}
+        try:
+            adapt = mod_adaptations(sample)
+        except ValidationError:
+            adapt = None
+        return {"compatible": False, "issue": str(exc), "adapt": adapt}
+    return {"compatible": True, "issue": None, "adapt": []}
 
 
 def characterize(raw: bytes, loop_start: int, loop_length: int) -> tuple[dict, str, str, list[str]]:
@@ -193,16 +328,25 @@ def _yin(values: list[float], rate: float) -> tuple[float, float] | None:
     return lag + max(-.5, min(.5, offset)), max(0.0, here)
 
 
-def estimate_pitch(sample: Sample) -> dict:
-    """Estimated fundamental of a sample at tracker note C-2: a measurement with its method, or null and a reason.
+def playback_rate(sample: Sample, origin: str = "mod") -> tuple[float, str]:
+    """(frames per second, reference note) of a bank sample: ProTracker C-2 for a MOD sample, FastTracker C-4
+    (relative note and 1/128-semitone finetune applied) for an XM one."""
+    if origin == "xm":
+        return xm_c4_rate(sample), "C-4"
+    return c2_playback_rate(sample.finetune), "C-2"
+
+
+def estimate_pitch(sample: Sample, origin: str = "mod") -> dict:
+    """Estimated fundamental of a sample at its reference note (`playback_rate`): a measurement with its method,
+    or null and a reason. `estimated_hz_at_c2` keeps its name for an XM sample too (the reference is then C-4).
 
     Looped samples up to MAX_CYCLE_LOOP bytes: playback rate x whole cycles in the loop / loop length.
     Other samples: YIN autocorrelation over the loop or, for a one-shot, over the part after its loudest attack.
     """
-    rate = c2_playback_rate(sample.finetune)
+    rate, reference = playback_rate(sample, origin)
     pcm = sample.pcm
     looped = bool(sample.loop_length) and sample.loop_start + sample.loop_length <= len(pcm)
-    result = {"measurement": "estimate", "method": None, "reference_note": "C-2", "finetune": sample.finetune,
+    result = {"measurement": "estimate", "method": None, "reference_note": reference, "finetune": sample.finetune,
               "playback_rate_hz": round(rate, 3), "loop_length": sample.loop_length if looped else None,
               "loop_cycles": None, "cycle_length": None, "periodicity": None, "region": None,
               "estimated_hz_at_c2": None, "nearest_note": None, "pitch_class": None, "cents": None,
@@ -263,45 +407,189 @@ def pitch_at_note(pitch: dict, note: str) -> dict | None:
     return {"note": note, "estimated_hz": round(frequency, 3), **_nearest(frequency)}
 
 
-def _pitch_summary(sample: Sample) -> dict | None:
+def _pitch_summary(sample: Sample, origin: str = "mod") -> dict | None:
     """Compact list-view estimate: only the cheap loop-cycle method on short loops; None otherwise."""
     if not sample.loop_length or sample.loop_length > MAX_CYCLE_LOOP:
         return None
-    pitch = estimate_pitch(sample)
+    pitch = estimate_pitch(sample, origin)
     if pitch["method"] != "loop-cycles":
         return None
     return {key: pitch[key] for key in ("estimated_hz_at_c2", "nearest_note", "cents", "transpose_semitones",
                                         "loop_cycles")}
 
 
+def _zip_members(original: bytes) -> list[tuple[str, bytes]]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            members = archive.infolist()
+            if len(members) > 512 or sum(item.file_size for item in members) > MAX_ARCHIVE:
+                raise ValidationError("Archive exceeds 512 entries or 64 MiB expanded.")
+            inputs = []
+            for item in members:
+                suffix = Path(item.filename).suffix.lower()
+                if not item.is_dir() and suffix in MODULE_SUFFIXES:
+                    if item.file_size > _limit(suffix):
+                        raise ValidationError(f"A {suffix} archive member exceeds {_limit(suffix) >> 20} MiB.")
+                    inputs.append((item.filename, archive.read(item)))
+    except (zipfile.BadZipFile, RuntimeError) as exc:
+        raise ValidationError("Cannot read reference ZIP.") from exc
+    return inputs
+
+
+def _folder_files(source: Path) -> list[Path]:
+    files = [path for path in sorted(source.rglob("*"))
+             if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES and not path.is_symlink()]
+    if sum(path.stat().st_size for path in files) > MAX_FOLDER:
+        raise ValidationError(f"The folder holds more than {MAX_FOLDER >> 20} MiB of modules and archives.")
+    return files
+
+
+def _folder_digest(source: Path, files: list[Path]) -> str:
+    listing = "".join(f"{path.relative_to(source).as_posix()}\0{_digest(path.read_bytes())}\n" for path in files)
+    return _digest(listing.encode("utf-8"))
+
+
 def _read_sources(source: Path) -> tuple[str, list[tuple[str, bytes]]]:
-    limit = MAX_ARCHIVE if source.suffix.lower() == ".zip" else MAX_FILE
+    """(source fingerprint, [(name, bytes)] of every .mod/.xm) of a module, a ZIP or a folder (recursive;
+    its ZIPs are opened too). Names are the file or member names; they go to the private provenance only."""
+    if source.is_dir():
+        files = _folder_files(source)
+        digest = _folder_digest(source, files)
+        inputs = []
+        for path in files:
+            name = path.relative_to(source).as_posix()
+            raw = path.read_bytes()
+            if len(raw) > _limit(path.suffix):
+                raise ValidationError(f"{path.suffix.lower()} file above the size limit in the folder.")
+            if path.suffix.lower() == ".zip":
+                inputs += [(f"{name}/{member}", payload) for member, payload in _zip_members(raw)]
+            else:
+                inputs.append((name, raw))
+        if not inputs:
+            raise ValidationError("No .mod or .xm references found.")
+        if _folder_digest(source, _folder_files(source)) != digest:
+            raise ValidationError("Source changed during extraction; no bank update was made.")
+        return digest, inputs
+    limit = _limit(source.suffix)
     if source.stat().st_size > limit:
         raise ValidationError("Reference input exceeds the analysis size limit.")
     original = source.read_bytes()
     if len(original) > limit:
         raise ValidationError("Reference input exceeds the analysis size limit.")
     if source.suffix.lower() == ".zip":
-        try:
-            with zipfile.ZipFile(io.BytesIO(original)) as archive:
-                members = archive.infolist()
-                if len(members) > 512 or sum(item.file_size for item in members) > MAX_ARCHIVE:
-                    raise ValidationError("Archive exceeds 512 entries or 64 MiB expanded.")
-                inputs = []
-                for item in members:
-                    if not item.is_dir() and item.filename.lower().endswith(".mod"):
-                        if item.file_size > MAX_FILE:
-                            raise ValidationError("A MOD archive member exceeds 4 MiB.")
-                        inputs.append((item.filename, archive.read(item)))
-        except (zipfile.BadZipFile, RuntimeError) as exc:
-            raise ValidationError("Cannot read reference ZIP.") from exc
+        inputs = _zip_members(original)
     else:
         inputs = [(source.name, original)]
     if not inputs:
-        raise ValidationError("No .mod references found.")
+        raise ValidationError("No .mod or .xm references found.")
     if source.read_bytes() != original:
         raise ValidationError("Source changed during extraction; no bank update was made.")
     return _digest(original), inputs
+
+
+def _source_unchanged(source: Path, digest: str) -> bool:
+    if source.is_dir():
+        return _folder_digest(source, _folder_files(source)) == digest
+    return _digest(source.read_bytes()) == digest
+
+
+def _envelope_facts(item: dict) -> dict:
+    """What an agent can use of an XM instrument, without copying it: does the volume envelope sustain, is
+    there auto-vibrato, how long the fadeout is (0: none)."""
+    envelope = item.get("volume_envelope") or {}
+    return {"volume_envelope": bool(envelope.get("type", 0) & 1 and envelope.get("points")),
+            "sustained": bool(envelope.get("type", 0) & 2 and envelope.get("points")),
+            "vibrato": bool((item.get("vibrato") or {}).get("depth")), "fadeout": int(item.get("fadeout", 0))}
+
+
+def _load_mod(filename: str, raw: bytes) -> dict:
+    try:
+        layout = parse_layout(raw)
+    except ValueError as exc:
+        raise ValidationError(str(exc), "MOD_LAYOUT") from exc
+    module, error = None, None
+    try:
+        module = mod.decode(raw)
+    except ValidationError as exc:
+        error = exc.code or "MOD_FORMAT"
+    cursor = 1084 + layout.pattern_bytes
+    samples = []
+    for slot, (words, tune, volume, start, length) in enumerate(layout.headers, 1):
+        payload = raw[cursor:cursor + words * 2]
+        cursor += words * 2
+        if not payload:
+            continue
+        settings = {"pcm_sha256": _digest(payload), "loop_start": start * 2, "loop_length": length * 2 if length > 1 else 0,
+                    "finetune": (tune & 15) - (16 if tune & 8 else 0), "volume": volume, "bits": 8,
+                    "loop_mode": "forward", "panning": 128, "relative_note": 0}
+        samples.append({"slot": slot, "index": 0, "payload": payload, "settings": settings, "played": True,
+                        "original_name": raw[20 + (slot - 1) * 30:42 + (slot - 1) * 30].decode("latin1").rstrip("\0 "),
+                        "original_header": list(layout.headers[slot - 1]), "xm_meta": {}, "envelope": None})
+    return {"name": filename, "digest": _digest(raw), "format": "mod", "module": module, "decode_error": error,
+            "title": raw[:20].decode("latin1").rstrip("\0 "), "samples": samples}
+
+
+def _load_xm(filename: str, raw: bytes) -> dict:
+    items = xm.read_samples(raw)
+    module, error = None, None
+    try:
+        module = xm.decode(raw)
+    except ValidationError as exc:
+        error = exc.code or "XM_FORMAT"
+    samples = []
+    for item in items:
+        if not item["pcm"]:
+            continue
+        payload = pcm_bytes(item["pcm"], item["bits"])
+        looped = item["loop_mode"] != "none" and item["loop_length"] > 0
+        settings = {"pcm_sha256": _digest(payload), "loop_start": item["loop_start"] if looped else 0,
+                    "loop_length": item["loop_length"] if looped else 0, "finetune": item["finetune"],
+                    "volume": item["volume"], "bits": item["bits"],
+                    "loop_mode": item["loop_mode"] if looped else "forward", "panning": item["panning"],
+                    "relative_note": item["relative_note"]}
+        kept = module is not None and item["instrument"] <= len(module.samples) \
+            and module.samples[item["instrument"] - 1].pcm == tuple(item["pcm"])
+        samples.append({"slot": item["instrument"], "index": item["index"], "payload": payload, "settings": settings,
+                        "played": kept, "original_name": item["name"],
+                        "original_header": {key: item[key] for key in ("bits", "loop_start", "loop_length", "loop_mode",
+                                                                       "volume", "finetune", "panning", "relative_note",
+                                                                       "keymap_notes")},
+                        "xm_meta": {key: item[key] for key in ("volume_envelope", "vibrato", "fadeout") if item.get(key)},
+                        "envelope": _envelope_facts(item)})
+    return {"name": filename, "digest": _digest(raw), "format": "xm", "module": module, "decode_error": error,
+            "title": raw[17:37].decode("latin1").rstrip("\0 "), "samples": samples}
+
+
+def _load_module(filename: str, raw: bytes) -> dict:
+    """The samples of one module for the bank, and its decoded form (None, with the code, when the importer refuses
+    it: the samples are still extracted, the roles then come from the PCM alone and there is no palette)."""
+    formats.refuse_other_trackers(raw[:48])
+    if formats.detect(raw) == "xm":
+        return _load_xm(filename, raw)
+    return _load_mod(filename, raw)
+
+
+def _study(module: Module) -> dict | None:
+    """`usage.study` on a decoded module; None when the study fails (the bank update does not depend on it)."""
+    from .usage import study
+    try:
+        return study(module)
+    except Exception:  # noqa: BLE001 - a reference that the study cannot follow still yields its samples
+        return None
+
+
+def _best_role(occurrences: list[dict]) -> dict | None:
+    """The role with the most evidence among an entry's occurrences, and how many occurrences agree with it."""
+    from .usage import CONFIDENCE_RANK
+    scored = [item for item in occurrences if item.get("role")]
+    if not scored:
+        return None
+    best = max(scored, key=lambda item: (CONFIDENCE_RANK.get(item.get("role_confidence"), 0),
+                                         len(item.get("role_evidence") or []), item.get("note_starts", 0)))
+    return {"role": best["role"], "role_confidence": best.get("role_confidence", "low"),
+            "role_evidence": list(best.get("role_evidence") or [])[:8],
+            "role_occurrences": sum(item["role"] == best["role"] for item in scored),
+            "role_source": best.get("role_source", "song")}
 
 
 class SampleLibrary:
@@ -337,15 +625,18 @@ class SampleLibrary:
             return {"schema": SCHEMA, "samples": [], "classification_note":
                     "Signal-based suggestions; musical roles require listening. Categories and tags are editable."}
         value = project.read_json(path)
-        if not isinstance(value, dict) or value.get("schema") != SCHEMA:
+        if not isinstance(value, dict) or value.get("schema") not in SCHEMAS:
             raise ValidationError("Unsupported sample library schema.")
         entries = value.get("samples")
         if not isinstance(entries, list) or len(entries) > MAX_ENTRIES:
             raise ValidationError("Invalid sample library entries.")
+        from .usage import ROLE_NAMES
         seen = set()
         for entry in entries:
             if not isinstance(entry, dict):
                 raise ValidationError("Invalid sample entry.")
+            for key, default in ENTRY_DEFAULTS.items():   # a v1 entry: an 8-bit MOD sample without a role
+                entry.setdefault(key, copy.deepcopy(default))
             sample_id = entry.get("id")
             if not isinstance(sample_id, str) or not re.fullmatch(r"SMP-[0-9]{4,6}", sample_id) or sample_id in seen:
                 raise ValidationError("Invalid or duplicate sample ID.")
@@ -353,17 +644,54 @@ class SampleLibrary:
             digest = entry.get("pcm_sha256")
             if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise ValidationError("Invalid PCM digest.")
-            if entry.get("pcm") != f"pcm/{digest}.pcm":
+            if entry["bits"] not in (8, 16) or entry["loop_mode"] not in ("forward", "pingpong") \
+                    or entry["format_origin"] not in ("mod", "xm"):
+                raise ValidationError("Invalid bits, loop_mode or format_origin.")
+            if entry.get("pcm") != f"pcm/{digest}.pcm{'16' if entry['bits'] == 16 else ''}":
                 raise ValidationError("Invalid PCM path; expected content-addressed local data.")
             ascii_field(entry.get("name"), 22, "Sample name")
             _tags(entry.get("tags"))
             if entry.get("category") not in CATEGORIES:
                 raise ValidationError("Invalid sample category.")
-            for key, maximum in (("bytes", MAX_PCM), ("loop_start", MAX_PCM), ("loop_length", MAX_PCM),
-                                 ("volume", 255)):
+            for key, maximum in (("bytes", MAX_PCM_BYTES), ("loop_start", MAX_FRAMES), ("loop_length", MAX_FRAMES),
+                                 ("volume", 255), ("panning", 255), ("role_occurrences", MAX_ENTRIES * 64)):
                 require_int(entry.get(key), key, 0, maximum)
-            require_int(entry.get("finetune"), "finetune", -8, 7)
+            require_int(entry.get("finetune"), "finetune", *((-128, 127) if entry["format_origin"] == "xm" else (-8, 7)))
+            require_int(entry["relative_note"], "relative_note", -96, 95)
+            if entry["role"] is not None and (entry["role"] not in ROLE_NAMES
+                                              or entry["role_confidence"] not in ("high", "medium", "low")
+                                              or not isinstance(entry["role_evidence"], list)):
+                raise ValidationError("Invalid sample role.")
+            if entry["envelope"] is not None and not isinstance(entry["envelope"], dict):
+                raise ValidationError("Invalid envelope facts.")
+        value["schema"] = SCHEMA
         return value
+
+    def _provenance(self) -> dict:
+        path = self._path("private/provenance.json")
+        provenance = project.read_json(path) if path.exists() else {
+            "schema": PROVENANCE_SCHEMA, "sources": {}, "occurrences": {}, "palettes": {}}
+        if (not isinstance(provenance, dict) or provenance.get("schema") != PROVENANCE_SCHEMA
+                or not isinstance(provenance.get("sources"), dict) or not isinstance(provenance.get("occurrences"), dict)
+                or not isinstance(provenance.setdefault("palettes", {}), dict)):
+            raise ValidationError("Invalid private provenance file.")
+        if any(not isinstance(item, dict) or not isinstance(item.get("entry_id"), str)
+               for item in provenance["occurrences"].values()):
+            raise ValidationError("Invalid private sample occurrences.")
+        return provenance
+
+    def _roles_from_pcm(self, manifest: dict) -> int:
+        """Give every entry without a role one scored from its PCM alone (the module is not on disk)."""
+        from .usage import sample_role
+        count = 0
+        for entry in manifest["samples"]:
+            if entry.get("role"):
+                continue
+            role, confidence, evidence = sample_role(_sample(entry, self._pcm(entry)))
+            entry.update(role=role, role_confidence=confidence, role_occurrences=0, role_source="pcm",
+                         role_evidence=evidence[:7] + ["module unavailable: role from the PCM alone, no song evidence"])
+            count += 1
+        return count
 
     def _pcm(self, entry: dict) -> bytes:
         path = self._path(entry["pcm"])
@@ -383,17 +711,25 @@ class SampleLibrary:
         return result
 
     def search(self, query: str = "", tags: list[str] | None = None, category: str | None = None,
-               compatible_only: bool = False, offset: int = 0, limit: int = 50) -> dict:
+               compatible_only: bool = False, offset: int = 0, limit: int = 50, role: str | None = None,
+               fmt: str | None = None) -> dict:
+        from .usage import ROLE_NAMES
         require_int(offset, "offset", 0, MAX_ENTRIES)
         require_int(limit, "limit", 1, 500)
         wanted = set(_tags(tags or []))
         if category is not None and category not in CATEGORIES:
             raise ValidationError("Unknown category.")
+        if role is not None and role not in ROLE_NAMES:
+            raise ValidationError(f"Unknown role; expected one of {', '.join(sorted(ROLE_NAMES))}.")
+        if fmt is not None and fmt not in ("mod", "xm"):
+            raise ValidationError("format: mod or xm expected.")
         results = []
         for item in self._manifest()["samples"]:
             if category and item["category"] != category or not wanted.issubset(item["tags"]):
                 continue
-            text = " ".join([item["id"], item["name"], item["category"], *item["tags"]]).casefold()
+            if role and item["role"] != role or fmt and item["format_origin"] != fmt:
+                continue
+            text = " ".join([item["id"], item["name"], item["category"], item["role"] or "", *item["tags"]]).casefold()
             if not all(word in text for word in query.casefold().split()):
                 continue
             raw = self._pcm(item)
@@ -401,99 +737,162 @@ class SampleLibrary:
             if compatible_only and not compatible:
                 continue
             summary = {key: copy.deepcopy(item[key]) for key in
-                       ("id", "name", "category", "tags", "bytes", "volume", "finetune", "loop_start", "loop_length")}
+                       ("id", "name", "category", "tags", "bytes", "volume", "finetune", "loop_start", "loop_length",
+                        "bits", "loop_mode", "relative_note", "format_origin", "role", "role_confidence")}
             summary["compatible"] = compatible
             results.append((summary, raw))
         page = results[offset:offset + limit]
         for summary, raw in page:
-            summary["pitch"] = _pitch_summary(_sample(summary, raw))
+            summary["pitch"] = _pitch_summary(_sample(summary, raw), summary["format_origin"])
         return {"ok": True, "total": len(results), "offset": offset,
                 "samples": [summary for summary, _ in page],
-                "pitch_note": "pitch: estimated fundamental at C-2 for loops up to "
-                              f"{MAX_CYCLE_LOOP} bytes (null otherwise; samples inspect also estimates one-shots). "
-                              "A measurement, not a listening judgment."}
+                "pitch_note": "pitch: estimated fundamental at C-2 (XM samples: at C-4) for loops up to "
+                              f"{MAX_CYCLE_LOOP} frames (null otherwise; samples inspect also estimates one-shots). "
+                              "A measurement, not a listening judgment.",
+                "role_note": "role: scored from how a reference song plays the sample and from its sound "
+                             "(role_evidence lists why); a suggestion to confirm by listening."}
 
     def extract(self, source: Path) -> dict:
+        """Add every sample of a MOD, an XM, a ZIP or a folder (recursive) to the bank, with its role, and
+        remember each readable module as a palette. Modules the importer refuses are counted by code (a single
+        refused file is an error); the other modules of a ZIP or folder are imported."""
+        from .sample_palettes import build_palette, read_palettes, write_palettes
         source = Path(source).resolve()
         if source.is_relative_to(self.path):
             raise ValidationError("Reference source must be outside the sample bank.")
         source_digest, inputs = _read_sources(source)
-        # Validate every layout before writing any bank data. Unsupported patterns
-        # and restart bytes do not prevent reading the original sample payloads.
-        layouts = [(name, raw, parse_layout(raw)) for name, raw in inputs]
+        # Read every module before writing any bank data; a refusal is counted, not partial.
+        modules, refused, errors = [], Counter(), []
+        for filename, raw in inputs:
+            try:
+                modules.append(_load_module(filename, raw))
+            except ValidationError as exc:
+                refused[exc.code or "INVALID"] += 1
+                errors.append(exc)
+        if not modules:
+            raise errors[0]
+        studies = {}
+        for index, item in enumerate(modules):
+            if item["module"] is not None:
+                studies[index] = _study(item["module"])
         with self._writer():
             manifest = self._manifest(create=True)
-            provenance_path = self._path("private/provenance.json")
-            provenance = project.read_json(provenance_path) if provenance_path.exists() else {
-                "schema": "chiploom.sample-provenance.v1", "sources": {}, "occurrences": {}}
-            if not isinstance(provenance, dict) or provenance.get("schema") != "chiploom.sample-provenance.v1" or not isinstance(provenance.get("sources"), dict) or not isinstance(provenance.get("occurrences"), dict):
-                raise ValidationError("Invalid private provenance file.")
+            provenance = self._provenance()
+            palettes = read_palettes(self.path) if self._path("palettes.json").exists() else []
             known = {tuple(entry[key] for key in SETTINGS): entry for entry in manifest["samples"]}
             # Verify existing PCM before updating an existing bank.
             for entry in manifest["samples"]:
                 self._pcm(entry)
             next_id = max((int(entry["id"][4:]) for entry in manifest["samples"]), default=0) + 1
             start_count = len(manifest["samples"])
-            payloads = {}
+            payloads: dict[tuple[str, int], bytes] = {}
             slots = 0
-            provenance["sources"][source_digest] = {"filename": source.name, "modules": len(inputs)}
-            for module_index, (filename, raw, layout) in enumerate(layouts):
-                module_digest = _digest(raw)
-                cursor = 1084 + layout.pattern_bytes
-                for slot, (words, tune, volume, start, length) in enumerate(layout.headers, 1):
-                    payload = raw[cursor:cursor + words * 2]
-                    cursor += words * 2
-                    if not payload:
-                        continue
+            provenance["sources"][source_digest] = {"filename": source.name, "modules": len(modules),
+                                                    "refused": dict(refused)}
+            by_module = {}   # palette id -> (module item, study, {slot: [entry ids]}, {entry id: occurrence})
+            for module_index, item in enumerate(modules):
+                study = studies.get(module_index)
+                slot_roles = {slot["slot"]: slot for slot in (study or {}).get("slots", [])}
+                entry_ids: dict[int, list[str]] = {}
+                occurrences: dict[str, dict] = {}
+                for found in item["samples"]:
                     slots += 1
-                    digest = _digest(payload)
-                    settings = {"pcm_sha256": digest, "loop_start": start * 2,
-                                "loop_length": length * 2 if length > 1 else 0,
-                                "finetune": (tune & 15) - (16 if tune & 8 else 0), "volume": volume}
+                    settings, payload = found["settings"], found["payload"]
                     key = tuple(settings[field] for field in SETTINGS)
                     entry = known.get(key)
                     if entry is None:
                         if len(manifest["samples"]) >= MAX_ENTRIES:
                             raise ValidationError("Sample library entry limit exceeded.")
-                        metrics, category, prefix, tags = characterize(payload, settings["loop_start"], settings["loop_length"])
+                        metrics, category, prefix, tags = characterize(
+                            high_bytes(payload, settings["bits"]), settings["loop_start"], settings["loop_length"])
                         # Names do not depend on an untrusted source label.
-                        name = f"{prefix} {next_id:02d}"
-                        entry = {"id": f"SMP-{next_id:04d}", "name": name, **settings,
-                                 "pcm": f"pcm/{digest}.pcm", "bytes": len(payload),
-                                 "category": category, "tags": tags, "metrics": metrics,
-                                 "origin": "module-extracted", "classification": "heuristic-v1"}
+                        entry = {"id": f"SMP-{next_id:04d}", "name": f"{prefix} {next_id:02d}", **settings,
+                                 "pcm": f"pcm/{settings['pcm_sha256']}.pcm{'16' if settings['bits'] == 16 else ''}",
+                                 "bytes": len(payload), "category": category, "tags": tags, "metrics": metrics,
+                                 "origin": "module-extracted", "classification": "heuristic-v1",
+                                 "format_origin": item["format"], "envelope": found["envelope"],
+                                 **{key: copy.deepcopy(ENTRY_DEFAULTS[key]) for key in
+                                    ("role", "role_confidence", "role_evidence", "role_occurrences", "role_source")}}
                         entry["compatibility"] = _compatibility(entry, payload)
                         manifest["samples"].append(entry)
                         known[key] = entry
                         next_id += 1
-                    payloads[digest] = payload
-                    occurrence_id = f"{source_digest}:{module_index}:{slot}"
-                    provenance["occurrences"][occurrence_id] = {
-                        "entry_id": entry["id"], "module_sha256": module_digest, "filename": filename,
-                        "module_title": raw[:20].decode("latin1").rstrip("\0 "), "slot": slot,
-                        "original_name": raw[20 + (slot - 1) * 30:42 + (slot - 1) * 30].decode("latin1").rstrip("\0 "),
-                        "original_header": list(layout.headers[slot - 1]), "archive_sha256": source_digest}
-            if _digest(source.read_bytes()) != source_digest:
+                    elif entry["envelope"] is None and found["envelope"]:
+                        entry["envelope"] = found["envelope"]
+                    payloads[settings["pcm_sha256"], settings["bits"]] = payload
+                    occurrence = {
+                        "entry_id": entry["id"], "module_sha256": item["digest"], "filename": item["name"],
+                        "module_title": item["title"], "format": item["format"], "slot": found["slot"],
+                        "sample_index": found["index"], "original_name": found["original_name"],
+                        "original_header": found["original_header"], "archive_sha256": source_digest,
+                        "role": None, "role_confidence": None, "role_evidence": [], "role_source": None,
+                        "note_starts": 0}
+                    scored = slot_roles.get(found["slot"]) if found["played"] else None
+                    if scored is not None:
+                        occurrence.update(role=scored["role"], role_confidence=scored["confidence"],
+                                          role_evidence=scored["evidence"][:8], note_starts=scored["note_starts"],
+                                          role_source="song" if scored["note_starts"] else "sound")
+                    else:
+                        from .usage import sample_role
+                        role, confidence, evidence = sample_role(_sample(entry, payload), found["xm_meta"],
+                                                                 found["original_name"])
+                        why = ("dropped from a multi-sample instrument: role from its sound and instrument only"
+                               if not found["played"] else
+                               f"module not decoded ({item['decode_error'] or 'no study'}): role from the sound alone")
+                        occurrence.update(role=role, role_confidence=confidence, role_evidence=evidence[:7] + [why],
+                                          role_source="sound")
+                    # The same key as earlier banks for a MOD slot, so a re-extraction of a source updates it.
+                    key = f"{source_digest}:{module_index}:{found['slot']}"
+                    occurrences[key if item["format"] == "mod" else f"{key}:{found['index']}"] = occurrence
+                    entry_ids.setdefault(found["slot"], []).append((entry["id"], found["played"]))
+                provenance["occurrences"].update(occurrences)
+                if study is not None:
+                    by_module[item["digest"]] = (item, study, entry_ids, occurrences)
+            if not _source_unchanged(source, source_digest):
                 raise ValidationError("Source changed during extraction; bank manifest was not updated.")
-            for digest, payload in payloads.items():
-                destination = self._path(f"pcm/{digest}.pcm")
+            for (digest, bits), payload in payloads.items():
+                destination = self._path(f"pcm/{digest}.pcm{'16' if bits == 16 else ''}")
                 if destination.exists():
                     if destination.read_bytes() != payload:
                         raise ValidationError("Existing PCM differs from its content digest.")
                 else:
                     project.atomic_bytes(destination, payload)
-            if any(not isinstance(item, dict) or not isinstance(item.get("entry_id"), str)
-                   for item in provenance["occurrences"].values()):
-                raise ValidationError("Invalid private sample occurrences.")
-            counts = Counter(item["entry_id"] for item in provenance["occurrences"].values())
+            # Roles: the best-evidenced occurrence of each entry; the PCM alone for entries without one.
+            per_entry: dict[str, list[dict]] = {}
+            for occurrence in provenance["occurrences"].values():
+                per_entry.setdefault(occurrence["entry_id"], []).append(occurrence)
             for entry in manifest["samples"]:
-                entry["source_occurrences"] = counts[entry["id"]]
+                entry["source_occurrences"] = len(per_entry.get(entry["id"], []))
+                best = _best_role(per_entry.get(entry["id"], []))
+                if best is not None:
+                    entry.update(best)
+            pcm_roles = self._roles_from_pcm(manifest)
+            # Palettes: one per decoded module, its ID kept across re-extractions of the same module.
+            by_digest = {info["module_sha256"]: palette_id for palette_id, info in provenance["palettes"].items()
+                         if isinstance(info, dict)}
+            next_palette = max((int(key[4:]) for key in provenance["palettes"]), default=0) + 1
+            new_palettes = 0
+            for digest, (item, study, entry_ids, occurrences) in by_module.items():
+                palette_id = by_digest.get(digest)
+                if palette_id is None:
+                    palette_id, next_palette = f"PAL-{next_palette:04d}", next_palette + 1
+                    new_palettes += 1
+                provenance["palettes"][palette_id] = {"module_sha256": digest, "filename": item["name"],
+                                                      "module_title": item["title"], "archive_sha256": source_digest}
+                palette = build_palette(palette_id, item["module"], study, entry_ids, occurrences)
+                palettes = [existing for existing in palettes if existing["id"] != palette_id] + [palette]
+            palettes.sort(key=lambda palette: palette["id"])
             project.atomic_bytes(self._path(".gitignore"), b"*\n!.gitignore\n")
-            project.write_json(provenance_path, provenance)
+            project.write_json(self._path("private/provenance.json"), provenance)
+            write_palettes(self.path, palettes)
             project.write_json(self._path("library.json"), manifest)
-        return {"ok": True, "library": str(self.path), "modules": len(inputs), "sample_slots": slots,
-                "new_entries": len(manifest["samples"]) - start_count, "entries": len(manifest["samples"]),
-                "unique_pcm": len({item["pcm_sha256"] for item in manifest["samples"]}), "source_unchanged": True}
+        new_entries = manifest["samples"][start_count:]
+        return {"ok": True, "library": str(self.path), "modules": len(modules), "refused": dict(refused),
+                "sample_slots": slots, "new_entries": len(new_entries), "entries": len(manifest["samples"]),
+                "unique_pcm": len({item["pcm_sha256"] for item in manifest["samples"]}),
+                "roles": dict(Counter(entry["role"] for entry in new_entries)),
+                "roles_from_pcm_alone": pcm_roles, "palettes_new": new_palettes, "palettes": len(palettes),
+                "modules_without_palette": len(modules) - len(by_module), "source_unchanged": True}
 
     def edit(self, sample_id: str, name: str | None = None, category: str | None = None,
              tags: list[str] | None = None) -> dict:
@@ -518,9 +917,9 @@ class SampleLibrary:
         return self.get(sample_id)
 
     def inspect(self, sample_id: str) -> dict:
-        """The entry with its compatibility and an estimated pitch at C-2 (see `estimate_pitch`)."""
+        """The entry with its compatibility and an estimated pitch at C-2 (XM: C-4; see `estimate_pitch`)."""
         entry = self.get(sample_id)
-        entry["pitch"] = estimate_pitch(_sample(entry, self._pcm(entry)))
+        entry["pitch"] = estimate_pitch(_sample(entry, self._pcm(entry)), entry["format_origin"])
         return entry
 
     def read_sample(self, sample_id: str) -> Sample:
@@ -529,24 +928,38 @@ class SampleLibrary:
         return _sample(entry, self._pcm(entry))
 
     def sample(self, sample_id: str, adapt: bool = False, fmt: str = "mod") -> tuple[Sample, list[str]]:
-        """The library sample ready for a module of format `fmt`. For an XM it is converted exactly like
-        `convert` converts a MOD sample (see `convert.mod_sample_to_xm`); the XM checks run on insertion."""
-        sample = self.read_sample(sample_id)
-        changes = []
-        if adapt and not sample.loop_length:
-            if sample.loop_start:
-                sample.loop_start = 0
-                changes.append("clear-inactive-loop-start")
-            if any(sample.pcm[:2]):
+        """The library sample ready for a module of format `fmt`, with what `adapt` changed.
+
+        Into an XM: an XM-origin sample stays native (bits, loop mode, panning, relative note, finetune); a
+        MOD-origin one is converted exactly like `convert` converts a MOD sample (`convert.mod_sample_to_xm`).
+        Into a MOD: a sample outside the MOD profile (16-bit, ping-pong, panned, XM tuning, odd length, one-shot
+        head) is refused unless `adapt`, which applies `adapt_for_mod` on a copy; the bank PCM is untouched."""
+        entry = self.get(sample_id)
+        sample = _sample(entry, self._pcm(entry))
+        if fmt == "xm":
+            if entry["format_origin"] == "xm":
+                return sample, []
+            changes = []
+            if adapt and not sample.loop_length and any(sample.pcm[:2]):
                 sample.pcm = (0, 0) + sample.pcm
                 changes.append("prepend-two-zero-bytes")
-        if fmt == "xm":
             from .convert import mod_sample_to_xm
             return mod_sample_to_xm(sample), changes
+        if adapt:
+            sample, changes = adapt_for_mod(sample)
+        else:
+            changes = []
         try:
             validate_sample(sample)
         except ValueError as exc:
-            raise ValidationError(f"{sample_id} is incompatible with the current MOD profile: {exc}") from exc
+            hint = ""
+            if not adapt:
+                try:
+                    hint = f" Pass adapt (CLI: --adapt) to apply: {', '.join(mod_adaptations(sample))}."
+                except ValidationError as why:
+                    hint = f" It cannot be adapted: {why}"
+            raise ValidationError(f"{sample_id} is incompatible with the current MOD profile: {exc}{hint}",
+                                  "SAMPLE_INCOMPATIBLE") from exc
         return sample, changes
 
     def insert(self, module: Module, sample_id: str, slot: int | None = None,
@@ -554,6 +967,7 @@ class SampleLibrary:
         validate(module)
         sample_source.guard_insert(module, "library")
         xm = module.format == "xm"
+        entry = self.get(sample_id)
         sample, changes = self.sample(sample_id, adapt, module.format)
         result = copy.deepcopy(module)
         used = {value.sample for pattern in result.patterns for value in pattern.cells.values() if value.sample}
@@ -571,15 +985,21 @@ class SampleLibrary:
         else:
             result.samples.append(sample)
         info = {"library_id": sample_id, "origin": "module-extracted", "adaptations": changes}
+        if entry.get("role"):
+            info["role"] = entry["role"]
         sources = result.metadata.setdefault("sample_sources", {})
         if not isinstance(sources, dict):
             raise ValidationError("Project metadata.sample_sources must be an object.")
         sources[str(slot)] = info
         validate(result)
         if xm:  # what the conversion did, for the caller (not stored: the library ID is the provenance)
+            native = entry["format_origin"] == "xm"
             return result, {"slot": slot, **info, "xm": {
+                "native": native, "bits": sample.bits, "loop_mode": sample.loop_mode,
                 "finetune": sample.finetune, "relative_note": sample.relative_note,
-                "note": "Converted like `convert` converts a MOD sample: finetune 16 x MOD finetune - 20, "
+                "note": "Kept as the XM reference stored it: bits, loop mode, panning, relative note, finetune."
+                        if native else
+                        "Converted like `convert` converts a MOD sample: finetune 16 x MOD finetune - 20, "
                         "8-bit, forward loop, centred. Play it at XM C-4 for the MOD's C-2."}}
         return result, {"slot": slot, **info}
 
@@ -598,25 +1018,67 @@ class SampleLibrary:
         entry = self.get(sample_id)
         require_int(entry["volume"], "volume", 0, 64)
         sample = _sample(entry, self._pcm(entry))
-        result = audition_sample(sample, output, note, seconds)
-        pitch = estimate_pitch(sample)
+        origin = entry["format_origin"]
+        # An XM sample is played so that tracker note C-2 sounds like the XM's C-4 (its own rate).
+        rate = xm_c4_rate(sample) if origin == "xm" else None
+        result = audition_sample(sample, output, note, seconds, rate)
+        pitch = estimate_pitch(sample, origin)
         pitch["at_preview_note"] = pitch_at_note(pitch, note)
-        facts = {"bytes": len(sample.pcm), "looped": bool(sample.loop_length), "loop_start": sample.loop_start,
-                 "loop_length": sample.loop_length, "pcm_peak": max(map(abs, sample.pcm), default=0)}
+        facts = {"bytes": len(sample.pcm) * sample.bits // 8, "frames": len(sample.pcm), "bits": sample.bits,
+                 "looped": bool(sample.loop_length), "loop_start": sample.loop_start,
+                 "loop_length": sample.loop_length, "loop_mode": sample.loop_mode if sample.loop_length else None,
+                 "pcm_peak": max(map(abs, sample.pcm), default=0)}
         return {"ok": True, "id": sample_id, **result, "volume": sample.volume, "finetune": sample.finetune,
-                "sample": facts, **audition_measurements(sample, output, None, loudness.library_group(entry)),
-                "pitch": pitch}
+                "format_origin": origin, "sample": facts,
+                **audition_measurements(sample, output, None, loudness.library_group(entry)), "pitch": pitch}
+
+    def _palettes(self) -> list[dict]:
+        from .sample_palettes import read_palettes
+        self._manifest()
+        if not self._path("palettes.json").exists():
+            return []
+        return read_palettes(self.path)
+
+    def palettes(self, role: str | None = None, fmt: str | None = None, channels: int | None = None) -> dict:
+        """The palettes (reference songs' sample sets) with a one-line role summary each."""
+        from .sample_palettes import list_palettes
+        return list_palettes(self._palettes(), role, fmt, channels)
+
+    def palette(self, palette_id: str) -> dict:
+        from .sample_palettes import find_palette
+        return copy.deepcopy(find_palette(self._palettes(), palette_id))
+
+    def use_palette(self, palette_id: str, module: Module, slots: list[int] | None = None, adapt: bool = False,
+                    include_unplayed: bool = False) -> tuple[Module, dict]:
+        """Insert a palette's entries into a library-mode project in role order (see `sample_palettes.use_palette`)."""
+        from .sample_palettes import find_palette, use_palette
+        return use_palette(self, find_palette(self._palettes(), palette_id), module, slots, adapt, include_unplayed)
 
     def audit(self) -> dict:
         entries = self._manifest()["samples"]
-        compatible, categories = 0, Counter()
+        compatible, categories, roles, confidences = 0, Counter(), Counter(), Counter()
+        bits, loops, origins, sources = Counter(), Counter(), Counter(), Counter()
         for entry in entries:
             raw = self._pcm(entry)
             compatible += _compatibility(entry, raw)["compatible"]
             categories[entry["category"]] += 1
+            roles[entry["role"] or "none"] += 1
+            confidences[entry["role_confidence"] or "none"] += 1
+            bits[str(entry["bits"])] += 1
+            loops[entry["loop_mode"] if entry["loop_length"] else "one-shot"] += 1
+            origins[entry["format_origin"]] += 1
+            sources[entry["role_source"] or "none"] += 1
+        palettes = self._path("palettes.json")
+        count = 0
+        if palettes.exists():
+            from .sample_palettes import read_palettes
+            count = len(read_palettes(self.path))
         return {"ok": True, "entries": len(entries),
                 "unique_pcm": len({entry["pcm_sha256"] for entry in entries}),
                 "source_occurrences": sum(entry.get("source_occurrences", 0) for entry in entries),
                 "compatible_entries": compatible, "incompatible_entries": len(entries) - compatible,
-                "categories": dict(categories), "classification_note":
-                "Heuristic labels are editable; no human listening validation is implied."}
+                "categories": dict(categories), "roles": dict(roles), "role_confidence": dict(confidences),
+                "role_source": dict(sources), "bits": dict(bits), "loop_mode": dict(loops),
+                "format_origin": dict(origins), "palettes": count, "classification_note":
+                "Heuristic labels are editable; roles are evidence-based suggestions; no human listening "
+                "validation is implied."}

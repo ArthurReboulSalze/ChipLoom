@@ -358,22 +358,37 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--output", type=Path, required=True)
     analyze.add_argument("--probe", action="store_true", help="Also estimate duration with ffprobe/libopenmpt.")
     from .sample_library import CATEGORIES, DEFAULT_LIBRARY
-    samples = commands.add_parser("samples", help="Local sample library: extract, search, audition and insert.")
+    from .usage import ROLE_ORDER
+    samples = commands.add_parser("samples", help="Local sample library: extract, search, audition, insert, palettes.")
     sample_commands = samples.add_subparsers(dest="sample_command", required=True)
-    for name in ("extract", "list", "inspect", "preview", "add", "edit", "audit"):
+    for name in ("extract", "list", "inspect", "preview", "add", "edit", "audit", "palettes", "palette", "use-palette"):
         command = sample_commands.add_parser(name)
         command.add_argument("--library", type=Path, default=DEFAULT_LIBRARY)
         if name == "extract":
-            command.add_argument("source", type=Path, help="Reference MOD or ZIP; read only.")
+            command.add_argument("source", type=Path, help="Reference MOD, XM, ZIP of either, or folder (recursive); read only.")
         if name in ("inspect", "preview", "add", "edit"):
             command.add_argument("id", help="Stable library ID, e.g. SMP-0001.")
+        if name in ("palette", "use-palette"):
+            command.add_argument("id", help="Palette ID, e.g. PAL-0001.")
         if name == "list":
             command.add_argument("--query", default="")
             command.add_argument("--tag", action="append", default=[])
             command.add_argument("--category", choices=CATEGORIES)
+            command.add_argument("--role", choices=ROLE_ORDER, help="Scored role (kick, snare, hat, bass, lead ...).")
+            command.add_argument("--format", choices=("mod", "xm"), dest="fmt", help="Origin format of the sample.")
             command.add_argument("--compatible", action="store_true")
             command.add_argument("--offset", type=int, default=0)
             command.add_argument("--limit", type=int, default=20)
+        if name == "palettes":
+            command.add_argument("--role", choices=ROLE_ORDER, help="Only palettes that play this role.")
+            command.add_argument("--format", choices=("mod", "xm"), dest="fmt")
+            command.add_argument("--channels", type=int)
+        if name == "use-palette":
+            command.add_argument("project", type=Path, help="Library-mode project the palette goes into.")
+            command.add_argument("--output", type=Path, required=True)
+            command.add_argument("--slots", type=int, nargs="+", help="Target slot of each entry, in role order.")
+            command.add_argument("--adapt", action="store_true", help="Adapt entries outside the MOD profile on a copy.")
+            command.add_argument("--all", action="store_true", help="Also insert the entries the song never plays.")
         if name == "preview":
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--note", default="C-2")
@@ -541,7 +556,21 @@ def main(argv: list[str] | None = None) -> int:
             if action == "extract":
                 result = bank.extract(args.source)
             elif action == "list":
-                result = bank.search(args.query, args.tag, args.category, args.compatible, args.offset, args.limit)
+                result = bank.search(args.query, args.tag, args.category, args.compatible, args.offset, args.limit,
+                                     args.role, args.fmt)
+            elif action == "palettes":
+                result = bank.palettes(args.role, args.fmt, args.channels)
+            elif action == "palette":
+                result = {"ok": True, "palette": bank.palette(args.id)}
+            elif action == "use-palette":
+                output = args.output.resolve()
+                if output == args.project.resolve() or output.is_relative_to(bank.path):
+                    raise ValidationError("Output must differ from the input project and be outside the sample bank.")
+                if output.suffix.lower() != ".json":
+                    raise ValidationError("Palette insertion outputs an editable JSON project.")
+                module, info = bank.use_palette(args.id, project.load(args.project), args.slots, args.adapt, args.all)
+                project.write_json(output, project.to_dict(module))
+                result = {"ok": True, "output": str(output), **info}
             elif action == "inspect":
                 result = {"ok": True, "sample": bank.inspect(args.id)}
             elif action == "audit":

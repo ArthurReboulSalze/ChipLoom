@@ -348,17 +348,24 @@ def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None, normal
         temporary.unlink(missing_ok=True)
 
 
-def audition_sample(sample: Sample, output: Path, note: str = "C-2", seconds: float = 1.0) -> dict:
+def audition_sample(sample: Sample, output: Path, note: str = "C-2", seconds: float = 1.0,
+                    rate_at_c2: float | None = None) -> dict:
     """Raw sample audition at a tracker note: its own volume, fine tune and loop, no pattern effects.
 
-    Writes a 16-bit mono 44.1 kHz WAV and needs no external decoder.
+    `rate_at_c2` replaces the ProTracker rate at C-2 (for an XM sample: its own C-4 rate, relative note and
+    1/128-semitone finetune included); the other notes follow the period table. 8-bit and 16-bit PCM; a
+    ping-pong loop is played forward. Writes a 16-bit mono 44.1 kHz WAV and needs no external decoder.
     """
     if note not in NOTE_TO_PERIOD or not math.isfinite(seconds) or not .05 <= seconds <= 5:
         raise ValidationError("Audition requires a tracker note C-1..B-3 and 0.05–5 seconds.", "INVALID_VALUE")
     values, start, length = sample.pcm, sample.loop_start, sample.loop_length
     if length and (length < 4 or start + length > len(values)):
         raise ValidationError("Cannot audition an invalid loop.", "SAMPLE_LOOP")
-    rate = PAL_CLOCK / NOTE_TO_PERIOD[note] * 2 ** (sample.finetune / 96)
+    if rate_at_c2 is None:
+        rate = PAL_CLOCK / NOTE_TO_PERIOD[note] * 2 ** (sample.finetune / 96)
+    else:
+        rate = rate_at_c2 * NOTE_TO_PERIOD["C-2"] / NOTE_TO_PERIOD[note]
+    scale = 256 if sample.bits == 8 else 1
     frame_count = round(seconds * 44100)
     pcm = array("h")
     for frame in range(frame_count):
@@ -367,7 +374,7 @@ def audition_sample(sample: Sample, output: Path, note: str = "C-2", seconds: fl
             position = start + (position - start) % length
         index = int(position)
         value = values[index] if index < len(values) else 0
-        pcm.append(round(value * 256 * sample.volume / 64))
+        pcm.append(max(-32768, min(32767, round(value * scale * sample.volume / 64))))
     if sys.byteorder != "little":
         pcm.byteswap()
     buffer = io.BytesIO()

@@ -10,7 +10,7 @@ from tracker4agents.model import Module, Pattern, Sample, cell
 from tracker4agents.usage import _name_hint, study
 
 ROOT = Path(__file__).resolve().parents[1]
-CYCLE = (0, 60, 90, 60, 0, -60, -90, -60) * 4                     # a short looped cycle (32 frames)
+CYCLE = tuple(value for value in (0, 60, 90, 60, 0, -60, -90, -60) for _ in range(8))   # one 64-frame cycle (129 Hz at C-2)
 NOISE = (0, 0) + tuple(((index * 7919) % 211) - 105 for index in range(398))  # a short noisy one-shot
 
 

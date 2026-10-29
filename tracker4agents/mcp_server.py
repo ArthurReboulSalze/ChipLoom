@@ -140,12 +140,25 @@ TOOLS = [
               "row": "--row", "rows": "--rows", "channel": "--channel", "channels": "--channels"})]),
     _tool("migrate", "Rewrite a v1 project (or a MOD) as a compact v2 project.", {"source": S, "output": S},
           ["source", "output"], lambda a: ["migrate", a["source"], "--output", a["output"]]),
-    _tool("samples_list", "Search the local sample library by text, tags, category and MOD compatibility.",
-          {"library": LIBRARY, "query": S, "tag": {"type": "array", "items": S}, "category": S, "compatible": B,
-           "offset": I, "limit": I}, (),
+    _tool("samples_list", "Search the local sample library by text, tags, category, scored role (kick, snare, hat, "
+          "clap, tom, cymbal, perc, bass, chord, lead, pluck, pad, texture, fx), origin format and MOD compatibility.",
+          {"library": LIBRARY, "query": S, "tag": {"type": "array", "items": S}, "category": S, "role": S,
+           "format": _enum("mod", "xm"), "compatible": B, "offset": I, "limit": I}, (),
           lambda a: ["samples", "list", *_flags(a, {"library": "--library", "query": "--query", "tag": "--tag",
-                                                    "category": "--category", "compatible": "--compatible",
-                                                    "offset": "--offset", "limit": "--limit"})], True),
+                                                    "category": "--category", "role": "--role", "format": "--format",
+                                                    "compatible": "--compatible", "offset": "--offset",
+                                                    "limit": "--limit"})], True),
+    _tool("samples_palettes", "List the bank's palettes: for each reference song, the entries it played together "
+          "(one-line role summary such as 'kick snare hat · bass · chord · lead×2'), format, channels, speed, BPM "
+          "and duration. Pick a palette (or samples by role) instead of samples at random.",
+          {"library": LIBRARY, "role": S, "format": _enum("mod", "xm"), "channels": I}, (),
+          lambda a: ["samples", "palettes", *_flags(a, {"library": "--library", "role": "--role", "format": "--format",
+                                                        "channels": "--channels"})], True),
+    _tool("samples_palette", "Show one palette: its entries with role, confidence and how much the song plays them, "
+          "the role of every channel, and the structure (orders, distinct patterns, sections, channel entry order). "
+          "Insert it with the CLI `samples use-palette` or one samples_add per entry in role order.",
+          {"library": LIBRARY, "id": S}, ["id"],
+          lambda a: ["samples", "palette", a["id"], *_flags(a, {"library": "--library"})], True),
     _tool("samples_inspect", "Show one library sample's measurements, labels, compatibility and estimated pitch at C-2 "
           "(for a looped cycle it follows the loop length).",
           {"library": LIBRARY, "id": S}, ["id"],

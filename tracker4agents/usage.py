@@ -3,7 +3,9 @@
 `study(module)` follows the playback timeline (as `report`) and, for each sample slot, gathers evidence of what
 it is for: how the song plays it (fixed note or melody, arpeggiated, held or struck, register, density), what the
 PCM looks like (`sample_library.characterize`), what the XM instrument says (envelope sustain, auto-vibrato) and a
-keyword found in the slot's own name (kept only as a category, never the name). The evidence is scored into a
+keyword found in the slot's own name (kept only as a category, never the name). The register is the heard one:
+the sample's pitch estimate (`sample_library.estimate_pitch`, relative note included) moved to the median note
+the song writes for it, so a cycle written high but tuned an octave down still counts as a bass part. The evidence is scored into a
 `role` (kick, snare, hat, clap, tom, cymbal, perc, bass, lead, chord, pad, pluck, texture, fx) with a
 `confidence` and the reasons, so the bank can say what each sample is *for* and an agent does not pick samples
 at random. The channel layout (which role each channel carries) and the structure (sections of the order list,
@@ -17,11 +19,16 @@ import statistics
 from . import loudness
 from .model import NOTES, XM_KEY_OFF, Module, playback_plan
 from .report import analyze
-from .sample_library import characterize
+from .sample_library import characterize, estimate_pitch
 
 ROLE_GROUPS = {**loudness.ROLES, "clap": "percussion", "tom": "percussion", "cymbal": "percussion",
                "perc": "percussion", "pad": "texture", "pluck": "lead", "fx": "texture", "unknown": "lead"}
 PERCUSSION = {"kick", "snare", "hat", "clap", "tom", "cymbal", "perc"}
+# The order a palette is laid into a project: drums, bass, chords, leads, pads, textures and effects.
+ROLE_ORDER = ("kick", "snare", "hat", "clap", "tom", "cymbal", "perc", "bass", "chord", "lead", "pluck", "pad",
+              "texture", "fx", "unknown")
+ROLE_NAMES = frozenset(ROLE_ORDER)
+CONFIDENCE_RANK = {"high": 2, "medium": 1, "low": 0}
 # Keyword families in sample names (any language's common tracker shorthand); the name itself is never kept.
 NAME_HINTS = (
     ("kick", r"kick|bdrum|bassdrum|bass drum|\bbd\b|\bkik\b|\bboom\b"),
@@ -40,6 +47,8 @@ NAME_HINTS = (
     ("lead", r"lead|solo|melod|\bsq\b|square|\bsaw|pulse|flute|trump|guitar|organ|synth|voice|vox"),
 )
 LOW_NOTE, HIGH_NOTE = 49, 73   # XM note numbers: below C-4 is a low register, from C-6 a high one
+REFERENCE_NOTE = 49            # the note the pitch estimate stands at: XM C-4, or MOD C-2 (period 428) in XM numbering
+LOW_HZ = 130.0                 # a melodic part whose heard median fundamental is below C-3 plays a bass part
 
 
 def _name_hint(name: str) -> str | None:
@@ -104,7 +113,17 @@ def _slot_facts(module: Module) -> dict[int, dict]:
     return facts
 
 
-def _score_role(slot: int, sample, usage: dict | None, xm_meta: dict, hint: str | None) -> tuple[str, str, list[str]]:
+def _heard_hz(sample, median_note: float, fmt: str) -> float | None:
+    """The median fundamental the song makes the sample sound at: its pitch estimate (at XM C-4 or MOD C-2,
+    relative note and finetune included) moved to the median written note; None when no pitch is estimable."""
+    estimate = estimate_pitch(sample, fmt)["estimated_hz_at_c2"]
+    if estimate is None:
+        return None
+    return estimate * 2 ** ((median_note - REFERENCE_NOTE) / 12)
+
+
+def _score_role(slot: int, sample, usage: dict | None, xm_meta: dict, hint: str | None,
+                fmt: str = "mod") -> tuple[str, str, list[str]]:
     """(role, confidence, evidence) from the PCM, the XM instrument, the name hint and the song's use."""
     scores: dict[str, float] = {}
     evidence: list[str] = []
@@ -171,15 +190,28 @@ def _score_role(slot: int, sample, usage: dict | None, xm_meta: dict, hint: str 
             vote("tom", 1.2, f"tonal one-shot on {distinct} pitches")
         if arp_share >= 0.3 and looped:
             vote("chord", 1.5, f"{arp_share:.0%} of its notes carry an arpeggio")
+        # The register is the heard one when the sample's pitch is estimable (a looped cycle written at C-4
+        # with a relative note of -12, or a long loop, sounds an octave lower than written); else the written
+        # note moved by the relative note.
+        heard = _heard_hz(sample, median_note, fmt) if distinct >= 5 else None
+        if heard is not None:
+            low = heard < LOW_HZ
+            register = f"heard median ~{heard:.0f} Hz"
+        else:
+            low = median_note + sample.relative_note < LOW_NOTE
+            register = f"median written note {median_note:.0f}" + (f" {sample.relative_note:+d}" if sample.relative_note else "")
         if looped and distinct >= 5:
-            if median_note < LOW_NOTE:
-                vote("bass", 1.5, f"melodic, low register (median note {median_note:.0f})")
+            if low:
+                vote("bass", 1.5, f"melodic, low register ({register})")
             elif median_length >= 1.0:
-                vote("pad", 1.2, f"melodic, notes held {median_length:.1f} s")
+                vote("pad", 1.2, f"melodic, notes held {median_length:.1f} s ({register})")
             else:
-                vote("lead", 1.2, f"melodic ({distinct} pitches), notes of {median_length:.2f} s")
+                vote("lead", 1.2, f"melodic ({distinct} pitches), notes of {median_length:.2f} s ({register})")
         if not looped and distinct >= 5:
-            vote("pluck", 1.0, f"one-shot played melodically ({distinct} pitches)")
+            if low:
+                vote("bass", 1.2, f"one-shot played melodically in the low register ({register})")
+            else:
+                vote("pluck", 1.0, f"one-shot played melodically ({distinct} pitches, {register})")
         if looped and distinct <= 2 and median_length >= 2.0:
             vote("texture", 0.8, "one or two notes held for seconds")
     if not scores:
@@ -189,6 +221,25 @@ def _score_role(slot: int, sample, usage: dict | None, xm_meta: dict, hint: str 
     margin = ordered[0] - (ordered[1] if len(ordered) > 1 else 0.0)
     confidence = "high" if margin >= 1.5 or (hint == role and ordered[0] >= 2.5) else "medium" if margin >= 0.7 else "low"
     return role, confidence, evidence
+
+
+def sample_role(sample, xm_meta: dict | None = None, name: str | None = None) -> tuple[str, str, list[str]]:
+    """(role, confidence, evidence) of a sample outside any song: its PCM shape, the XM instrument facts
+    (`volume_envelope`, `vibrato` as the importer stores them) and a keyword family of `name` (not kept)."""
+    return _score_role(0, sample, None, xm_meta or {}, _name_hint(name or ""))
+
+
+def role_summary(roles: list[str]) -> str:
+    """One line such as `kick snare hat · bass · chord · lead×2`: roles in palette order, grouped."""
+    counts = {role: roles.count(role) for role in ROLE_ORDER if role in roles}
+    groups = (("kick", "snare", "hat", "clap", "tom", "cymbal", "perc"), ("bass",), ("chord",), ("lead", "pluck"),
+              ("pad", "texture"), ("fx", "unknown"))
+    parts = []
+    for group in groups:
+        words = [f"{role}×{counts[role]}" if counts[role] > 1 else role for role in group if role in counts]
+        if words:
+            parts.append(" ".join(words))
+    return " · ".join(parts)
 
 
 def study(module: Module) -> dict:
@@ -202,7 +253,7 @@ def study(module: Module) -> dict:
         use = usage.get(index)
         meta = xm_instruments.get(str(index), {}) if isinstance(xm_instruments, dict) else {}
         hint = _name_hint(sample.name) or _name_hint(str(meta.get("sample_name", "")))   # instrument, then sample name
-        role, confidence, evidence = _score_role(index, sample, use, meta, hint)
+        role, confidence, evidence = _score_role(index, sample, use, meta, hint, module.format)
         entry = {"slot": index, "role": role, "group": ROLE_GROUPS.get(role, "lead"), "confidence": confidence,
                  "name_hint": hint, "evidence": evidence, "frames": len(sample.pcm), "bits": sample.bits,
                  "looped": bool(sample.loop_length), "loop_mode": sample.loop_mode if sample.loop_length else None,
