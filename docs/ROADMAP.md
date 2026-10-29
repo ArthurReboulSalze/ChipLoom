@@ -80,8 +80,11 @@ These are proposals. Each still needs the owner's agreement.
    A gesture adapts to the song's speed/BPM, format (MOD or XM volume column) and effect memory, passes
    `lint`, and is one undoable edit. In the window: select, right-click, "Apply FX style"; for agents
    `fx apply STYLE --pattern --rows --channels`, a patch operation and an MCP tool, and the owner can ask
-   for one in a placed comment. Presets measured on the owner's references (which effect sequences recur
-   and with what settings: effect gestures, never notes).
+   for one in a placed comment. The styles are a core feature, not a window one: the agent uses them while
+   composing (the skill says which gesture suits which role and section, e.g. a roll before a downbeat, an
+   echo on a sparse lead), `report` names the styles a song uses, and the window only calls the same core.
+   Presets measured on the owner's references (which effect sequences recur and with what settings:
+   effect gestures, never notes).
 5. **Publishing.** Upload the package to PyPI (an owner action) and keep attaching the Windows and Linux
    builds to GitHub releases.
 6. **macOS.** Not tested yet: window, real-time audio and a standalone build.
