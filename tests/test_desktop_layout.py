@@ -204,6 +204,7 @@ class AgentTabHeightTests(LayoutCase):
         self.assertIn("Proposals from the agent", window.agent_panel.empty_hint.toolTip())   # the full hint stays in reach
 
 
+@unittest.skipUnless(QApplication is not None and shutil.which("ffmpeg"), "PySide6 and FFmpeg required")
 class ClearMonitorTests(LayoutCase):
     def test_ctrl_click_on_any_mute_or_solo_makes_every_track_audible_with_one_render(self):
         window = self.window

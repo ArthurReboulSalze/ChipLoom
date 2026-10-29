@@ -8,11 +8,11 @@ import unittest
 
 try:
     from PySide6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+    from tracker4agents.desktop_tuning import retune_between, transpose_slot_notes
+except ModuleNotFoundError:   # the core CI job runs without PySide6
+    QApplication = retune_between = transpose_slot_notes = None
 
 from tracker4agents import convert
-from tracker4agents.desktop_tuning import retune_between, transpose_slot_notes
 from tracker4agents.document import fingerprint
 from tracker4agents.model import Module, Pattern, Sample, ValidationError, cell
 
@@ -36,6 +36,7 @@ class TuningCase(bank_tests.BankCase):
         return [entry["label"] for entry in self.call("changes")["entries"] if entry["author"] == "human"]
 
 
+@unittest.skipUnless(QApplication is not None, "PySide6 required")
 class TransposeSlotNotesTests(unittest.TestCase):
     def test_only_the_notes_of_the_slot_move_and_the_range_is_checked(self):
         module = base.song()
@@ -197,6 +198,7 @@ class XmTuningTests(TuningCase):
                                                               for row in range(browser.results.count())))
 
 
+@unittest.skipUnless(QApplication is not None, "PySide6 required")
 class BuildSongTests(unittest.TestCase):
     def test_the_fixture_song_has_the_notes_the_tests_rely_on(self):
         module = Module("T", [Sample("A", (0, 0, 1, -1), 64)], [Pattern(cells={(0, 0): cell("C-2", 1)})], [0])
