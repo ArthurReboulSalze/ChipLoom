@@ -17,12 +17,12 @@ from pathlib import Path
 import sys
 
 from . import formats
-from ._xmp_worker import FrameInfo, replay_style
+from ._xmp_worker import FrameInfo, master_volume, replay_style
 from .model import Module, ValidationError, playback_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 XMP_END = -1
-PLAYER_AMP, PLAYER_MIX, PLAYER_CFLAGS, PLAYER_DEFPAN, PLAYER_MODE = 0, 1, 5, 10, 11
+PLAYER_AMP, PLAYER_MIX, PLAYER_CFLAGS, PLAYER_VOLUME, PLAYER_DEFPAN, PLAYER_MODE = 0, 1, 5, 7, 10, 11
 MODE_PROTRACKER = 3
 FLAGS_VBLANK_OFF_PAL = 8  # Same player flags as the libxmp reference worker (PAL CIA timing).
 
@@ -105,7 +105,7 @@ class XmpEngine:
         self._pending_marker: dict | None = None
         self._times: dict[tuple[int, int], float] = {}
         self._frame = FrameInfo()
-        self.channels = 4
+        self.channels, self._volume = 4, 100
         self.audible = (True, True, True, True)
         self.loop = True
         self.finished = False
@@ -133,6 +133,7 @@ class XmpEngine:
         # header carries a restart byte or other imported oddities (see formats.encode_for_replay).
         payload = formats.encode_for_replay(module)
         self.channels = module.channels
+        self._volume = master_volume(module.format, module.channels)
         self._style = replay_style(payload)
         if len(self.audible) != module.channels:  # keep the states of the channels both modules share
             self.audible = tuple((self.audible + (True,) * module.channels)[:module.channels])
@@ -162,6 +163,7 @@ class XmpEngine:
             self._check(self._dll.xmp_set_player(self._ctx, PLAYER_CFLAGS, wanted), "flags")
         self._check(self._dll.xmp_set_player(self._ctx, PLAYER_MIX, 70), "stereo separation")
         self._check(self._dll.xmp_set_player(self._ctx, PLAYER_AMP, 1), "amplification")
+        self._check(self._dll.xmp_set_player(self._ctx, PLAYER_VOLUME, self._volume), "level matched to libopenmpt")
         self.set_audible(self.audible)
 
     def reload(self, module: Module) -> None:

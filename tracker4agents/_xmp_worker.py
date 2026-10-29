@@ -42,8 +42,27 @@ def replay_style(data: bytes) -> str:
     return "mod" if data[1080:1084] in (b"M.K.", b"M!K!") else "mod-plain"
 
 
+# libxmp's master volume (XMP_PLAYER_VOLUME, percent, 0-200) that brings it to libopenmpt's level, indexed by
+# channel count - 2. libopenmpt, the default renderer, is the reference: it plays an XM about 6 dB below a
+# four-channel MOD and lowers both formats as channels are added, while libxmp keeps one level (and clips
+# on busy XM songs). Measured with tools/calibrate_xmp_level.py (one centred pulse note per channel count,
+# libxmp 4.7.3 against the gyan.dev FFmpeg build of 2026-02-26); the four-channel MOD, where both engines
+# agree, stays at 100.
+LEVEL_TO_OPENMPT = {
+    "mod": (200, 134, 100, 81, 66, 57) + (51,) * 25,
+    "xm": (51, 51, 51, 51, 43, 43, 38, 38, 36, 36, 34, 34, 32, 32, 30, 30,
+           29, 29, 29, 29, 28, 28, 27, 27, 27, 27, 26, 26, 26, 26, 26),
+}
+
+
+def master_volume(fmt: str, channels: int) -> int:
+    """libxmp's master volume for a module of `fmt` ("mod" or "xm") with `channels` channels (2-32)."""
+    table = LEVEL_TO_OPENMPT["xm" if fmt == "xm" else "mod"]
+    return table[min(max(channels, 2), 32) - 2]
+
+
 def render(source: Path, output: Path, seconds: float, sample_rate: int, library: Path,
-           start_seconds: float = 0.0) -> dict:
+           start_seconds: float = 0.0, volume: int = 100) -> dict:
     dll = C.CDLL(str(library))
     prototypes = {
         "xmp_create_context": ([], C.c_void_p),
@@ -96,6 +115,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
             checked(dll.xmp_set_player(ctx, 5, flags), "PAL CIA / mixer flags")
         checked(dll.xmp_set_player(ctx, 1, 70), "stereo separation")
         checked(dll.xmp_set_player(ctx, 0, 1), "amplification")
+        checked(dll.xmp_set_player(ctx, 7, volume), "master volume")
         frame = FrameInfo()
         with wave.open(str(output), "wb") as audio:
             audio.setparams((2, 2, sample_rate, 0, "NONE", "not compressed"))
@@ -139,7 +159,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
             "detected_format": info.type.decode("ascii", "replace"),
             "personality": "ProTracker", "mixer_type": dll.xmp_get_player(ctx, 12),
             "current_flags": dll.xmp_get_player(ctx, 5),
-            "stereo_separation": 70, "frames": frames_written, "trace": trace,
+            "stereo_separation": 70, "master_volume": volume, "frames": frames_written, "trace": trace,
         }
     finally:
         if started:
@@ -152,7 +172,7 @@ def render(source: Path, output: Path, seconds: float, sample_rate: int, library
 if __name__ == "__main__":
     try:
         result = render(Path(sys.argv[1]), Path(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]),
-                        float(sys.argv[6]) if len(sys.argv) > 6 else 0.0)
+                        float(sys.argv[6]) if len(sys.argv) > 6 else 0.0, int(sys.argv[7]) if len(sys.argv) > 7 else 100)
         print(json.dumps(result))
     except (OSError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

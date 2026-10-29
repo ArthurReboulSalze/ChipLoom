@@ -195,5 +195,41 @@ class NativeAudioTests(unittest.TestCase):
             self.assertAlmostEqual(row["seconds"], expected["seconds"] + (index // 3) * 0.225, places=4)
 
 
+class EngineLevelTests(unittest.TestCase):
+    """libxmp is brought to libopenmpt's level for each format and channel count (see _xmp_worker)."""
+
+    def test_the_level_table_covers_every_channel_count(self):
+        from tracker4agents._xmp_worker import LEVEL_TO_OPENMPT, master_volume
+        for fmt, table in LEVEL_TO_OPENMPT.items():
+            self.assertEqual(len(table), 31, fmt)
+            self.assertTrue(all(1 <= value <= 200 for value in table), fmt)
+        self.assertEqual(master_volume("mod", 4), 100)  # the anchor: both engines agree on a 4-channel MOD
+        self.assertEqual(master_volume("xm", 99), master_volume("xm", 32))
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg indisponible")
+    def test_both_engines_play_at_the_same_level(self):
+        from tracker4agents import formats, synth_tools, xm
+        try:
+            library = audio.default_xmp_library()
+        except audio.RenderError as exc:
+            self.skipTest(str(exc))
+        for fmt, channels in (("mod", 4), ("mod", 8), ("xm", 4), ("xm", 16)):
+            with self.subTest(fmt=fmt, channels=channels), tempfile.TemporaryDirectory() as folder:
+                if fmt == "xm":
+                    module, note = xm.blank("Level", channels=channels), "C-4"
+                    synth_tools.insert_recipe(module, "Pulse", {"type": "wave", "shape": "pulse"}, slot=1, volume=64)
+                else:
+                    module, _ = synth_tools.palette("Level", channels=channels)
+                    module.patterns, module.orders, note = [Pattern("Probe", {}, 64)], [0], "C-2"
+                for row in range(0, 64, 8):
+                    module.patterns[0].put(row, 0, cell(note, 1, "000", fmt))
+                source = Path(folder) / f"probe{formats.extension(module)}"
+                source.write_bytes(formats.encode(module))
+                levels = {engine: audio.render(source, Path(folder) / f"{engine}.wav", engine, 1.0,
+                                               xmp_library=library)["audio"]["rms_dbfs"]
+                          for engine in ("openmpt", "xmp")}
+                self.assertAlmostEqual(levels["xmp"], levels["openmpt"], delta=0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

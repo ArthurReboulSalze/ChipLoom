@@ -63,6 +63,8 @@ python -m tracker4agents gui examples/pixel_rush.project.json
 | `ended_before_requested` | `true` when `--seconds` asked for more than one playback cycle from the start point and the WAV stopped at the end of the song (libopenmpt does not loop; libxmp keeps playing and fills the length). Then `module_seconds` gives the length of that cycle and `warnings` explains it |
 | `source_sha256`, `output` | Hash of the source, path of the WAV |
 
+**Level.** libopenmpt (the default) is the level reference. It plays an XM about 6 dB below a four-channel MOD and lowers the level as channels are added: by 6 dB for a MOD with 8 or more channels, and by up to 6 dB more for an XM with 32 channels. libxmp's master volume is set from a measured table so that both engines render the same module at the same level, within about 0.2 dB for a centred note and 1 dB on the test songs; the libxmp result gives the value as `master_volume`. Differences in pan law remain. `python tools/calibrate_xmp_level.py` measures the remaining gap for every channel count.
+
 `gui --state-dir PATH` chooses a session/cache folder. `gui --no-restore` skips the previous file and uses a built-in example when no input is supplied. Language and theme are selected in the window and stored there.
 
 ## Response contract

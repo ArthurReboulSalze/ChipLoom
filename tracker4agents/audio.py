@@ -17,6 +17,7 @@ import tempfile
 import wave
 
 from . import formats, project
+from ._xmp_worker import master_volume
 from .model import NOTE_TO_PERIOD, PAL_CLOCK, Sample, ValidationError, playback_plan, require_int
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -178,7 +179,8 @@ def _render_module(module, source: Path, output: Path, engine: str, seconds: flo
             try:
                 result = subprocess.run(
                     [sys.executable, "-m", "tracker4agents._xmp_worker", str(replay), str(temporary),
-                     str(seconds), str(sample_rate), str(library), str(start_seconds)],
+                     str(seconds), str(sample_rate), str(library), str(start_seconds),
+                     str(master_volume(module.format, module.channels))],
                     cwd=ROOT, capture_output=True, text=True, timeout=60,
                     **SUBPROCESS_OPTIONS,
                 )

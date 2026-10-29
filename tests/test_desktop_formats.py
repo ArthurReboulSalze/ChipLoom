@@ -530,10 +530,10 @@ class XmTests(FormatCase):
             self.assertEqual(control.toolTip(), tip)
         for control in (editor.volume, editor.finetune, editor.play_button, editor.apply_button):
             self.assertTrue(control.isEnabled())
-        self.assertFalse(window.sample_browser.add_button.isEnabled())
-        self.assertEqual(window.sample_browser.add_button.toolTip(), tip)
-        self.assertFalse(window.create_panel.add_button.isEnabled())
-        self.assertEqual(window.create_panel.add_button.toolTip(), tip)
+        self.assertNotEqual(window.sample_browser.add_button.toolTip(), tip)   # inserting into an XM works
+        self.assertTrue(window.create_panel.add_button.isEnabled())
+        self.assertFalse(window.create_panel.pcm.isEnabled())           # plain drawn PCM stays a MOD sample edit
+        self.assertEqual(window.create_panel.pcm.toolTip(), tip)
         self.assertFalse(window.instrument_panel.apply_button.isEnabled())
         self.assertEqual(window.instrument_panel.apply_button.toolTip(), tip)
         self.assertIsNone(window.instrument_panel.apply_at_cursor())   # Ctrl+I says so as well
@@ -640,7 +640,8 @@ class XmTests(FormatCase):
         self.assertTrue(all(control.isEnabled() for control in (*editor.apply.values(), editor.loop_start, editor.wave)))
         self.assertEqual((editor.finetune.minimum(), editor.finetune.maximum()), (-8, 7))
         self.assertTrue(window.create_panel.add_button.isEnabled())
-        self.assertEqual(window.create_panel.add_button.toolTip(), "")
+        self.assertTrue(window.create_panel.pcm.isEnabled())
+        self.assertEqual(window.create_panel.pcm.toolTip(), "")
         self.assertFalse(window.xm_hint.isVisible())
         self.assertEqual(self.model.headerData(1, Qt.Orientation.Horizontal), "Smp")
         self.assertIn("mono 8-bit", window.sample_info.text())

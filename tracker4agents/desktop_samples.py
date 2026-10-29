@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
                                QLineEdit, QListWidget, QListWidgetItem, QSizePolicy,
                                QVBoxLayout, QWidget)
 
-from .desktop_widgets import XM_REFUSED_TIP, media_call
+from .desktop_widgets import media_call
 from .model import NOTES
 from .sample_library import CATEGORIES, DEFAULT_LIBRARY, SampleLibrary
 
@@ -345,9 +345,8 @@ class SampleBrowser(QWidget):
         self.adapt.setVisible(incompatible)
         ready = selected and bool(document) and (not occupied or self.replace.isChecked())
         explanation = ""
-        xm = bool(document) and document.module.format == "xm"
-        if xm:   # the window does not offer XM insertion yet (the core and CLI accept it)
-            ready, explanation = False, XM_REFUSED_TIP
+        # An XM takes the sample converted like `convert` does (8-bit, played at C-4), in up to 128 instruments.
+        limit = 128 if document and document.module.format == "xm" else 31
         if ready and incompatible:
             ready = self.adapt.isChecked()
             if ready:
@@ -360,11 +359,11 @@ class SampleBrowser(QWidget):
         if ready and slot is None:
             module = document.module
             used = {value.sample for pattern in module.patterns for value in pattern.cells.values() if value.sample}
-            if len(module.samples) >= 31 and not any(not sample.pcm and index not in used
+            if len(module.samples) >= limit and not any(not sample.pcm and index not in used
                                                     for index, sample in enumerate(module.samples, 1)):
                 ready = False
                 explanation = "No free slot. Select an existing slot to replace."
-        if occupied and not self.replace.isChecked() and not xm:
+        if occupied and not self.replace.isChecked():
             explanation = "Check Replace to use this occupied slot."
         self.add_button.setEnabled(bool(ready))
         self.add_button.setToolTip(self.window.t(explanation) if explanation else "")

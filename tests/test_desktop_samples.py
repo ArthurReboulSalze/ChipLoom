@@ -28,7 +28,7 @@ try:
 except ModuleNotFoundError:
     TrackerWindow = None
 
-from tracker4agents import mod, project
+from tracker4agents import convert, mod, project, xm
 from tracker4agents.document import Document, fingerprint
 from tracker4agents.model import Module, Pattern, Sample
 from tracker4agents.sample_library import SampleLibrary
@@ -145,6 +145,30 @@ class DesktopSampleTests(unittest.TestCase):
         self.window.document.export_mod(exported)
         self.assertEqual(mod.encode(project.load(source)), exported.read_bytes())
         self.assertEqual(mod.read(exported).samples[old_count].pcm, self.bank.sample("SMP-0001")[0].pcm)
+
+    def test_an_xm_song_takes_library_and_created_samples(self):
+        song, _ = convert.mod_to_xm(project.load(ROOT / "examples/pixel_rush.project.json"))
+        self.assertTrue(self.window.open_module(song))
+        self.wait_until(lambda: not self.browser._loading)
+        old_count = len(self.window.document.module.samples)
+        self.select("SMP-0001")
+        self.assertTrue(self.browser.add_button.isEnabled(), self.browser.add_button.toolTip())
+        self.browser.add_button.click()
+        module = self.window.document.module
+        self.assertEqual(module.samples[old_count], convert.mod_sample_to_xm(self.bank.sample("SMP-0001")[0]))
+        self.assertEqual(module.metadata["sample_sources"][str(old_count + 1)]["library_id"], "SMP-0001")
+        create = self.window.create_panel
+        create.kind.setCurrentIndex(create.kind.findData("draw"))
+        self.assertTrue(create.add_button.isEnabled())
+        self.assertFalse(create.pcm.isEnabled())       # plain drawn PCM is a MOD sample edit: the drawing stays a recipe
+        create.pcm.setChecked(True)
+        info = create.add_to_song()
+        self.assertIsNotNone(info, create.status.text())
+        created = self.window.document.module.samples[info["slot"] - 1]
+        self.assertEqual((created.recipe["type"], created.bits), ("draw", 8))
+        exported = self.root / "song.xm"
+        self.window.document.export_mod(exported)
+        self.assertEqual(xm.read(exported).samples[old_count].pcm, module.samples[old_count].pcm)
 
     def test_occupied_slot_requires_replace_and_does_not_rewrite_notes(self):
         before = fingerprint(self.window.document.module)

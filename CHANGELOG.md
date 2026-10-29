@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.3 — 2026-10-29
 
 Feedback from an agent that composed an eight-channel library-mode song through the MCP adapter.
 
@@ -26,6 +26,8 @@ A test run of ten songs composed by agents (library and created samples, MOD wit
 - Playback plans, `validate`, `inspect` and `patch` warn about an XM `Dxx` past the end of the next pattern and about a loop that comes back at a different speed or BPM.
 - `estimate` accepts up to 256 rows and 256 orders; previews explain XM note labels (XM `C-4` is MOD `C-2`). `compare` writes and reports `x.xm`/`y.xm` for XM versions.
 
+- The window adds library samples and created sounds to an XM song: the library insert and **Create → Add to song** convert the sample as `convert` does, in up to 128 instruments. A drawing goes in as a recipe there, because plain drawn sample data is a MOD sample edit.
+
 **Patch**
 
 - `patch` refuses to replace an existing output file other than the source unless `--overwrite` is given (MCP `overwrite`), so a typo no longer clobbers an earlier revision.
@@ -45,6 +47,7 @@ A test run of ten songs composed by agents (library and created samples, MOD wit
 **Render, export and errors**
 
 - `render` accepts a `.json` project (rendered from a temporary MOD or XM) and reports integrated loudness, true peak and loudness range (FFmpeg `ebur128`) in a `loudness` field. A `--seconds` longer than the song says so (`ended_before_requested`, `module_seconds`, a warning).
+- libxmp renders at libopenmpt's level. libopenmpt plays an XM about 6 dB below a four-channel MOD and lowers the level as channels are added (6 dB for a MOD with 8 channels or more, up to 12 dB for a 32-channel XM), while libxmp kept one level and clipped on busy XM songs. libxmp's master volume now comes from a table measured per format and channel count (`tools/calibrate_xmp_level.py`), in renders (`master_volume` in the result) and in the window's real-time playback. The engines agree within 0.2 dB on a centred note and within 0.7 dB on the test songs, against 6 to 10 dB before.
 - `export` refuses an output that is not `.mod` or `.xm` unless `--format` is given (`OUTPUT_PATH`).
 - Render, MP3, synth-recipe and libxmp errors reach agents in English with specific codes (`RENDER_LIMIT`, `OUTPUT_PATH`, `RECIPE_INVALID`, new `XMP_MISSING`); the French original stays in `message_fr`. Unknown-note messages keep the note, validation messages say "channel" instead of "track", and an unknown MOD signature names the signature found instead of the old four-channel message. `sample waveform` reads XM files.
 - The CLI reference documents the missing codes (`CHANNELS`, `CONVERT_REFUSED`, the `XM_*` import codes, `MOD_FLT8`, `MOD_VARIANT`, ...), the N-channel bounds (`INTEGER_RANGE` for an index, `PATCH_BOUNDS` for a block), and how to apply instruments from the last note to the first. The agent guide no longer says that sample synthesis is deferred, and the sample-bank reference starts its test song with `new`.

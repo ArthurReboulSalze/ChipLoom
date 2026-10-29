@@ -475,10 +475,11 @@ class CreatePanel(QWidget):
         self.measures.style().polish(self.measures)
 
     def update_format(self):
-        """The window does not add recipes or drawn samples to an XM yet (the CLI can add recipes); auditioning works."""
+        """An XM takes the recipe, converted like `convert` converts a MOD sample; keeping a drawing as plain
+        sample data is a MOD sample edit, so an XM keeps the drawing as a recipe."""
         xm = self.window.module_format == "xm"
-        self.add_button.setEnabled(not xm)
-        self.add_button.setToolTip(self.window.t(XM_REFUSED_TIP) if xm else "")
+        self.pcm.setEnabled(not xm)
+        self.pcm.setToolTip(self.window.t(XM_REFUSED_TIP) if xm else "")
 
     # --- adding -----------------------------------------------------------------------------
     def refresh_slots(self):
@@ -489,7 +490,8 @@ class CreatePanel(QWidget):
         self.slot.addItem(window.t("First free slot"), None)
         if window.document:
             samples = window.document.module.samples
-            for number in range(1, min(31, len(samples) + 1) + 1):
+            limit = 128 if window.document.module.format == "xm" else 31
+            for number in range(1, min(limit, len(samples) + 1) + 1):
                 sample = samples[number - 1] if number <= len(samples) else None
                 text = f"{number:02d} · {sample.name or window.t('Sample')}" if sample and sample.pcm \
                     else f"{number:02d} · {window.t('free')}"
@@ -513,7 +515,7 @@ class CreatePanel(QWidget):
         window = self.window
         name, recipe = self.name.text().strip() or "Created", self.recipe()
         slot = self.slot.currentData()
-        if recipe["type"] == "draw" and self.pcm.isChecked():
+        if recipe["type"] == "draw" and self.pcm.isChecked() and self.pcm.isEnabled():
             slot = slot or self.first_free_slot()
             sample = sample_tools.draw_to_pcm(recipe["points"], recipe.get("cycles", 16), recipe.get("frequency", 261.625565),
                                               recipe.get("peak", 0.88))

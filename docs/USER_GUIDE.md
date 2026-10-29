@@ -73,7 +73,7 @@ The Smp and Effect columns and the row and order numbers are in hexadecimal. Tra
 
 ### Playback
 
-When libxmp is available, the window plays the song **in real time**: edits, channel mutes and solos are heard at once, with no new render. Exports and listening copies are still rendered by FFmpeg/libopenmpt; small differences between the two engines are possible. **Playback → Real-time playback** turns the engine on or off.
+When libxmp is available, the window plays the song **in real time**: edits, channel mutes and solos are heard at once, with no new render. Exports and listening copies are still rendered by FFmpeg/libopenmpt; small differences between the two engines are possible. libxmp is set to libopenmpt's level for the module's format and channel count, so switching engines does not change the volume. **Playback → Real-time playback** turns the engine on or off.
 
 Without libxmp, the window falls back to rendered playback: the real MOD is rendered to WAV in the background and played by Qt, with a cache, and an edit needs a short preparation before the next listen. On Windows, `python tools/setup_reference.py` builds the pinned libxmp; on Linux, the `libxmp4` package works. Rendered audio cycles remain limited to 120 seconds.
 
@@ -232,7 +232,7 @@ The window opens, plays, edits and exports MOD files with 2 to 32 channels and X
 - **Channel colours** are the same as in the browser studio: the theme's four colours, then lighter and darker variants of them for channels 5 and up.
 - **XM entry.** The octave goes from 0 to 7 (4 by default), instrument numbers go from 01 to 80, the Vol column takes the volume-column byte in hex (40 is full volume) and effects take 0-9 then A-Z. In Edit mode, the key before 2 on the top row (1 on QWERTY, & on AZERTY) enters a key off (`===`). The help line under the grid repeats this.
 - **Blocks.** Copy, cut, paste, move and transpose work on any channel count; pasting between a MOD and an XM is refused with a message, because their cells differ.
-- **Samples.** An XM sample's card shows its bits, panning, relative note and loop mode. Volume, fine tune (-128 to 127 on an XM) and **Play sample** work; the editing controls of the sound workshop, the library insert, **Create → Add to song** and the Instruments **Apply** are disabled on an XM, with a tooltip, because the core's sample operations are MOD-only. **Levels** says it does not apply to XM.
+- **Samples.** An XM sample's card shows its bits, panning, relative note and loop mode. Volume, fine tune (-128 to 127 on an XM) and **Play sample** work. The library insert and **Create → Add to song** put a sample into an XM, converted as `chiploom convert` converts a MOD sample (8-bit, play it at C-4 for the MOD's C-2), in up to 128 instruments; a drawing is added as a recipe, because keeping it as plain sample data is a MOD sample edit. The editing controls of the sound workshop and the Instruments **Apply** are disabled on an XM, with a tooltip, because those sample operations are MOD-only. **Levels** says it does not apply to XM.
 - **Files.** **Open…** accepts `.xm` files, and **Export MOD…** becomes **Export XM…** for an XM song. To change format, use `chiploom convert` (see the [command reference](CLI.md)).
 - **Keyboard audition** plays XM samples at their real pitch (relative note, fine tune, 16-bit, ping-pong loops) and follows the channel under the cursor.
 
