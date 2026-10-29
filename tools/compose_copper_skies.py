@@ -3,7 +3,7 @@
     python tools/compose_copper_skies.py exports/copper-skies/copper-skies.project.json
 
 Ten channels, speed 3 at 150 BPM (eight rows per beat, 32 per bar), patterns of 128, 64, 48 and 32
-rows, 21 created instruments (synthesized mode), volume and panning envelopes, auto-vibrato,
+rows, 22 created instruments (synthesized mode), volume and panning envelopes, auto-vibrato,
 fadeout, ping-pong loops, relative notes, finetune, panning, the volume column and every XM effect
 ChipLoom accepts except E6x. The song loops to the theme (restart position 1 and B01), skipping the intro.
 
@@ -32,7 +32,7 @@ C4 = 261.625565
 
 # --- instruments (slot, name, role, volume, recipe, extras) -------------------------------------
 KICK, SNARE, HATC, HATO, KICKHAT, SNAREHAT, BASSP, SLAP, ARP25, ARP12, LEAD25, LEAD50, LEAD12, \
-    SAWA, SAWB, BELLS, PADT, NOISE, STAB, TOM, CRASH = range(1, 22)
+    SAWA, SAWB, BELLS, PADT, NOISE, STAB, TOM, CRASH, CONTINUO = range(1, 23)
 
 VOL_ENV = {"points": [[0, 64], [5, 50], [30, 52], [60, 52], [100, 0]], "sustain": 3, "type": 3}
 ENV_LEAD = {"volume_envelope": VOL_ENV, "vibrato": {"type": 0, "sweep": 40, "depth": 3, "rate": 34}, "fadeout": 400}
@@ -85,6 +85,8 @@ INSTRUMENTS = [
     (TOM, "Tom", "kick", 54, {"type": "kick", "duration": 0.36, "peak": 0.9, "seed": 7120, "drive": 0.3}, {}),
     (CRASH, "Crash", "texture", 34, {"type": "wave", "shape": "noise", "length": 8192, "smooth": 0.55, "peak": 0.85, "seed": 7121},
      {"loop_mode": "pingpong", "panning": 150, **ENV_CRASH}),
+    (CONTINUO, "Continuo bass", "bass", 40, {"type": "wave", "shape": "pulse", "duty": 0.4, "frequency": C4, "peak": 0.85},
+     {"relative_note": -12}),   # no envelope: a steady held tone, an octave below the written note
 ]
 
 MINOR, MAJOR = "037", "047"
@@ -270,34 +272,44 @@ def bass_line(g: Grid, prog: list[str], next_root: str, busy: bool = True, start
             g.put(b + 30, BASS, name(target - 1), BASSP, 0x32)
 
 
+# Arpeggios are struck on the rhythm, never held: each hit plays the chord for a few rows, drops to a
+# quiet tail, and the next hit retriggers it (as Pixel Rush does with Cxx). Accents follow a 3-3-2 groove.
+ACCENTS = (1, 0, 0, 1, 0, 0, 1, 0)   # per eighth: rows 0, 12 and 24 are accented
+TAIL = 0x16                          # volume-column byte of a hit's tail (volume 6)
+
+
 def arps(g: Grid, prog: list[str], gate: bool = False, right: bool = True, vol_l: int = 0x24, vol_r: int = 0x20):
+    """Left channel: one hit per eighth (sixteenths with `gate`), 3 rows of chord then a tail, silent on the
+    bar's last row. Right channel: short inverted-chord answers off the beat."""
     for i, chord in enumerate(prog):
         b = i * BAR
         kind = CHORDS[chord][1]
-        g.put(b, ARP_L, root_note(chord, 4), ARP25, vol_l, kind)
-        for r in range(1, BAR):
-            g.eff(b + r, ARP_L, kind)
+        step = 2 if gate else 4
+        for k, r in enumerate(range(0, BAR, step)):
+            accent = ACCENTS[(r // 4) % 8] and r % 4 == 0
+            g.put(b + r, ARP_L, root_note(chord, 4), ARP25, vol_l + (8 if accent else -4), kind)
+            for t in range(1, step):
+                g.put(b + r + t, ARP_L, vol=TAIL if t == step - 1 else 0, eff=kind)
+        g.vol(b + BAR - 1, ARP_L, 0x10)                       # silence before the next bar
         if right:
             inv = INV1[kind] if i % 2 == 0 else INV2[kind]
             note = third_note(chord, 4) if i % 2 == 0 else fifth_note(chord, 4)
-            g.put(b, ARP_R, note, ARP12, vol_r, inv)
-            for r in range(1, BAR):
-                g.eff(b + r, ARP_R, inv)
-                if gate:
-                    g.vol(b + r, ARP_R, 0x10 if r % 4 == 3 else (vol_r if r % 4 == 0 else 0))
+            for r in (8, 20, 28):   # the last eighth of each 3-3-2 group: a pickup into the left channel's accent
+                for t in range(1, step):
+                    g.put(b + r + t, ARP_R, vol=TAIL if t == step - 1 else 0, eff=inv)
+                g.put(b + r, ARP_R, note, ARP12, vol_r, inv)
+            g.vol(b + BAR - 1, ARP_R, 0x10)
 
 
 def pad(g: Grid, prog: list[str], octave: int = 3):
-    """One sustained pad note per bar (the chord root), fine volume slides, key off before the change."""
+    """The low chord root struck on the 3-3-2 accents (rows 0, 12 and 24, with the left arpeggio's accents):
+    three rows, a quiet tail, then silence until the next accent, so it marks the groove without filling it."""
     for i, chord in enumerate(prog):
         b = i * BAR
-        g.put(b, PAD, root_note(chord, octave), PADT, 0x38)
-        for r in range(b + 8, b + 20, 2):
-            g.vol(r, PAD, 0x91)                     # fine slide up: the chord grows after its attack
-        for r in range(b + 22, b + 28, 2):
-            g.vol(r, PAD, 0x82)                     # fine slide down before the key off
-        if b + 28 < g.rows:
-            g.put(b + 28, PAD, "===")
+        for r, v in ((0, 0x34), (12, 0x2C), (24, 0x30)):
+            g.put(b + r, PAD, root_note(chord, octave), CONTINUO, v)
+            g.put(b + r + 3, PAD, vol=TAIL)
+            g.put(b + r + 4, PAD, "===")
 
 
 def bells(g: Grid, prog: list[str]):
@@ -440,16 +452,16 @@ def build():
         g.vol(r, FX, 0xD2 if r < 48 else 0xE2)      # pan slide left, then right
     for r in range(56, 64):
         g.eff(r, FX, "A08")                         # the wind fades out under the roll
-    g.put(0, ARP_L, "A-4", ARP25, 0x10, MINOR)
-    for r in range(1, 64):
-        g.eff(r, ARP_L, MINOR)
-        if r < 24:
-            g.vol(r, ARP_L, 0x71)
-    g.put(32, ARP_R, "C-5", ARP12, 0x10, INV1[MINOR])
-    for r in range(33, 64):
-        g.eff(r, ARP_R, INV1[MINOR])
-        if r < 48:
-            g.vol(r, ARP_R, 0x71)
+    for r in range(0, 64, 4):                       # struck arpeggio, growing hit by hit
+        g.put(r, ARP_L, "A-4", ARP25, 0x12 + r // 4 + (6 if r % 16 == 0 else 0), MINOR)
+        g.put(r + 1, ARP_L, eff=MINOR)
+        g.put(r + 2, ARP_L, eff=MINOR)
+        g.put(r + 3, ARP_L, vol=0x14, eff=MINOR)
+    for r in (40, 52, 60):                          # the right channel's pickups join in the second bar
+        g.put(r, ARP_R, "C-5", ARP12, 0x18 + (r - 40) // 4, INV1[MINOR])
+        g.put(r + 1, ARP_R, eff=INV1[MINOR])
+        g.put(r + 2, ARP_R, eff=INV1[MINOR])
+        g.put(r + 3, ARP_R, vol=0x10 if r == 60 else TAIL, eff=INV1[MINOR])
     g.put(0, PAD, "A-3", PADT, 0x30)
     g.put(60, PAD, "===")
     for r in range(32, 64, 4):
@@ -550,7 +562,7 @@ def build():
     patterns.append(bridge("Bridge K3", 0, Fn, transpose=2, slide_in_column=True))
     g = bridge("Bridge K4", 1, A, transpose=2)
     g.put(127, FX, eff="EE7")                       # pattern delay: the last row is held one full beat
-    g.vol(127, ARP_R, 0x20)                         # both arps ring under the hold
+    g.put(127, ARP_L, vol=0x24)                     # the arpeggio rings through the held beat
     for ch in (DRUM, HAT):
         for r in range(124, 128):
             g.pattern.cells.pop((r, ch), None)      # no fill under the held beat
@@ -588,11 +600,14 @@ def build():
 
     # Tail (64 rows, at the slowed tempo): the final major chord, held, the global volume fading, the jump back.
     g = Grid("Tail", 64, transpose=2)
-    g.put(0, ARP_L, "A-4", ARP25, 0x2C, MAJOR)
-    g.put(0, ARP_R, "C#5", ARP12, 0x24, INV1[MAJOR])
-    for r in range(1, 64):
-        g.eff(r, ARP_L, MAJOR)
-        g.eff(r, ARP_R, INV1[MAJOR])
+    for k, r in enumerate((0, 8, 16, 24, 32)):      # the final chord struck on each beat, fading
+        g.put(r, ARP_L, "A-4", ARP25, 0x2C - 3 * k, MAJOR)
+        g.put(r, ARP_R, "C#5", ARP12, 0x26 - 3 * k, INV1[MAJOR])
+        for t in range(1, 6):
+            g.put(r + t, ARP_L, eff=MAJOR)
+            g.put(r + t, ARP_R, eff=INV1[MAJOR])
+        g.put(r + 6, ARP_L, vol=0x14, eff=MAJOR)
+        g.put(r + 6, ARP_R, vol=0x10, eff=INV1[MAJOR])
     g.put(0, PAD, "A-3", PADT, 0x40)
     g.put(0, LEAD, "A-5", LEAD25, 0x50)
     g.put(0, ECHO, "E-6", LEAD50, 0x30)

@@ -173,6 +173,25 @@ class AnalyzeStructureTests(unittest.TestCase):
         self.assertEqual(one["samples_used"], [1])
         self.assertEqual(one["effects"]["3"], 1)
 
+    def test_a_held_arpeggio_is_flagged_and_a_struck_one_is_not(self):
+        # 64 rows at speed 6 / 125 BPM = 7.68 s; one note held under 037 for the whole pattern
+        held = [(0, 0, cell("A-2", 1, "037"))] + [(row, 0, cell(None, 0, "037")) for row in range(1, 64)]
+        report = analyze(Module("Held", samples(1), [pattern(*held)], [0]))
+        run = report["channels"][0]["held_arpeggios"]
+        self.assertEqual(run["count"], 1)
+        self.assertEqual((run["longest"]["start_played_row"], run["longest"]["rows"]), (0, 64))
+        self.assertAlmostEqual(run["longest"]["seconds"], 7.68)
+        warning = next(item for item in report["warnings"] if item["code"] == "held_arpeggio")
+        self.assertEqual((warning["channel"], warning["count"]), (0, 1))
+        # the same chord struck every four rows (three rows of arpeggio, then a C00 cut) is not flagged
+        struck = []
+        for row in range(0, 64, 4):
+            struck += [(row, 0, cell("A-2", 1, "037")), (row + 1, 0, cell(None, 0, "037")),
+                       (row + 2, 0, cell(None, 0, "037")), (row + 3, 0, cell(None, 0, "C00"))]
+        report = analyze(Module("Struck", samples(1), [pattern(*struck)], [0]))
+        self.assertEqual(report["channels"][0]["held_arpeggios"], {"count": 0, "longest": None})
+        self.assertNotIn("held_arpeggio", [item["code"] for item in report["warnings"]])
+
     def test_extended_effects_are_counted_separately(self):
         module = Module("Ext", samples(1), [pattern((0, 0, cell("C-2", 1, "E51")), (3, 3, cell(None, 0, "D00")))], [0])
         one = analyze(module)["channels"][0]

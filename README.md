@@ -24,6 +24,12 @@
   <a href="docs/CLI.md">CLI reference</a>
 </p>
 
+<p align="center">
+  <a href="https://arthurreboulsalze.github.io/ChipLoom/#copper-skies"><img src="docs/assets/copper-skies-card.svg" alt="Copper Skies, the new ten-channel XM demo: play it in the listening room" width="820"></a>
+  <br>
+  <sub><a href="https://arthurreboulsalze.github.io/ChipLoom/#copper-skies">▶ Play Copper Skies</a> · <a href="docs/listen/media/copper_skies.xm">XM</a> · <a href="docs/listen/media/copper_skies.mp3">MP3</a> · <a href="docs/listen/media/copper_skies.project.json">editable project</a> · <a href="tools/compose_copper_skies.py">the script that wrote it</a></sub>
+</p>
+
 ---
 
 ## Hear what ChipLoom can do
@@ -32,12 +38,12 @@ Three original compositions made with ChipLoom, using only created samples: two 
 
 | | Copper Skies | Pixel Rush | Voltage Odyssey V2 |
 | :--- | :--- | :--- | :--- |
-| **The sound** | A cracktro in ten channels: racing arpeggios, a square lead with its echo, bells, a detuned saw solo and a key change for the last chorus | Quick melodic hooks, tiny pulse waves and an arcade beat | A full chiptune journey with a bigger drop and an expressive solo |
-| **The arrangement** | **1:42** · 150 BPM · 21 instruments · XM | **0:48** · 160 BPM · 13 samples · MOD | **1:57** · 164 BPM · 28 samples · MOD |
+| **The sound** | A cracktro in ten channels: arpeggios struck on a 3-3-2 groove, a punchy low bass, a square lead with its echo, bells, a detuned saw solo and a key change for the last chorus | Quick melodic hooks, tiny pulse waves and an arcade beat | A full chiptune journey with a bigger drop and an expressive solo |
+| **The arrangement** | **1:42** · 150 BPM · 22 instruments · XM | **0:48** · 160 BPM · 13 samples · MOD | **1:57** · 164 BPM · 28 samples · MOD |
 | **Play** | [▶ Listen to Copper Skies](https://arthurreboulsalze.github.io/ChipLoom/#copper-skies) | [▶ Listen to Pixel Rush](https://arthurreboulsalze.github.io/ChipLoom/#pixel-rush) | [▶ Listen to Voltage Odyssey V2](https://arthurreboulsalze.github.io/ChipLoom/#voltage-odyssey-v2) |
 | **Take it apart** | [XM](docs/listen/media/copper_skies.xm) · [MP3](docs/listen/media/copper_skies.mp3) · [Project](docs/listen/media/copper_skies.project.json) · [Generator](tools/compose_copper_skies.py) | [MOD](docs/listen/media/pixel_rush.mod) · [MP3](docs/listen/media/pixel_rush.mp3) · [Project](docs/listen/media/pixel_rush.project.json) | [MOD](docs/listen/media/voltage_odyssey_v2.mod) · [MP3](docs/listen/media/voltage_odyssey_v2.mp3) · [Project](docs/listen/media/voltage_odyssey_v2.project.json) |
 
-Copper Skies is written with the Python API by [`tools/compose_copper_skies.py`](tools/compose_copper_skies.py): it uses volume and panning envelopes, auto-vibrato, fadeout, ping-pong loops, relative notes, finetune, the volume column, patterns of 32 to 128 rows, a restart position and every XM effect ChipLoom accepts.
+Copper Skies is written with the Python API by [`tools/compose_copper_skies.py`](tools/compose_copper_skies.py): it uses volume and panning envelopes, auto-vibrato, fadeout, ping-pong loops, relative notes, finetune, the volume column, patterns of 32 to 128 rows, a restart position and every XM effect ChipLoom accepts but `E6x`. Its accompaniment was then reworked live with the owner, through the open window: the arpeggios and the low bass are struck on the groove instead of held, a lesson now in the [agent skill](skills/chiploom/SKILL.md) and checked by `report`.
 
 ## Built for the agent, shared with the musician
 
@@ -110,7 +116,7 @@ Ready-made standalone builds for Windows (`.zip`) and Linux x86-64 (`.tar.gz`) a
 
 For audio, install **FFmpeg with libopenmpt** on PATH; MP3 also needs **libmp3lame**. Check `ffmpeg -demuxers` and `ffmpeg -encoders`. [Official FFmpeg downloads](https://ffmpeg.org/download.html). `--no-audio` produces the MOD and editable project without an external decoder.
 
-The CLI alias is `chiploom`; `python -m tracker4agents` remains supported. Commands below use the Python interpreter from your virtual environment. Generated work goes under `exports/`; the two curated public demos are the explicit media exception.
+The CLI alias is `chiploom`; `python -m tracker4agents` remains supported. Commands below use the Python interpreter from your virtual environment. Generated work goes under `exports/`; the three curated public demos are the explicit media exception.
 
 ## Give your agent a musical brief
 
@@ -179,7 +185,7 @@ locally. Projects and exported MODs embed their samples and reopen without the b
 
 The bank, original labels, private provenance, source lists, auditions and music made
 with those samples remain local. This repository publishes the tools and skill,
-alongside only the two approved original demos above. [Sample commands →](docs/CLI.md#local-sample-library)
+alongside only the three approved original demos above. [Sample commands →](docs/CLI.md#local-sample-library)
 
 ## Songs made only with created samples
 

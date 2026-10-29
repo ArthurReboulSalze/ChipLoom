@@ -19,6 +19,9 @@ from .model import EFFECT_DIGITS, NOTES, PITCHES, XM_KEY_OFF, XM_NOTES, Module, 
 SCHEMA = "chiploom.report.v1"
 LONG_SILENCE_SECONDS = 2.0
 LEVEL_WARNING_DB = 6.0
+# One note held under an arpeggio (0xy) for longer than this buzzes without pause; struck arpeggios
+# (a new note every few rows, or a cut) stay well below it.
+HELD_ARPEGGIO_SECONDS = 1.2
 MAX_FEEDBACK_TEXT = 2000
 MAX_TEMPO_EVENTS = 32
 BLOCK_SIZES = (4, 8, 16)
@@ -204,6 +207,16 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
     sample_changes: dict[int, int] = {}  # cells that select a slot without starting a note (sample switching)
     notes_without_sample = [0] * count
     sample_channels: dict[int, set[int]] = {}
+    # Arpeggio runs: played rows where one note keeps an 0xy effect without a new note or a cut.
+    arpeggio_run: list[list | None] = [None] * count   # [start played row, rows, seconds]
+    held_arpeggios: list[list[list]] = [[] for _ in range(count)]
+
+    def close_arpeggio(channel: int) -> None:
+        run = arpeggio_run[channel]
+        if run is not None and run[2] > HELD_ARPEGGIO_SECONDS:
+            held_arpeggios[channel].append(run)
+        arpeggio_run[channel] = None
+
     for index, item in enumerate(timeline):
         pattern = module.patterns[item["pattern"]]
         for channel in range(count):
@@ -222,6 +235,17 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             if starts_note and (value.command in (3, 5) or (xm and value.volume >= 0xF0)):
                 portamento_targets[channel] += 1
                 starts_note = False
+            arpeggio = value.command == 0 and value.param != 0
+            silenced = bool(value.period) or (xm and value.volume == 0x10) or (value.command == 0xC and not value.param)
+            if starts_note or silenced or not arpeggio:
+                close_arpeggio(channel)
+            if arpeggio and not (silenced and not starts_note):
+                run = arpeggio_run[channel]
+                if run is None:
+                    arpeggio_run[channel] = [index, 1, row_seconds[index]]
+                else:
+                    run[1] += 1
+                    run[2] += row_seconds[index]
             if not starts_note:
                 if value.sample:
                     sample_changes[value.sample] = sample_changes.get(value.sample, 0) + 1
@@ -238,10 +262,13 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             else:
                 notes_without_sample[channel] += 1
 
+    for channel in range(count):
+        close_arpeggio(channel)
     channels = []
     for channel in range(count):
         notes = channel_notes[channel]
         gap = _longest_run(note_flags[channel], row_seconds)
+        held = max(held_arpeggios[channel], key=lambda run: run[2], default=None)
         entry = {
             "channel": channel, "note_ons": len(notes),
             "notes_per_second": _round(len(notes) / duration) if duration else 0.0,
@@ -256,6 +283,9 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             "portamento_targets": portamento_targets[channel],
             "notes_without_sample": notes_without_sample[channel],
             "longest_gap_without_note": gap,
+            "held_arpeggios": {"count": len(held_arpeggios[channel]),
+                               "longest": {"start_played_row": held[0], "rows": held[1],
+                                           "seconds": _round(held[2])} if held else None},
         }
         channels.append(entry)
 
@@ -415,6 +445,16 @@ def analyze(module: Module, reference: dict | None = None) -> dict:
             warnings.append({"code": "note_without_sample", "channel": entry["channel"],
                              "message": f"Channel {entry['channel']} starts {entry['notes_without_sample']} note(s) "
                                         "before any sample number was set on it."})
+        held = entry["held_arpeggios"]
+        if held["count"]:
+            longest = held["longest"]
+            warnings.append({"code": "held_arpeggio", "channel": entry["channel"], "count": held["count"],
+                             "longest_seconds": longest["seconds"],
+                             "message": f"Channel {entry['channel']} holds one note under an arpeggio (0xy) for more "
+                                        f"than {HELD_ARPEGGIO_SECONDS} s {held['count']} time(s), the longest "
+                                        f"{longest['seconds']:.2f} s ({longest['rows']} rows from played-row index "
+                                        f"{longest['start_played_row']}). Struck arpeggios (a new note every few "
+                                        "rows, or a cut between hits) do not trigger this."})
     for slot in never_played:
         warnings.append({"code": "sample_never_played", "slot": slot,
                          "message": f"Sample slot {slot} ({module.samples[slot - 1].name!r}) holds audio but no cell of "

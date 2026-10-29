@@ -46,18 +46,18 @@
       "files": [
         {
           "name": "copper_skies.xm",
-          "sha256": "b4a0960854bcafcb001c2308fe5c5947e8356c30febd1216517ef0796db15387",
-          "bytes": 65501
+          "sha256": "77547086ed2d94f627ee1a8be54c3fda3d8f19c794064f14ac2b2ea704a78247",
+          "bytes": 67294
         },
         {
           "name": "copper_skies.mp3",
-          "sha256": "41b8a5d2bd1ce6f43b5fb6ba763f35d198f9c704f176ad43efa5484a78b1c2e5",
-          "bytes": 2429298
+          "sha256": "f5f931436c10b232ca18af1f9c953051df096266f5101c03588d19b299b407d1",
+          "bytes": 2369552
         },
         {
           "name": "copper_skies.project.json",
-          "sha256": "666f5c610443e11829f419271ea0198b95f21eacdba09025bb1f4d23c8ba1f80",
-          "bytes": 362331
+          "sha256": "4bcf6426e03a665f59cdff45af5668f4dd1575a8ccc97fee3fce33cc8ac1603b",
+          "bytes": 359163
         }
       ]
     }

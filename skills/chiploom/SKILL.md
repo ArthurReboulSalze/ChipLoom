@@ -75,6 +75,24 @@ music made with that PCM local unless the user explicitly requests publication.
 6. Check signal, duration and transitions. Distinguish measured results from musical
    judgments and actual listening. Revise from the user's feedback.
 
+**Play arpeggios on the rhythm.** A tracker arpeggio (`037`, `047`, any `0xy`) is struck,
+not held: retrigger the chord on a grid (eighths or sixteenths), let each hit play two or
+three rows, then drop it to a quiet tail (volume about 6/64: `C06` in a MOD, `16` in an XM
+volume column) or cut it, and leave the last row of the bar silent. Shape the hits with
+accents (a 3-3-2 groove on the eighths works well). Never hold one note with `0xy` on
+every row for bars: the constant buzz tires the ear and covers the lead. Channel 2 of the
+Pixel Rush example shows the articulation (a hit, two rows, a `C0E` tail, a `C00` cut).
+`report` flags an arpeggio held on one note for more than 1.2 s (`held_arpeggio`): fix
+every one before delivering.
+A second arpeggio channel locks to the same grid and answers in the first one's gaps
+(for example the eighth before each accent) with the same articulation; it never sits on
+unrelated sixteenth offsets or doubles the first channel continuously. The same goes for
+every accompaniment part under a busy section, a low bass or pad included: strike it on the
+groove (for example the 3-3-2 accents), a few rows, a quiet tail, then silence. A note held
+through the bar fills the whole space, and retriggering a slow-attack pad several times a
+bar makes it pump; use a steady sample with no slow attack for these hits. Keep long held
+notes for intros, breaks and endings.
+
 ```sh
 python -m tracker4agents new --output exports/song/project.json --channels 8 --bpm 120 --patterns 4
 python -m tracker4agents validate exports/song/project.json --report
@@ -122,6 +140,9 @@ and a cell is `NOTE II VV EEE`.
 2. Add samples: `samples add` / `library_sample` and `synth add` / `recipe_sample` work on an XM
    (instruments 1-128); each sample is converted as `convert` converts a MOD sample.
 3. Edit with `patch` as usual; `pattern_length` resizes a pattern, `add_pattern` takes `length`.
+   An instrument number without a note does not switch the sample in an XM (FastTracker II
+   keeps the playing sample, resets its volume and restarts the envelope), so the MOD trick
+   of changing pulse width mid-note needs new notes there.
 4. Header: `xm_header` sets `restart_position`, `default_speed`, `default_bpm`,
    `frequency_table`. Read `warnings` for loops that come back at another tempo.
 5. Validate (with `--sample-source` for a declared mode), `export --output song.xm`, render.

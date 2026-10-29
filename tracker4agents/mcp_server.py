@@ -112,7 +112,7 @@ TOOLS = [
     _tool("preview", "Build a portable HTML listening bundle in a new directory.",
           {"source": S, "output": S, "mp3": B, "language": _enum("en", "fr")}, ["source", "output"],
           lambda a: ["preview", a["source"], "--output", a["output"], *_flags(a, {"mp3": "--mp3", "language": "--language"})]),
-    _tool("report", "Measure a composition: density, ranges, gaps, repetition, estimated key, unused samples, "
+    _tool("report", "Measure a composition: density, ranges, gaps, repetition, held arpeggios, estimated key, unused samples, "
           "sample sources and loudness against the reference levels (exports/sample_library when it exists, "
           "unless library is given; else fixed levels). The key estimate leaves out percussion slots. "
           "Channels count from 0.",

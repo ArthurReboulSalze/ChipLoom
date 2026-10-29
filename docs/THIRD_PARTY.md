@@ -2,7 +2,7 @@
 
 The original project source and documentation are released under MIT by Arthur Reboul Salze; see the root LICENSE.
 
-The included example scores and sample-generation recipes were created for this project. At the owner's request, two curated original demos, **Pixel Rush** and **Voltage Odyssey V2**, are published with MOD, MP3 and editable projects in `docs/listen/media/`. Their samples were synthesized for ChipLoom; no historical reference PCM or recordings are included. The manifest records file hashes. Other generated exports remain outside Git.
+The included example scores and sample-generation recipes were created for this project. At the owner's request, three curated original demos are published in `docs/listen/media/`: **Copper Skies** (XM, MP3 and editable project, rebuilt by `tools/compose_copper_skies.py`), **Pixel Rush** and **Voltage Odyssey V2** (MOD, MP3 and editable projects). Their samples were synthesized for ChipLoom; no historical reference PCM or recordings are included. The manifest records file hashes. Other generated exports remain outside Git.
 
 The header logo was generated for ChipLoom with the built-in image generation tool and approved by the owner. Its design notes and transparent PNG are in `docs/assets/`.
 
