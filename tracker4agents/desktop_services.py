@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import threading
 import wave
 
 from . import __version__, audio, formats, project
@@ -56,6 +57,14 @@ class AudioCache:
     def __init__(self, directory: Path):
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=True)
+        # Two render threads asking for the same key would rewrite the module file while FFmpeg reads it
+        # (Windows then refuses the replace): one lock per key makes the second wait and reuse the WAV.
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _lock(self, key: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.Lock())
 
     def prepare(self, module: Module, audible: tuple[bool, ...] | None = None) -> Path:
         """Render the module (MOD or XM, any channel count) to a WAV, with the muted channels silenced."""
@@ -69,16 +78,17 @@ class AudioCache:
         payload = formats.encode(rendered_module)
         key = hashlib.sha256(payload + f"desktop-{__version__}-48000-openmpt".encode()).hexdigest()
         source, destination = self.directory / f"{key}{formats.extension(rendered_module)}", self.directory / f"{key}.wav"
-        if destination.is_file():
-            try:
-                with wave.open(str(destination), "rb") as stream:
-                    if stream.getnframes() > 0 and stream.getframerate() == 48000 and stream.getnchannels() == 2:
-                        return destination
-            except (OSError, EOFError, wave.Error):
-                pass
-        project.atomic_bytes(source, payload)
-        audio.render(source, destination, seconds=duration)
-        return destination
+        with self._lock(key):
+            if destination.is_file():
+                try:
+                    with wave.open(str(destination), "rb") as stream:
+                        if stream.getnframes() > 0 and stream.getframerate() == 48000 and stream.getnchannels() == 2:
+                            return destination
+                except (OSError, EOFError, wave.Error):
+                    pass
+            project.atomic_bytes(source, payload)
+            audio.render(source, destination, seconds=duration)
+            return destination
 
     def sample(self, module: Module, index: int) -> Path:
         sample = module.samples[index]
