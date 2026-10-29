@@ -126,8 +126,9 @@ python -m tracker4agents feedback exports/song/v2.project.json --text "..." --ra
 
 `report` gives measurements of the played score (density, ranges, gaps, repetition, an
 estimated key), never a quality verdict. `compare` builds a casual blind A/B page: do
-not pass `--show-answer` or read `answer_key.json`/`comparison.json` before the owner listens, and say that loudness
-is not equalized. Record what the owner says with `feedback`.
+not pass `--show-answer` or read `answer_key.json`/`comparison.json` before the owner listens, and pass
+`--equalize` so the louder version does not win by volume alone (otherwise say that loudness is not
+equalized). Record what the owner says with `feedback`.
 
 ### XM songs
 
@@ -188,5 +189,8 @@ are in [references/live.md](references/live.md). The procedure:
 ## Deliver
 
 Deliver the MOD as the main artifact, its editable JSON and any requested listening
-copy. A saved project and its MOD contain their samples and reopen without the bank.
+copy. Put the version in every delivered file name (`song-v3.mod`, `song-v3.mp3`) and never
+reuse a name for different audio: a browser, a chat client or a web page cache keeps
+playing the old file under the same name, and the owner then hears a version you already
+replaced. When you publish a page, version its media links too (`song.mp3?v=3`). A saved project and its MOD contain their samples and reopen without the bank.
 Reference analysis informs composition; it does not train model weights.

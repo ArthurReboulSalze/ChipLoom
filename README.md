@@ -236,7 +236,7 @@ Without the window, `chiploom live serve SONG.json` hosts the same session headl
 
 ## Measure, compare, give feedback
 
-`report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. `report` leaves percussion out of its key estimate. The A/B page is a casual test: its answer key sits in `answer_key.json` next to it (printed only with `--show-answer`), and the loudness of the two versions is not equalized.
+`report` measures a score (density, ranges, gaps, repetition, an estimated key); it describes the notes, not whether they are good. `compare` builds a blind A/B listening page for two versions, in a new folder, and `feedback` stores your verdict in the project for the next revision. `report` leaves percussion out of its key estimate. The A/B page is a casual test: its answer key sits in `answer_key.json` next to it (printed only with `--show-answer`), and `--equalize` matches the loudness of the two versions, which is otherwise left as rendered.
 
 ```sh
 python -m tracker4agents compare exports/my-song/v1.project.json exports/my-song/v2.project.json --output exports/my-song-compare --seconds 30 --mp3

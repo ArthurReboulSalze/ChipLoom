@@ -280,7 +280,7 @@ Etiquette that follows from the mechanics: without `--base` no conflict check ru
 **Blind comparison.** Once you have two versions, `compare` builds a page where the owner hears them as X and Y in random order, picks a preference, optionally rates melody, groove, sound palette and arrangement, and then sees which was which, with measured peak and RMS. Use `--seconds` for a bounded excerpt (required when a cycle is over 120 seconds), `--labels` for readable version names and `--mp3` for easy playback. Keep in mind:
 
 - It is a casual blind test. The command does not print the X/Y mapping (only the path of `answer_key.json`, unless `--show-answer`); the key is in `answer_key.json`, `comparison.json` and, encoded, in the page. Do not read it before the owner has listened.
-- Loudness is not equalized, and a louder version tends to win. If the versions differ in level, say so when you present the result.
+- A louder version tends to win. Pass `--equalize` to match both renders to the same integrated loudness; otherwise, if the versions differ in level, say so when you present the result.
 - One listener, one session: the result is one person's preference on one day.
 
 **Feedback.** Record what the owner says with `feedback --text "..." --rating 4 --version v2 --output NEW.json`. It writes a new project with the entry in `metadata.feedback`, keyed to the version label you named; the score is untouched. Start the next revision from that file or its source, and say in your reply what you changed in response.

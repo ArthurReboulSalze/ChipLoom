@@ -26,8 +26,18 @@ RULES = {
     "slide_both_nibbles": ("misleading", "Axy, 5xy, 6xy, Hxy or Pxy with both nibbles set: only one direction runs"),
     "tick_effect_after_row": ("inert", "E9x, ECx or EDx whose tick is not reached before the next row"),
     "portamento_without_note": ("inert", "tone portamento on a channel that has not played a note yet"),
+    "effect_memory_empty": ("inert", "XM: an effect with parameter 00 (repeat the last value) before any value was set "
+                                     "on the channel; MOD: 300, 400, 700 or 900 likewise"),
+    "zero_parameter": ("inert", "MOD: 100, 200, A00, E10, E20, EA0 or EB0, which ProTracker does not remember"),
     "held_arpeggio": ("texture", f"one note held under an 0xy arpeggio for more than {HELD_ARPEGGIO_SECONDS} s"),
 }
+# Effect memory: an effect whose parameter is 00 repeats the last non-zero value of its memory slot on
+# the channel. FastTracker II keeps one slot per effect (Axy, 5xy and 6xy share the volume-slide slot);
+# ProTracker only remembers 3xx, 4xy, 7xy and 9xx.
+XM_MEMORY = {"1": "1", "2": "2", "3": "3", "4": "4", "7": "7", "9": "9", "A": "A", "H": "H", "P": "P", "R": "R",
+             "E1": "E1", "E2": "E2", "EA": "EA", "EB": "EB", "X1": "X1", "X2": "X2"}
+MOD_MEMORY = {"3": "3", "4": "4", "7": "7", "9": "9"}
+MOD_NO_MEMORY = {"1", "2", "A", "E1", "E2", "EA", "EB"}
 SLIDE_LETTERS = {"A": "volume slide", "5": "tone portamento + volume slide", "6": "vibrato + volume slide",
                  "H": "global volume slide", "P": "panning slide"}
 
@@ -43,6 +53,7 @@ def lint(module: Module) -> dict:
     instrument = [0] * count          # the last instrument number written on the channel
     played_note = [False] * count
     arpeggio_run: list[list | None] = [None] * count  # [timeline index, rows, seconds]
+    memory: list[dict[str, int]] = [{} for _ in range(count)]  # memory slot -> last non-zero value
 
     def add(code: str, index: int, channel: int, message: str, **extra) -> None:
         item = timeline[index]
@@ -77,19 +88,36 @@ def lint(module: Module) -> dict:
             column_porta = xm and value.volume >= 0xF0
             portamento = letter in ("3", "5") or column_porta
 
+            # the effect's memory slot ("E1", "X2" ... for the sub-effects) and the value it carries
+            name = letter + (f"{high:X}" if letter in ("E", "X") else "")
+            amount = low if letter in ("E", "X") else value.param
+            slot_name = (XM_MEMORY if xm else MOD_MEMORY).get(name)
+            remembered = memory[channel].get(slot_name, 0) if slot_name else 0
+            if slot_name and not amount and not remembered:
+                add("effect_memory_empty", index, channel,
+                    f"{name} with parameter 0 repeats the last value given to it on this channel, but none was given "
+                    "yet, so it does nothing.")
+            elif not xm and name in MOD_NO_MEMORY and not amount:
+                add("zero_parameter", index, channel,
+                    f"ProTracker does not remember {name}: with parameter 0 it does nothing.")
             if letter == "9":
+                offset = value.param or remembered
                 if not note:
                     add("offset_without_note", index, channel,
                         "A sample offset only applies to a note in the same cell; this one does nothing.")
-                elif value.param:
+                elif offset:
                     slot = value.sample or instrument[channel]
                     if 0 < slot <= len(module.samples):
                         frames = len(module.samples[slot - 1].pcm)
-                        if value.param * 256 >= frames:
+                        if offset * 256 >= frames:
                             add("offset_past_end", index, channel,
-                                f"The offset ({value.param * 256} frames) is at or past the end of sample {slot:02X} "
-                                f"({frames} frames): FastTracker II plays nothing and ProTracker players differ.",
-                                frames=frames)
+                                f"The offset ({offset * 256} frames{'' if value.param else ', repeated from memory'}) "
+                                f"is at or past the end of sample {slot:02X} ({frames} frames): FastTracker II plays "
+                                "nothing and ProTracker players differ.", frames=frames)
+            if slot_name and amount:
+                memory[channel][slot_name] = amount
+            elif xm and letter in ("5", "6") and value.param:
+                memory[channel]["A"] = value.param      # FastTracker II shares the volume-slide value
             if letter == "E" and high == 5 and not note:
                 add("finetune_without_note", index, channel,
                     "E5x sets the finetune of a note in the same cell; without a note it does nothing.")

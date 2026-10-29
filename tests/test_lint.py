@@ -49,7 +49,8 @@ class LintRuleTests(unittest.TestCase):
         self.assertLess(frames, 0xFF * 256)
         item = next(item for item in lint(module)["findings"] if item["code"] == "offset_past_end")
         self.assertEqual((item["row"], item["frames"]), (0, frames))
-        self.assertNotIn(("offset_past_end", 8, 0), codes(module))   # 900 reuses the previous offset
+        repeated = next(item for item in lint(module)["findings"] if item["code"] == "offset_past_end" and item["row"] == 8)
+        self.assertIn("repeated from memory", repeated["message"])   # 900 reuses the previous offset, FF
 
     def test_an_xm_instrument_number_without_a_note(self):
         found = codes(xm_song({(0, 0): x("C-4", 1), (4, 0): x(None, 1), (8, 0): x(None, 2), (12, 0): x("C-4", 2),
@@ -90,6 +91,35 @@ class LintRuleTests(unittest.TestCase):
         self.assertIn(("portamento_without_note", 0, 1), found)
         self.assertNotIn(("portamento_without_note", 8, 1), found)
         self.assertIn(("portamento_without_note", 12, 2), found)
+
+    def test_xm_effect_memory(self):
+        found = codes(xm_song({(0, 0): x("C-4", 1, "A00"), (4, 0): x(effect="A02"), (8, 0): x(effect="A00"),
+                               (0, 1): x("C-4", 1, "502"), (4, 1): x(effect="A00"),
+                               (0, 2): x("C-4", 1, "E10"), (4, 2): x(effect="X20"), (8, 2): x(effect="X24"),
+                               (12, 2): x(effect="X20"), (16, 2): x(effect="100")}))
+        self.assertIn(("effect_memory_empty", 0, 0), found)       # nothing to repeat yet
+        self.assertNotIn(("effect_memory_empty", 8, 0), found)    # repeats A02
+        self.assertNotIn(("effect_memory_empty", 4, 1), found)    # 5xy shares the volume-slide value with Axy
+        self.assertIn(("effect_memory_empty", 0, 2), found)
+        self.assertIn(("effect_memory_empty", 4, 2), found)
+        self.assertNotIn(("effect_memory_empty", 12, 2), found)   # repeats X24
+        self.assertIn(("effect_memory_empty", 16, 2), found)      # 1xx has its own slot
+        self.assertNotIn("zero_parameter", [code for code, _, _ in found])
+
+    def test_mod_effect_memory_and_zero_parameters(self):
+        cells = {(0, 0): cell("C-2", 1, "A00"), (4, 0): cell(None, 0, "100"), (8, 0): cell(None, 0, "500"),
+                 (0, 1): cell("C-2", 1, "300"), (4, 1): cell("E-2", 1, "305"), (8, 1): cell("G-2", 1, "300"),
+                 (12, 1): cell(None, 0, "E10")}
+        pattern = Pattern()
+        for (row, channel), value in cells.items():
+            pattern.put(row, channel, value)
+        found = codes(Module("Mod", [Sample("A", TONE)], [pattern], [0]))
+        self.assertIn(("zero_parameter", 0, 0), found)
+        self.assertIn(("zero_parameter", 4, 0), found)
+        self.assertNotIn(("zero_parameter", 8, 0), found)         # 500 continues the portamento: not inert
+        self.assertIn(("effect_memory_empty", 0, 1), found)
+        self.assertNotIn(("effect_memory_empty", 8, 1), found)    # 300 repeats 305
+        self.assertIn(("zero_parameter", 12, 1), found)
 
     def test_a_held_arpeggio_and_a_struck_one(self):
         held = {(0, 0): x("A-4", 1, "037")}

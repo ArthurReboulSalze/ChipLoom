@@ -284,6 +284,28 @@ def sample_preview(sample: Sample, output: Path, fmt: str = "mod") -> None:
 MP3_PEAK_TARGET_DBFS = -1.0
 
 
+def apply_gain(wav: Path, gain_db: float, ffmpeg: str | None = None) -> dict:
+    """Scale a rendered 16-bit WAV in place by `gain_db` (FFmpeg `volume`), and return its new measurements."""
+    executable = ffmpeg or shutil.which("ffmpeg")
+    if not executable:
+        raise RenderError("FFmpeg is required to change the level of a render.", "FFMPEG_MISSING")
+    wav = Path(wav)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{wav.stem}.", suffix=".wav", dir=wav.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        result = subprocess.run(
+            [executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", str(wav),
+             "-af", f"volume={gain_db:.3f}dB", "-c:a", "pcm_s16le", str(temporary)],
+            capture_output=True, text=True, timeout=60, **SUBPROCESS_OPTIONS)
+        if result.returncode:
+            raise RenderError(f"FFmpeg gain: {result.stderr.strip()[-2000:]}", "RENDER_FAILED")
+        os.replace(temporary, wav)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return analyze_wav(wav)
+
+
 def export_mp3(source_wav: Path, output: Path, ffmpeg: str | None = None, normalize: bool = False) -> dict:
     """Optional listening copy, always encoded from a rendered WAV. With `normalize` the copy is scaled so its
     sample peak sits at -1 dBFS (the WAV is untouched; a multi-channel XM renders well below full scale)."""

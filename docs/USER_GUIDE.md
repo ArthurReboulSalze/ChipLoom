@@ -247,7 +247,7 @@ python -m tracker4agents preview examples/pixel_rush.project.json --output expor
 
 Open `exports/pixel-review/preview.html`. The folder also contains the MOD, the project, the WAV, the optional MP3, the samples and a report. Choose a new folder for each revision; to share, copy the whole folder. Without `--language fr`, the HTML controls are in English. The preview works without Qt and complements the native window.
 
-`compare A B --output folder` creates a blind A/B listening page (X and Y in random order). It is an informal test: the answer is in `answer_key.json`, in `comparison.json` and, encoded, in the page, and the command prints it only with `--show-answer`. The volumes of the two versions are not equalized. The page is listen-only.
+`compare A B --output folder` creates a blind A/B listening page (X and Y in random order). It is an informal test: the answer is in `answer_key.json`, in `comparison.json` and, encoded, in the page, and the command prints it only with `--show-answer`. The volumes of the two versions are not equalized unless you add `--equalize`, which turns the louder render down to the loudness of the quieter one. The page is listen-only.
 
 If your browser restricts audio from local pages, serve the folder with a local server:
 

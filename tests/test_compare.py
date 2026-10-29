@@ -296,6 +296,25 @@ class RealAudioComparisonTests(ComparisonFixtureCase):
         # Different notes mean different rendered audio.
         self.assertNotEqual(sha(out / "x.wav"), sha(out / "y.wav"))
 
+    def test_equalize_turns_the_louder_render_down(self):
+        quiet = tone_module("Tone Quiet", ("D-2", "F-2", "A-2", "D-3"))
+        quiet.samples[0] = Sample("Sine", SINE, 16, loop_length=64)   # volume 16 of 64: about 12 dB quieter
+        quiet_path = self.sources / "quiet.mod"
+        quiet_path.write_bytes(mod.encode(quiet))
+        result = create_comparison(self.first, quiet_path, self.root / "eq", mp3=True, seed=3, equalize=True)
+        out = self.root / "eq"
+        key = json.loads((out / "comparison.json").read_text(encoding="utf-8"))
+        gains = {side: key["versions"][side]["equalized"]["gain_db"] for side in ("x", "y")}
+        louder = "x" if key["answer_key"]["x"] == "first" else "y"
+        quieter = "y" if louder == "x" else "x"
+        self.assertEqual(gains[quieter], 0)
+        self.assertLess(gains[louder], -6)
+        self.assertEqual(result["equalized"]["gain_db"], gains)
+        levels = [audio.measure_loudness(out / f"{side}.wav")["integrated_lufs"] for side in ("x", "y")]
+        self.assertAlmostEqual(levels[0], levels[1], delta=1.0)
+        self.assertIn("EBU R 128", (out / "index.html").read_text(encoding="utf-8"))
+        self.assertGreater((out / f"{louder}.mp3").stat().st_size, 500)   # MP3s are encoded after the gain
+
     def test_example_project_against_a_variant(self):
         example = ROOT / "examples" / "pixel_rush.project.json"
         variant = project.load(example)

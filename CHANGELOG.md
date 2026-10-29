@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `lint` follows effect memory: `effect_memory_empty` flags an effect with parameter `00` (repeat the last value) before any value was given on the channel (XM: every effect with a memory, `5xy` and `6xy` sharing the `Axy` value; MOD: `3xx`, `4xy`, `7xy`, `9xx`), `zero_parameter` flags MOD `100`, `200`, `A00`, `E10`, `E20`, `EA0`, `EB0`, which ProTracker does not remember, and `offset_past_end` now counts a `900` with its remembered offset.
+- `compare --equalize` (MCP `equalize`) turns the louder render down to the integrated loudness of the quieter one before the MP3 copies are made; the page says so, and the result and `comparison.json` record the target and each side's gain.
+- The skill puts the version in every delivered file name and versions published media links, since a cached file under the same name plays an older version.
+
 ## 0.8.5 — 2026-10-29
 
 - Add `chiploom lint` and the MCP tool `lint` (`chiploom.lint.v1`): cells whose effect does nothing or not what the score suggests, along the playback timeline, each with its pattern, row, channel, grid text and the reason. Rules: `offset_without_note`, `offset_past_end`, `finetune_without_note`, XM `instrument_without_note`, XM `retrig_volume_ignored`, XM `key_off_k00`, `slide_both_nibbles`, `tick_effect_after_row`, `portamento_without_note` and `held_arpeggio`. `--strict` exits 1 on any finding; `validate --report` adds a `lint` summary. The published songs lint clean; the first version of Copper Skies would have shown its 100 held arpeggios. The skill and the agent guide run it before delivery.

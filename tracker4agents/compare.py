@@ -38,6 +38,8 @@ TEXTS = {
                  "then submit to see which version each one was.",
         "bias_note": "Loudness differences can sway a blind test. The measured peak and RMS level of "
                      "both renders are shown after you submit.",
+        "equalized_note": "Both renders were matched to the same integrated loudness (EBU R 128), so the "
+                          "louder version does not win by volume alone.",
         "excerpt": "Both versions are rendered excerpts of at most {seconds} s.",
         "version_x": "Version X", "version_y": "Version Y",
         "switch": "Switch X/Y at the same position",
@@ -86,6 +88,8 @@ TEXTS = {
                  "tu préfères, puis valide pour découvrir quelle version se cachait derrière chacune.",
         "bias_note": "Une différence de volume peut fausser un test à l’aveugle. Le pic et le niveau RMS "
                      "mesurés des deux rendus s’affichent après la validation.",
+        "equalized_note": "Les deux rendus ont été ramenés au même volume perçu (EBU R 128) : la version la "
+                          "plus forte ne gagne pas juste parce qu’elle est plus forte.",
         "excerpt": "Les deux versions sont des extraits rendus de {seconds} s au maximum.",
         "version_x": "Version X", "version_y": "Version Y",
         "switch": "Basculer X/Y à la même position",
@@ -371,8 +375,11 @@ def _text_spans(language: str) -> dict[str, str]:
     return {key: f'<span data-i18n="{key}">{html.escape(value)}</span>' for key, value in TEXTS[language].items()}
 
 
-def build_page(language: str, comparison_id: str, answer_blob: str, seconds: float | None) -> str:
+def build_page(language: str, comparison_id: str, answer_blob: str, seconds: float | None,
+               equalized: bool = False) -> str:
     spans = _text_spans(language)
+    if equalized:
+        spans["bias_note"] = spans["equalized_note"]
     criteria_rows = []
     for name in CRITERIA:
         cells = "".join(
@@ -398,12 +405,13 @@ def build_page(language: str, comparison_id: str, answer_blob: str, seconds: flo
 def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = False, ffmpeg: str | None = None,
                       language: str = "en", seed: int | None = None,
                       labels: tuple[str, str] | None = None, seconds: float | None = None,
-                      show_answer: bool = False) -> dict:
+                      show_answer: bool = False, equalize: bool = False) -> dict:
     """Build a blind A/B bundle from two projects, MODs or XMs. Sources are only read.
 
     The X/Y mapping is written to `answer_key.json` (and `comparison.json`) in the bundle; the result gives
     the file's path, not the mapping, so an agent running the command does not spoil the test. With
-    `show_answer` the mapping is returned as well.
+    `show_answer` the mapping is returned as well. With `equalize` the louder render is turned down to the
+    integrated loudness of the quieter one before any MP3 is encoded, and each side records the gain.
     """
     first, second, output = Path(first).resolve(), Path(second).resolve(), Path(output).resolve()
     if language not in LANGUAGES:
@@ -459,20 +467,35 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
             project.atomic_bytes(mod_path, formats.encode(module))
             details = audio.render(mod_path, wav_path, seconds=seconds, ffmpeg=ffmpeg)
             files = {"mod": f"{side}{extension}", "wav": f"{side}.wav", "mp3": None}
-            encoded = None
-            if mp3:
-                encoded = audio.export_mp3(wav_path, folder / f"{side}.mp3", ffmpeg)
-                encoded = {key: value for key, value in encoded.items() if key != "output"}
-                files["mp3"] = f"{side}.mp3"
             report = analyze(module)
             sides[side] = {
                 "version": version, "label": names[position], "title": module.title,
                 "source_name": (first, second)[position].name,
                 "source_sha256": audio.sha256((first, second)[position]),
                 "mod_sha256": audio.sha256(mod_path), "files": files, "render": _kept_render(details),
-                "optional_mp3": encoded, "report": report,
+                "optional_mp3": None, "report": report, "loudness": details.get("loudness", {}),
                 "metrics": _metrics(report, details["audio"], XM_NOTES if module.format == "xm" else NOTES),
             }
+        equalized = None
+        if equalize:
+            levels = {side: sides[side]["loudness"].get("integrated_lufs") for side in ("x", "y")}
+            if None in levels.values():
+                raise ValidationError("equalize needs the integrated loudness of both renders (FFmpeg ebur128); "
+                                      "one render is silent or was not measured.", "RENDER_FAILED")
+            target = min(levels.values())
+            equalized = {"target_lufs": target, "method": "Integrated loudness (FFmpeg ebur128); the louder render "
+                                                          "is turned down, never up, so nothing clips."}
+            for side in ("x", "y"):
+                gain = round(target - levels[side], 2)
+                measured = audio.apply_gain(folder / f"{side}.wav", gain, ffmpeg) if gain else None
+                sides[side]["equalized"] = {"measured_lufs": levels[side], "gain_db": gain}
+                if measured:
+                    sides[side]["metrics"].update(peak_dbfs=measured.get("peak_dbfs"), rms_dbfs=measured.get("rms_dbfs"))
+        for side in ("x", "y"):
+            if mp3:
+                encoded = audio.export_mp3(folder / f"{side}.wav", folder / f"{side}.mp3", ffmpeg)
+                sides[side]["optional_mp3"] = {key: value for key, value in encoded.items() if key != "output"}
+                sides[side]["files"]["mp3"] = f"{side}.mp3"
         metric_rows = []
         x_metrics, y_metrics = sides["x"]["metrics"], sides["y"]["metrics"]
         for key in [*x_metrics, *(item for item in y_metrics if item not in x_metrics)]:  # channel counts may differ
@@ -490,17 +513,18 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
             "metrics": metric_rows,
         }
         blob = base64.b64encode(json.dumps(secret, ensure_ascii=False).encode("utf-8")).decode("ascii")
-        page = build_page(language, comparison_id, blob, seconds)
+        page = build_page(language, comparison_id, blob, seconds, equalized=bool(equalized))
         key_file = {
             "schema": COMPARISON_SCHEMA, "id": comparison_id, "version": __version__, "created_at": created,
-            "seed": seed, "excerpt_seconds": seconds, "language": language,
+            "seed": seed, "excerpt_seconds": seconds, "language": language, "equalized": equalized,
             "answer_key": {"x": sides["x"]["version"], "y": sides["y"]["version"]},
             "labels": {"first": names[0], "second": names[1]},
             "versions": {"x": {k: v for k, v in sides["x"].items() if k != "metrics"},
                          "y": {k: v for k, v in sides["y"].items() if k != "metrics"}},
             "note": "This file is the answer key. The page hides the mapping only in base64 until the listener "
                     "submits; this is a casual blind test, not a secure one. Loudness differences between the "
-                    "renders are not compensated. Reports are measurements, not quality verdicts.",
+                    "renders are compensated only when equalized is set. Reports are measurements, not quality "
+                    "verdicts.",
         }
         project.write_json(folder / "comparison.json", key_file)
         project.write_json(folder / "answer_key.json", {
@@ -515,6 +539,9 @@ def create_comparison(first: Path, second: Path, output: Path, *, mp3: bool = Fa
         "ok": True, "output": str(output), "page": str(output / "index.html"),
         "comparison": str(output / "comparison.json"), "answer_key_file": str(output / "answer_key.json"),
         "id": comparison_id, "language": language, "excerpt_seconds": seconds,
+        "equalized": {"target_lufs": equalized["target_lufs"],
+                      "gain_db": {side: sides[side]["equalized"]["gain_db"] for side in ("x", "y")}}
+        if equalized else None,
         **{side: {"mod": str(output / sides[side]["files"]["mod"]), "wav": str(output / f"{side}.wav"),
                   "mp3": str(output / f"{side}.mp3") if mp3 else None} for side in ("x", "y")},
         "scope": "Casual blind test: the answer key is in answer_key.json and comparison.json, and base64 in "

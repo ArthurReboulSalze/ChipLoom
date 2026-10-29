@@ -436,6 +436,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--seed", type=int)
     compare.add_argument("--seconds", type=float, help="Render the same excerpt length from the start of both versions.")
     compare.add_argument("--labels", nargs=2, metavar=("FIRST", "SECOND"))
+    compare.add_argument("--equalize", action="store_true",
+                         help="Turn the louder render down to the integrated loudness of the quieter one.")
     compare.add_argument("--show-answer", action="store_true",
                          help="Also print the X/Y answer key (by default only the path of answer_key.json).")
     feedback = commands.add_parser("feedback", help="Record listening feedback in a project's metadata.")
@@ -623,7 +625,7 @@ def main(argv: list[str] | None = None) -> int:
             result = create_comparison(args.first, args.second, args.output, mp3=args.mp3, ffmpeg=args.ffmpeg,
                                        language=args.language, seed=args.seed, seconds=args.seconds,
                                        labels=tuple(args.labels) if args.labels else None,
-                                       show_answer=args.show_answer)
+                                       show_answer=args.show_answer, equalize=args.equalize)
         elif args.command == "feedback":
             result = record_feedback(args)
         elif args.command == "mcp":

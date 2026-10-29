@@ -438,6 +438,8 @@ python -m tracker4agents lint exports/song/project.json [--strict]
 | `tick_effect_after_row` | inert | `E9x`, `ECx` or `EDx` whose tick is not reached at the row's speed (an `EDx` note is then never played in FastTracker II) |
 | `portamento_without_note` | inert | `3xx`, `5xy` or a volume-column `Fx` on a channel that has not played a note yet |
 | `held_arpeggio` | texture | one note under an `0xy` arpeggio for more than 1.2 s without a new note or a cut (`rows`, `seconds`; the same measure as `report`) |
+| `effect_memory_empty` | inert | an effect with parameter `00`, which repeats the last value given to it on the channel, before any value was given: in an XM every effect with a memory (`1xx` `2xx` `3xx` `4xy` `7xy` `9xx` `Axy` `Hxy` `Pxy` `Rxy` `E1x` `E2x` `EAx` `EBx` `X1x` `X2x`; `5xy` and `6xy` share the `Axy` value), in a MOD `3xx` `4xy` `7xy` `9xx`. A `900` also counts for `offset_past_end` with the remembered offset |
+| `zero_parameter` | inert | MOD: `100`, `200`, `A00`, `E10`, `E20`, `EA0` or `EB0`, which ProTracker does not remember, so they do nothing (`500` and `600` still run their portamento or vibrato) |
 
 Each finding has `code`, `kind`, `order`, `pattern`, `row`, `channel`, `cell` (grid text), `message` and `times_played`; `counts` totals them by code, `clean` is true when there is none, and `rules` describes every rule. At most 500 findings are listed (`truncated`).
 
@@ -481,7 +483,7 @@ python -m tracker4agents compare exports/song/v1.project.json exports/song/v2.pr
 | `--mp3`, `--ffmpeg`, `--language en\|fr` | MP3 copies, FFmpeg path, page language |
 | `--show-answer` | Also print the X/Y mapping (`answer_key`) in the result |
 
-The result gives the paths (`x.mod` and `y.mod` hold the real module paths, `.xm` for an XM version) and `answer_key_file`, the path of `answer_key.json`; it does **not** print the X/Y mapping unless `--show-answer` is given, so an agent that runs `compare` for the owner does not learn the answer. This is a **casual blind test, not secrecy**: the answer is in `answer_key.json`, in `comparison.json` and, base64-encoded, in the page source. **Loudness is not equalized**: a louder version tends to be preferred, so the page shows the measured peak and RMS of both renders after submission. An agent that reads `answer_key.json` or `comparison.json` before the owner listens has spoiled the test.
+The result gives the paths (`x.mod` and `y.mod` hold the real module paths, `.xm` for an XM version) and `answer_key_file`, the path of `answer_key.json`; it does **not** print the X/Y mapping unless `--show-answer` is given, so an agent that runs `compare` for the owner does not learn the answer. This is a **casual blind test, not secrecy**: the answer is in `answer_key.json`, in `comparison.json` and, base64-encoded, in the page source. **Loudness is not equalized unless `--equalize` is given** (MCP `equalize`): a louder version tends to be preferred. With `--equalize` the louder render is turned down to the integrated loudness of the quieter one (FFmpeg `ebur128`; never turned up, so nothing clips) before the MP3 copies are made, the page says so, and the result and `comparison.json` record `equalized` (`target_lufs` and each side's `gain_db`). Without it the page shows the measured peak and RMS of both renders after submission. An agent that reads `answer_key.json` or `comparison.json` before the owner listens has spoiled the test.
 
 ### feedback
 

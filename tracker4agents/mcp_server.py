@@ -124,11 +124,13 @@ TOOLS = [
           lambda a: ["report", a["source"], *_flags(a, {"library": "--library"})], True),
     _tool("compare", "Build a blind A/B listening page comparing two versions in a new directory. The X/Y answer "
           "is written to answer_key.json (path in answer_key_file), not returned; do not read it before the "
-          "owner has listened.",
-          {"first": S, "second": S, "output": S, "mp3": B, "language": _enum("en", "fr"), "seed": I, "seconds": N},
+          "owner has listened. equalize=true matches both renders to the same integrated loudness.",
+          {"first": S, "second": S, "output": S, "mp3": B, "language": _enum("en", "fr"), "seed": I, "seconds": N,
+           "equalize": B},
           ["first", "second", "output"],
           lambda a: ["compare", a["first"], a["second"], "--output", a["output"], *_flags(a, {
-              "mp3": "--mp3", "language": "--language", "seed": "--seed", "seconds": "--seconds"})]),
+              "mp3": "--mp3", "language": "--language", "seed": "--seed", "seconds": "--seconds",
+              "equalize": "--equalize"})]),
     _tool("feedback", "Record listening feedback in a project's metadata, written to a new project file.",
           {"project": S, "text": S, "rating": I, "output": S, "version": S}, ["project", "text", "output"],
           lambda a: ["feedback", a["project"], "--output", a["output"], *_flags(a, {
